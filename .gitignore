@@ -20,6 +20,10 @@ Thumbs.db
 # Claude Code workspace settings
 .claude/
 
+# Supabase local dev
+supabase/.branches
+supabase/.temp
+
 # Logs
 *.log
 npm-debug.log*
