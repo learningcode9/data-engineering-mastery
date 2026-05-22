@@ -1,0 +1,177 @@
+# Supabase Setup Guide
+
+## Phase 1 status: Foundation complete
+
+The Supabase foundation is scaffolded and the app runs without any Supabase credentials.
+All service functions fall back to `localStorage` when no project is configured.
+
+---
+
+## Step 1 — Create a Supabase project
+
+1. Go to [supabase.com](https://supabase.com) and sign in
+2. Click **New project**
+3. Choose an organisation (or create one)
+4. Fill in:
+   - **Project name**: `data-engineering-mastery`
+   - **Database password**: choose a strong password and save it
+   - **Region**: pick the one closest to your users
+5. Click **Create new project** and wait ~2 minutes for provisioning
+
+---
+
+## Step 2 — Get your project credentials
+
+1. In your project dashboard, go to **Settings → API**
+2. Copy two values:
+
+| Value | Where to find it |
+|---|---|
+| **Project URL** | Under "Project URL" — looks like `https://abcdefgh.supabase.co` |
+| **Anon key** | Under "Project API keys" → `anon` `public` key |
+
+---
+
+## Step 3 — Create your local env file
+
+In the project root, copy the example file:
+
+```bash
+cp .env.example .env.local
+```
+
+Open `.env.local` and fill in your credentials:
+
+```bash
+VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key-here
+```
+
+> **Never commit `.env.local` to git.** It's already in `.gitignore`.
+
+---
+
+## Step 4 — Verify the connection
+
+Start the dev server:
+
+```bash
+npm run dev
+```
+
+Open the browser console. You should see:
+
+```
+[DEM] Environment
+  Backend: 📦 localStorage   ← still uses localStorage until VITE_ENABLE_BACKEND=true
+  Realtime: 🔇 disabled
+  AI: 🔇 disabled
+```
+
+The Supabase client is now initialised but the app still uses localStorage.
+Backend features will be activated progressively in later phases.
+
+---
+
+## Step 5 — Apply database migrations (later phases)
+
+When you're ready to switch to real persistence, install the Supabase CLI:
+
+```bash
+brew install supabase/tap/supabase
+```
+
+Link to your project:
+
+```bash
+supabase link --project-ref your-project-ref
+```
+
+Apply all migrations:
+
+```bash
+supabase db push
+```
+
+Seed with demo data (optional):
+
+```bash
+supabase db seed
+```
+
+---
+
+## File structure reference
+
+```
+src/
+├── config/
+│   └── env.ts                   ← typed env config + feature flags
+├── lib/
+│   └── supabase.ts              ← null-safe Supabase client singleton
+├── services/
+│   └── supabase/
+│       ├── client.ts            ← query/upsert wrappers, error logging
+│       ├── auth.ts              ← auth service (signIn, signUp, profile)
+│       ├── progress.ts          ← topic progress + section completion
+│       ├── notes.ts             ← saved topic notes
+│       ├── incidents.ts         ← incident simulation sessions
+│       ├── sqlLab.ts            ← SQL challenge attempts + saved queries
+│       ├── interview.ts         ← interview sessions + question mastery
+│       ├── xp.ts                ← XP ledger + streaks + achievements
+│       └── ai.ts                ← AI copilot (mock → OpenAI)
+└── types/
+    ├── database.ts              ← clean app-level types (Profile, SqlAttempt, etc.)
+    └── database.types.ts        ← full auto-generated Supabase types
+
+supabase/
+├── config.toml                  ← local dev configuration
+├── migrations/                  ← ordered SQL migration files
+│   ├── 001_users.sql
+│   ├── 002_xp_streaks.sql
+│   ├── 003_learning_progress.sql
+│   ├── 004_sql_challenges.sql
+│   ├── 005_incidents.sql
+│   ├── 006_interviews.sql
+│   ├── 007_ai_conversations.sql
+│   └── 008_career_tracks.sql
+└── seed.sql                     ← demo data for local dev
+
+docs/
+├── supabase-setup.md            ← this file
+├── architecture.md              ← system architecture overview
+├── database-schema.md           ← full schema reference
+├── auth-flow.md                 ← auth state machine
+├── deployment.md                ← Vercel + Supabase deployment
+├── realtime-plan.md             ← realtime subscription plan
+├── AI-copilot-plan.md           ← AI integration plan
+└── simulation-engine.md         ← incident simulation engine design
+```
+
+---
+
+## Feature flags
+
+All backend features are gated. Flip them one at a time as each phase is implemented:
+
+```bash
+# .env.local
+VITE_ENABLE_BACKEND=false    # Phase 1: off (localStorage only)
+VITE_ENABLE_REALTIME=false   # Phase 8: off
+VITE_ENABLE_AI=false         # Phase 7: off
+```
+
+Setting `VITE_ENABLE_BACKEND=true` requires valid Supabase credentials and migrations applied.
+
+---
+
+## Phase completion checklist
+
+- [x] Phase 1 — Supabase foundation (client, env, service structure, types)
+- [ ] Phase 2 — Database schema + migrations applied to real project
+- [ ] Phase 3 — Auth UI + protected routes
+- [ ] Phase 4 — Global user state sync (XP, streaks, progress → Supabase)
+- [ ] Phase 5 — SQL Lab real persistence
+- [ ] Phase 6 — Incident engine persistence
+- [ ] Phase 7 — AI copilot live integration
+- [ ] Phase 8 — Realtime subscriptions
