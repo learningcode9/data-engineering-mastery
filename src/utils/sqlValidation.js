@@ -1,58 +1,39 @@
-// Keyword-based SQL validation — case/whitespace insensitive, tolerant of minor differences.
+// sqlValidation.js — kept for backward compatibility.
+// SQL mode now uses the real execution engine (sqlEngine.js).
+// This file is only called for non-SQL practice checks where sqlMode = false.
 
-const SQL_KEYWORDS = [
-  'select', 'from', 'where', 'group by', 'order by', 'having',
-  'inner join', 'left join', 'right join', 'full join', 'join', 'cross join',
-  'on', 'limit', 'top', 'distinct', 'count', 'sum', 'avg', 'max', 'min',
-  'insert into', 'update', 'set', 'delete from', 'create table', 'drop table', 'alter table',
-  'with', 'union all', 'union', 'intersect', 'except',
-  'case', 'when', 'then', 'else', 'end',
-  'over', 'partition by', 'row_number', 'rank', 'dense_rank', 'ntile',
-  'lag', 'lead', 'first_value', 'last_value',
-  'between', 'like', 'ilike', 'in', 'not in', 'exists', 'not exists',
-  'is null', 'is not null',
-];
+const SQL_KW = new Set([
+  'select','from','where','group','by','order','having','join','on','limit',
+  'distinct','count','sum','avg','max','min','as','and','or','not','in',
+  'is','null','like','between','case','when','then','else','end',
+  'insert','into','update','set','delete','with','union','all',
+  'over','partition','row_number','rank','dense_rank','lag','lead',
+]);
 
-function norm(sql) {
-  return (sql ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+function norm(s) {
+  return (s ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
-function tokenize(sql) {
-  return norm(sql)
-    .split(/[\s,;()\n=<>!'"]+/)
-    .filter(t => /^[a-z_][a-z0-9_]{1,}$/.test(t));
+function extractIdentifiers(sql) {
+  return sql
+    .split(/[\s,;()\n=<>!'"*%+\-/]+/)
+    .filter(t => /^[a-z_][a-z0-9_]*$/.test(t) && !SQL_KW.has(t) && t.length >= 2);
 }
 
-export function validateSQL(userAnswer, solution) {
-  const user = norm(userAnswer);
-  const sol  = norm(solution ?? '');
+export function validateSQL(userQuery, solution) {
+  const n = norm(userQuery);
+  if (!n) return { valid: false, message: 'Write a query first.' };
 
-  if (!user) return { valid: false, message: 'Write a query first.' };
+  const solNorm = norm(solution ?? '');
+  if (!solNorm) return { valid: true, message: 'Looks good!' };
 
-  // Collect multi-word and single-word SQL keywords present in the solution
-  const requiredKws = SQL_KEYWORDS.filter(kw => sol.includes(kw));
+  const solIds  = extractIdentifiers(solNorm);
+  const userIds = new Set(extractIdentifiers(n));
+  const missing = solIds.filter(t => !userIds.has(t));
 
-  // Each required keyword must appear in the user's answer too
-  const missingKws = requiredKws.filter(kw => !user.includes(kw));
-
-  // Allow at most 1 missing keyword (tolerant)
-  if (missingKws.length > 1) {
-    const display = missingKws
-      .slice(0, 3)
-      .map(k => k.toUpperCase())
-      .join(', ');
-    return { valid: false, message: `Missing: ${display}` };
+  if (solIds.length > 1 && missing.length > solIds.length * 0.45) {
+    return { valid: false, message: `Check: ${missing.slice(0, 2).join(', ')}` };
   }
 
-  // Check that key identifiers (table/column names) from the solution appear in the user query.
-  // Filter out pure SQL keywords to leave only identifiers.
-  const allKwTokens = new Set(SQL_KEYWORDS.flatMap(kw => kw.split(' ')));
-  const solIdentifiers = tokenize(sol).filter(t => !allKwTokens.has(t) && t.length > 2);
-  const missingIds = solIdentifiers.filter(t => !user.includes(t));
-
-  if (solIdentifiers.length > 1 && missingIds.length > solIdentifiers.length * 0.45) {
-    return { valid: false, message: 'Check your column or table names.' };
-  }
-
-  return { valid: true, message: 'Query looks correct!' };
+  return { valid: true, message: 'Looks good!' };
 }

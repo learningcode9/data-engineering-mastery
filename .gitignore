@@ -26,3 +26,7 @@ npm-debug.log*
 
 # Vite cache
 .vite/
+
+# Auto-generated at build time by the copySqlAssets Vite plugin
+public/sql-wasm.wasm
+public/sql-wasm-browser.js

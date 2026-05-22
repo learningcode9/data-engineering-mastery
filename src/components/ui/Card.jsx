@@ -1,8 +1,10 @@
 import { ProgressBar } from './ProgressBar.jsx';
+import { cn } from '../../utils/cn.js';
+export { AppCard, MetricCard, StatPill, Badge, PrimaryButton, SecondaryButton, SectionHeader, SearchInput, PageContainer, SidebarItem } from './design-system.jsx';
 
 export function SummaryCard({ variant, icon, label, value, sub }) {
   return (
-    <article className={`summary-card ${variant}`}>
+    <article className={cn('summary-card ds-card ds-card--compact', variant)}>
       <span className="summary-icon" aria-hidden="true">{icon}</span>
       <div className="summary-copy">
         <span>{label}</span>
@@ -13,45 +15,23 @@ export function SummaryCard({ variant, icon, label, value, sub }) {
   );
 }
 
-export function RoadmapCard({ title, icon, percent, body, onClick }) {
-  return (
-    <article
-      className={`roadmap-card${onClick ? ' roadmap-card--clickable' : ''}`}
-      onClick={onClick}
-      role={onClick ? 'button' : undefined}
-      tabIndex={onClick ? 0 : undefined}
-      onKeyDown={onClick ? e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
-    >
-      <div className="roadmap-topline">
-        <h3>
-          <span className="roadmap-icon" aria-hidden="true">{icon}</span>
-          {title}
-        </h3>
-        <span>{percent}</span>
-      </div>
-      <p>{body}</p>
-      <ProgressBar percent={percent} label={`${title} progress`} />
-    </article>
-  );
-}
-
-export function ProjectCard({ title, meta, icon }) {
-  return (
-    <article>
-      <span className="project-icon" aria-hidden="true">{icon}</span>
-      <div>
-        <span>{meta}</span>
-        <strong>{title}</strong>
-      </div>
-    </article>
-  );
-}
-
 export function TopicCard({ topic, selected, onClick }) {
+  const pct = parseInt(topic.progress) || 0;
+  const statusLabel = topic.completed
+    ? 'Completed'
+    : pct > 0
+      ? 'In Progress'
+      : 'Not started';
+  const statusClass = topic.completed
+    ? 'topic-status--done'
+    : pct > 0
+      ? 'topic-status--progress'
+      : 'topic-status--new';
+
   return (
     <button
       type="button"
-      className={`topic-card ${selected ? 'selected' : ''}`}
+      className={cn('topic-card ds-card ds-card--interactive', selected && 'selected')}
       onClick={onClick}
       aria-pressed={selected}
     >
@@ -61,7 +41,7 @@ export function TopicCard({ topic, selected, onClick }) {
       <div>
         <div className="topic-title">
           <h3>{topic.title}</h3>
-          <span>{topic.label}</span>
+          <span className={`topic-status ${statusClass}`}>{statusLabel}</span>
         </div>
         <p>{topic.body}</p>
         <div className="topic-progress">

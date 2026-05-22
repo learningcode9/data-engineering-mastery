@@ -1,6 +1,7 @@
 import { memo, useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { TopicCard } from '../ui/Card.jsx';
 import TopicDetails from './TopicDetails.jsx';
+import { EmptyState } from '../ui/EmptyState.jsx';
 
 function matchesSubtopic(st, lc) {
   return (
@@ -129,9 +130,12 @@ const Topics = memo(function Topics({
       </div>
 
       {filtered.length === 0 ? (
-        <div className="empty-state">
-          <p>No topics match "{searchTerm}"</p>
-        </div>
+        <EmptyState
+          icon="▦"
+          title={`No topics match "${searchTerm}"`}
+          body="Try searching for SQL, Spark, Python, Delta Lake, or Databricks."
+          variant="compact"
+        />
       ) : (
         <div className="topic-grid">
           {filtered.map(topic => (
@@ -142,6 +146,27 @@ const Topics = memo(function Topics({
               onClick={() => handleSelect(topic.id)}
             />
           ))}
+        </div>
+      )}
+
+      {selectedTopic && !isClosing && (
+        <div className="topic-sticky-crumb">
+          <button
+            type="button"
+            className="topic-crumb-back"
+            onClick={() => handleSelect(selectedTopicId)}
+            aria-label="Back to topics"
+          >
+            ← Topics
+          </button>
+          <span className="topic-crumb-sep" aria-hidden="true">›</span>
+          <span className="topic-crumb-current">{selectedTopic.title}</span>
+          {selectedTopic.completed && (
+            <span className="topic-crumb-badge topic-crumb-badge--done">✓ Complete</span>
+          )}
+          {selectedTopic.inProgress && !selectedTopic.completed && (
+            <span className="topic-crumb-badge topic-crumb-badge--progress">In Progress</span>
+          )}
         </div>
       )}
 

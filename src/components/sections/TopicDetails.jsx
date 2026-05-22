@@ -1,12 +1,13 @@
-import { memo, useMemo, useRef, useEffect, useState } from 'react';
+import { memo, useMemo, useRef, useState } from 'react';
 import { AccordionItem } from '../ui/Accordion.jsx';
 import { CodeBlock } from '../ui/CodeBlock.jsx';
 import { DifficultyBadge } from '../ui/DifficultyBadge.jsx';
 import { PracticeCard } from '../ui/PracticeCard.jsx';
+import { SQLWorkspace } from '../workspace/SQLWorkspace.jsx';
 import { useLocalStorage } from '../../hooks/useLocalStorage.js';
 
 // ── Subtopic card ──────────────────────────────────────────────────────────────
-function SubtopicCard({ subtopic, practiceCompleted, onTogglePractice }) {
+function SubtopicCard({ subtopic, practiceCompleted, onTogglePractice, sqlMode }) {
   return (
     <div className="subtopic-card">
       <div className="subtopic-card-header">
@@ -44,35 +45,39 @@ function SubtopicCard({ subtopic, practiceCompleted, onTogglePractice }) {
           </div>
         )}
       </div>
-      {subtopic.practice && (
-        <PracticeCard
+      {subtopic.practice && sqlMode ? (
+        <SQLWorkspace
           subtopic={subtopic}
           completed={practiceCompleted}
           onToggleComplete={onTogglePractice}
         />
-      )}
+      ) : subtopic.practice ? (
+        <PracticeCard
+          subtopic={subtopic}
+          completed={practiceCompleted}
+          onToggleComplete={onTogglePractice}
+          sqlMode={false}
+        />
+      ) : null}
     </div>
   );
 }
 
 // ── Sticky section navigation ──────────────────────────────────────────────────
-function SqlNavBar({ sections }) {
+function TopicNavBar({ sections, topicId }) {
   const [activeIdx, setActiveIdx] = useState(0);
   const [hidden, setHidden]       = useState(false);
   const wrapperRef                = useRef(null);
 
   function handleNavClick(i) {
     setActiveIdx(i);
-    const el = document.getElementById(`sql-section-${i}`);
+    const el = document.getElementById(`${topicId}-section-${i}`);
     if (!el) return;
 
-    // 1. Open the accordion first (if closed) so its height is included in the layout
     const trigger = el.querySelector('.accordion-trigger');
     const wasClosed = trigger && trigger.getAttribute('aria-expanded') === 'false';
     if (wasClosed) trigger.click();
 
-    // 2. After accordion animation (~300 ms), scroll so the section header
-    //    lands just below the sticky nav bar.
     setTimeout(() => {
       const navH = wrapperRef.current ? wrapperRef.current.offsetHeight : 52;
       const rect = el.getBoundingClientRect();
@@ -97,7 +102,7 @@ function SqlNavBar({ sections }) {
 
   return (
     <div className="sql-nav-wrapper" ref={wrapperRef}>
-      <nav className="sql-nav-bar" aria-label="Jump to SQL section">
+      <nav className="sql-nav-bar" aria-label="Jump to section">
         {sections.map((section, i) => (
           <button
             key={section.title}
@@ -139,9 +144,10 @@ function subtopicMatchesSearch(st, lc) {
   );
 }
 
-// ── SQL sections with search-aware accordion ───────────────────────────────────
-function SqlSections({ sections, searchTerm, practiceProgress, onTogglePractice }) {
+// ── Topic sections with search-aware accordion ─────────────────────────────────
+function TopicSections({ sections, topicId, sqlMode, searchTerm, practiceProgress, onTogglePractice }) {
   const lc = searchTerm?.toLowerCase() ?? '';
+  const [openIndex, setOpenIndex] = useState(0);
 
   const sectionsWithMatch = useMemo(() => {
     if (!lc) return sections.map(s => ({ ...s, hasMatch: false }));
@@ -155,6 +161,9 @@ function SqlSections({ sections, searchTerm, practiceProgress, onTogglePractice 
 
   const anyMatch = lc && sectionsWithMatch.some(s => s.hasMatch);
 
+  const firstMatchIndex = lc ? sectionsWithMatch.findIndex(s => s.hasMatch) : -1;
+  const effectiveOpenIndex = firstMatchIndex >= 0 ? firstMatchIndex : openIndex;
+
   return (
     <div className="accordion" style={{ marginTop: 8 }}>
       {sectionsWithMatch.map((section, i) => {
@@ -164,22 +173,27 @@ function SqlSections({ sections, searchTerm, practiceProgress, onTogglePractice 
 
         if (anyMatch && matchingSubtopics.length === 0) return null;
 
-        const completedCount = section.subtopics.filter(
-          st => practiceProgress?.[st.id]
-        ).length;
-        const badge =
-          completedCount > 0
-            ? `${completedCount}/${section.subtopics.length}`
-            : `${section.subtopics.length} topics`;
+        const practiceSubs    = section.subtopics.filter(st => st.practice);
+        const practiceTotal   = practiceSubs.length;
+        const completedCount  = practiceSubs.filter(st => !!practiceProgress?.[st.id]).length;
 
+        const badge = practiceTotal === 0
+          ? `${section.subtopics.length} topics`
+          : completedCount === practiceTotal
+            ? '✓ Complete'
+            : `${completedCount}/${practiceTotal}`;
+
+        const isComplete = practiceTotal > 0 && completedCount === practiceTotal;
+        const isOpen = i === effectiveOpenIndex;
         return (
           <AccordionItem
             key={section.title}
-            id={`sql-section-${i}`}
+            id={`${topicId}-section-${i}`}
             title={section.title}
             badge={badge}
-            defaultOpen={i === 0}
-            forceOpen={section.hasMatch && lc ? true : undefined}
+            badgeVariant={isComplete ? 'success' : undefined}
+            controlledOpen={isOpen}
+            onOpenChange={next => setOpenIndex(next ? i : -1)}
             level="h4"
           >
             <div className="subtopic-grid">
@@ -189,6 +203,7 @@ function SqlSections({ sections, searchTerm, practiceProgress, onTogglePractice 
                   subtopic={st}
                   practiceCompleted={!!practiceProgress?.[st.id]}
                   onTogglePractice={onTogglePractice}
+                  sqlMode={sqlMode}
                 />
               ))}
             </div>
@@ -219,13 +234,38 @@ function QueryExamples({ examples }) {
 // ── Mini project ───────────────────────────────────────────────────────────────
 function MiniProject({ project }) {
   return (
-    <section className="wide-section">
-      <h4>{project.title}</h4>
-      <p>{project.goal}</p>
+    <section className="wide-section mini-project-card">
+      <div className="mini-project-header">
+        <span className="mini-project-kicker">Hands-on project</span>
+        <h4>{project.title}</h4>
+      </div>
+      <p className="mini-project-goal">{project.goal}</p>
       <ol className="mini-project-steps">
         {project.steps.map((step, i) => <li key={i}>{step}</li>)}
       </ol>
-      <p><strong>Expected output:</strong> {project.output}</p>
+      <p className="mini-project-output"><strong>Expected output:</strong> {project.output}</p>
+    </section>
+  );
+}
+
+function AppliedScenarios({ groups }) {
+  const scenarioGroup = groups?.find(group => /real[-\s]?world|scenario/i.test(group.title));
+  if (!scenarioGroup?.questions?.length) return null;
+
+  return (
+    <section className="wide-section applied-scenarios">
+      <div className="applied-scenarios-header">
+        <span className="mini-project-kicker">Enterprise scenarios</span>
+        <h4>Production Decision Practice</h4>
+      </div>
+      <div className="applied-scenario-grid">
+        {scenarioGroup.questions.slice(0, 3).map((q, i) => (
+          <article key={i} className="applied-scenario-card">
+            <strong>{q.question}</strong>
+            <p>{q.answer}</p>
+          </article>
+        ))}
+      </div>
     </section>
   );
 }
@@ -264,13 +304,19 @@ function QuickQuestions({ questions }) {
 }
 
 // ── Interview groups ───────────────────────────────────────────────────────────
+const REAL_WORLD_RE = /real[-\s]?world|scenario/i;
+
 function InterviewGroups({ groups }) {
   if (!groups?.length) return null;
+  // Real-world scenarios are rendered separately by AppliedScenarios below.
+  // Only render the level-based groups here to avoid the 4th-item wrap bug.
+  const levelGroups = groups.filter(g => !REAL_WORLD_RE.test(g.title));
+  if (!levelGroups.length) return null;
   return (
     <section className="wide-section">
       <h4>Interview Questions by Level</h4>
-      <div className="interview-group-grid">
-        {groups.map(group => (
+      <div className="interview-questions-grid">
+        {levelGroups.map(group => (
           <div key={group.title} className="interview-group">
             <strong>{group.title}</strong>
             <ul className="interview-list">
@@ -407,11 +453,21 @@ const TopicDetails = memo(function TopicDetails({
       <QuickQuestions questions={topic.questions} />
 
       {mod?.sections?.length > 0 && (
-        <section>
-          <h4>Deep Dive Sections</h4>
-          <SqlNavBar sections={mod.sections} />
-          <SqlSections
+        <section className="deep-dive-section">
+          <div className="deep-dive-heading">
+            <div>
+              <h4>Deep Dive Sections</h4>
+              <p>Open one section at a time to keep the lesson focused.</p>
+            </div>
+            <span>{mod.sections.length} sections</span>
+          </div>
+          {mod.sections.length > 4 && (
+            <TopicNavBar sections={mod.sections} topicId={topic.id} />
+          )}
+          <TopicSections
             sections={mod.sections}
+            topicId={topic.id}
+            sqlMode={topic.id === 'sql'}
             searchTerm={searchTerm}
             practiceProgress={practiceProgress}
             onTogglePractice={onTogglePractice}
@@ -423,9 +479,13 @@ const TopicDetails = memo(function TopicDetails({
         <QueryExamples examples={mod.queryExamples} />
       )}
 
-      {mod?.miniProject && <MiniProject project={mod.miniProject} />}
+      {mod?.miniProjects?.length > 0 && mod.miniProjects.map((p, i) => (
+        <MiniProject key={i} project={p} />
+      ))}
+      {!mod?.miniProjects?.length && mod?.miniProject && <MiniProject project={mod.miniProject} />}
 
       <InterviewGroups groups={mod?.interviewGroups} />
+      <AppliedScenarios groups={mod?.interviewGroups} />
 
       <NotesBox topicId={topic.id} notes={notes} onNotesChange={onNotesChange} />
     </article>

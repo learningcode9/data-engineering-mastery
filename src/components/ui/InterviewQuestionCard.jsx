@@ -1,7 +1,14 @@
 import { useState } from 'react';
 import { toast } from '../../utils/toast.js';
 
-export function InterviewQuestionCard({ question, answer, scenario, learned, revision, onToggleLearn, onToggleRevision }) {
+const LEVEL_LABELS = {
+  beginner:     'BEG',
+  intermediate: 'INT',
+  advanced:     'ADV',
+  realWorld:    'REAL',
+};
+
+export function InterviewQuestionCard({ question, answer, scenario, learned, revision, onToggleLearn, onToggleRevision, level }) {
   const [open, setOpen] = useState(false);
 
   function handleLearn() {
@@ -13,6 +20,8 @@ export function InterviewQuestionCard({ question, answer, scenario, learned, rev
     onToggleRevision();
     if (!revision) toast('Added to revision queue.', 'info');
   }
+
+  const levelClass = level === 'realWorld' ? 'realworld' : level;
 
   return (
     <div className={[
@@ -29,6 +38,7 @@ export function InterviewQuestionCard({ question, answer, scenario, learned, rev
         aria-expanded={open}
       >
         <span>{question}</span>
+        {level && <span className={`iq-level-tag iq-level-tag--${levelClass}`}>{LEVEL_LABELS[level] ?? level}</span>}
         {learned && <span className="iq-badge iq-badge--learned" aria-label="Learned">✓</span>}
         {revision && !learned && <span className="iq-badge iq-badge--revision" aria-label="In revision">↻</span>}
         <span className="iq-chevron" aria-hidden="true" />

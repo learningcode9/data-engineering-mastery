@@ -131,9 +131,9 @@ export const sqlModule = {
           syntax: "WHERE column LIKE 'pattern%';",
           example: "SELECT * FROM customers WHERE name LIKE 'A%';",
           expectedOutput: "All customers whose name starts with 'A'.",
-          practice: "Find products where name ends with 'Pro'.",
-          hint: "Use LIKE '%Pro' — % at the start matches anything before 'Pro'.",
-          solution: "SELECT * FROM products WHERE name LIKE '%Pro';",
+          practice: "Find products where product_name ends with 'Pro'.",
+          hint: "Use product_name LIKE '%Pro' — % at the start matches anything before 'Pro'.",
+          solution: "SELECT product_name FROM products WHERE product_name LIKE '%Pro';",
           interview: { question: 'What does % mean in LIKE?', answer: 'It matches zero or more characters at that position.' },
         },
         {

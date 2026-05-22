@@ -4,23 +4,19 @@ export function AccordionItem({
   title,
   children,
   defaultOpen = false,
-  forceOpen,
+  controlledOpen,
+  onOpenChange,
   level = 'h3',
   badge,
+  badgeVariant,
   domRef,
   id,
 }) {
-  const initOpen = forceOpen !== undefined ? forceOpen : defaultOpen;
-  const [open, setOpen] = useState(initOpen);
+  const initOpen = controlledOpen ?? defaultOpen;
+  const [internalOpen, setInternalOpen] = useState(initOpen);
+  const open = controlledOpen ?? internalOpen;
   const bodyRef = useRef(null);
   const [height, setHeight] = useState(initOpen ? 'auto' : '0px');
-
-  // When forceOpen changes (search activates / clears), sync internal state
-  useEffect(() => {
-    if (forceOpen !== undefined) {
-      setOpen(forceOpen);
-    }
-  }, [forceOpen]);
 
   useEffect(() => {
     if (!bodyRef.current) return;
@@ -37,6 +33,13 @@ export function AccordionItem({
   }, [open]);
 
   const Tag = level;
+  const handleToggle = () => {
+    const next = !open;
+    if (controlledOpen === undefined) {
+      setInternalOpen(next);
+    }
+    onOpenChange?.(next);
+  };
 
   return (
     <div id={id} ref={domRef} className={`accordion-item${open ? ' open' : ''}`}>
@@ -44,11 +47,15 @@ export function AccordionItem({
         className="accordion-trigger"
         type="button"
         aria-expanded={open}
-        onClick={() => setOpen(o => !o)}
+        onClick={handleToggle}
       >
         <Tag className="accordion-title">
           {title}
-          {badge && <span className="accordion-badge">{badge}</span>}
+          {badge && (
+            <span className={`accordion-badge${badgeVariant ? ` accordion-badge--${badgeVariant}` : ''}`}>
+              {badge}
+            </span>
+          )}
         </Tag>
         <span className="accordion-chevron" aria-hidden="true" />
       </button>

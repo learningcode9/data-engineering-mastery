@@ -2,26 +2,123 @@ import { useState } from 'react';
 import { CodeBlock } from './CodeBlock.jsx';
 import { DifficultyBadge } from './DifficultyBadge.jsx';
 import { QueryResultTable } from './QueryResultTable.jsx';
+import { QueryHistory } from './QueryHistory.jsx';
 import { useLocalStorage } from '../../hooks/useLocalStorage.js';
-import { validateSQL } from '../../utils/sqlValidation.js';
-import { runMockSQL } from '../../utils/mockSqlRunner.js';
+import { useSqlEngine } from '../../hooks/useSqlEngine.js';
+import { TABLE_SCHEMAS } from '../../utils/sqlEngine.js';
 import { toast } from '../../utils/toast.js';
 
-export function PracticeCard({ subtopic, completed, onToggleComplete }) {
+// ── Schema explorer ────────────────────────────────────────────────────────────
+function SchemaExplorer() {
+  const [expandedTable, setExpandedTable] = useState(null);
+
+  return (
+    <div className="schema-explorer">
+      <div className="schema-explorer-header">
+        <span className="schema-explorer-title">Playground Schema</span>
+        <span className="schema-explorer-hint">5 tables · click to inspect</span>
+      </div>
+      <div className="schema-table-list">
+        {Object.entries(TABLE_SCHEMAS).map(([name, schema]) => {
+          const isOpen = expandedTable === name;
+          return (
+            <div key={name} className={`schema-table-item${isOpen ? ' schema-table-item--open' : ''}`}>
+              <button
+                type="button"
+                className="schema-table-trigger"
+                onClick={() => setExpandedTable(isOpen ? null : name)}
+                aria-expanded={isOpen}
+              >
+                <span className="schema-table-icon" aria-hidden="true">⊞</span>
+                <span className="schema-table-name">{name}</span>
+                <span className="schema-table-count">{schema.rowCount} rows</span>
+                <span className={`result-chevron${isOpen ? ' result-chevron--open' : ''}`} aria-hidden="true">▾</span>
+              </button>
+              {isOpen && (
+                <div className="schema-table-body">
+                  <p className="schema-table-note">{schema.note}</p>
+                  <table className="schema-col-table">
+                    <thead>
+                      <tr>
+                        <th>Column</th>
+                        <th>Type</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {schema.columns.map((col, i) => (
+                        <tr key={col}>
+                          <td className="schema-col-name">{col}</td>
+                          <td className="schema-col-type">{schema.types[i]}</td>
+                          <td className="schema-col-meta">
+                            {col === schema.pk && <span className="schema-badge schema-badge--pk">PK</span>}
+                            {schema.fks?.[col] && (
+                              <span className="schema-badge schema-badge--fk" title={`→ ${schema.fks[col]}`}>FK</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Engine loading states ──────────────────────────────────────────────────────
+function EngineLoading() {
+  return (
+    <div className="engine-loading">
+      <span className="engine-spinner" aria-hidden="true" />
+      <span>Loading SQL engine…</span>
+    </div>
+  );
+}
+
+function EngineError({ message }) {
+  return (
+    <div className="engine-error">
+      ⚠ SQL engine failed to load: {message}
+    </div>
+  );
+}
+
+// ── PracticeCard ───────────────────────────────────────────────────────────────
+export function PracticeCard({ subtopic, completed, onToggleComplete, sqlMode = false }) {
   const [showHint,     setShowHint]     = useState(false);
   const [showSolution, setShowSolution] = useState(false);
   const [showSchema,   setShowSchema]   = useState(false);
-  const [answer, setAnswer] = useLocalStorage(`dem-practice-answer-${subtopic.id}`, '');
-  const [validation, setValidation]   = useState(null); // { valid, message }
-  const [queryResult, setQueryResult] = useState(null); // mock SQL result
+  const [answer,       setAnswer]       = useLocalStorage(`dem-practice-answer-${subtopic.id}`, '');
+  const [validation,   setValidation]   = useState(null);
+  const [queryResult,  setQueryResult]  = useState(null);
+  const [resultsOpen,  setResultsOpen]  = useState(false);
 
-  function handleRun() {
-    const val = validateSQL(answer, subtopic.solution);
-    const qr  = runMockSQL(answer);
-    setValidation(val);
-    setQueryResult(qr);
-    if (val.valid && !completed) {
-      onToggleComplete(subtopic.id);
+  // Real SQL engine (only used when sqlMode = true)
+  const { engineReady, engineError, running, history, runAndValidate, clearHistory } =
+    useSqlEngine();
+
+  async function handleRun() {
+    if (!sqlMode || !answer.trim()) return;
+
+    const outcome = await runAndValidate(answer, subtopic.solution);
+    if (!outcome) return;
+
+    setValidation({
+      valid:      outcome.valid,
+      message:    outcome.message,
+      mismatch:   outcome.mismatch ?? false,
+      expectedRowCount: outcome.expectedRowCount ?? null,
+    });
+    setQueryResult(outcome.queryResult);
+    setResultsOpen(true);
+
+    if (outcome.valid && !completed) {
+      onToggleComplete(subtopic.id, subtopic.title);
       toast(`Completed: ${subtopic.title}`, 'success');
     }
   }
@@ -30,18 +127,31 @@ export function PracticeCard({ subtopic, completed, onToggleComplete }) {
     setAnswer('');
     setValidation(null);
     setQueryResult(null);
+    setResultsOpen(false);
     setShowHint(false);
     setShowSolution(false);
   }
 
+  function handleRerun(sql) {
+    setAnswer(sql);
+    setValidation(null);
+    setQueryResult(null);
+    setResultsOpen(false);
+  }
+
   const textareaClass = [
     'practice-textarea',
-    validation?.valid              ? 'practice-textarea--valid' : '',
-    validation && !validation.valid ? 'practice-textarea--error' : '',
+    validation?.valid                   ? 'practice-textarea--valid' : '',
+    validation && !validation.valid     ? 'practice-textarea--error' : '',
+    running                             ? 'practice-textarea--running' : '',
   ].filter(Boolean).join(' ');
+
+  const showRunButton = sqlMode && subtopic.solution;
+  const canRun        = engineReady && !running && !!answer.trim();
 
   return (
     <div className={`practice-card${completed ? ' practice-done' : ''}`}>
+      {/* ── Header ── */}
       <div className="practice-header">
         <div className="practice-meta">
           <span className="practice-label">Practice Task</span>
@@ -51,7 +161,7 @@ export function PracticeCard({ subtopic, completed, onToggleComplete }) {
           <input
             type="checkbox"
             checked={!!completed}
-            onChange={() => onToggleComplete(subtopic.id)}
+            onChange={() => onToggleComplete(subtopic.id, subtopic.title)}
             aria-label="Mark practice complete"
           />
           <span>{completed ? 'Completed' : 'Mark complete'}</span>
@@ -60,75 +170,108 @@ export function PracticeCard({ subtopic, completed, onToggleComplete }) {
 
       <p className="practice-question">{subtopic.practice}</p>
 
-      {/* Playground schema hint */}
-      <div className="practice-schema-bar">
-        <span className="practice-schema-label">Playground tables:</span>
-        {['customers', 'orders', 'products'].map(t => (
+      {/* ── SQL mode: schema toggle ── */}
+      {sqlMode && (
+        <div className="practice-schema-bar">
           <button
-            key={t}
             type="button"
-            className={`practice-table-chip${showSchema ? ' active' : ''}`}
+            className={`practice-schema-btn${showSchema ? ' active' : ''}`}
             onClick={() => setShowSchema(s => !s)}
-            title="Show table schema"
+            aria-expanded={showSchema}
           >
-            {t}
+            <span aria-hidden="true">⊞</span> Schema
+            <span className={`result-chevron${showSchema ? ' result-chevron--open' : ''}`} aria-hidden="true">▾</span>
           </button>
-        ))}
-      </div>
-
-      {showSchema && (
-        <div className="practice-schema-preview">
-          <div>
-            <strong>customers</strong>
-            <code>customer_id, customer_name, city, status</code>
-          </div>
-          <div>
-            <strong>orders</strong>
-            <code>order_id, customer_id, amount, status, created_at</code>
-          </div>
-          <div>
-            <strong>products</strong>
-            <code>product_id, product_name, category, price</code>
-          </div>
+          <span className="schema-pills">
+            {Object.keys(TABLE_SCHEMAS).map(t => (
+              <span key={t} className="schema-pill">{t}</span>
+            ))}
+          </span>
         </div>
       )}
 
-      <textarea
-        className={textareaClass}
-        placeholder="Write your SQL query here…"
-        value={answer}
-        onChange={e => { setAnswer(e.target.value); setValidation(null); setQueryResult(null); }}
-        aria-label={`Practice answer for ${subtopic.title}`}
-        spellCheck={false}
-      />
+      {sqlMode && showSchema && <SchemaExplorer />}
 
-      {/* Validation banner */}
-      {validation && (
-        <div className={`practice-result${validation.valid ? ' practice-result--success' : ' practice-result--error'}`}>
-          <span className="practice-result-status">
-            {validation.valid ? '✓' : '✕'} {validation.message}
+      {/* ── Engine states ── */}
+      {sqlMode && !engineReady && !engineError && <EngineLoading />}
+      {sqlMode && engineError && <EngineError message={engineError} />}
+
+      {/* ── Editor ── */}
+      <div className="practice-editor-wrap">
+        <textarea
+          className={textareaClass}
+          placeholder={sqlMode ? 'Write your SQL query here…' : 'Write your code or answer here…'}
+          value={answer}
+          onChange={e => {
+            setAnswer(e.target.value);
+            setValidation(null);
+            setQueryResult(null);
+            setResultsOpen(false);
+          }}
+          onKeyDown={e => {
+            if (sqlMode && (e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+              e.preventDefault();
+              if (canRun) handleRun();
+            }
+          }}
+          aria-label={`Practice answer for ${subtopic.title}`}
+          spellCheck={false}
+          disabled={running}
+        />
+        {sqlMode && (
+          <span className="practice-shortcut-hint">
+            <kbd>⌘</kbd><kbd>↵</kbd> to run
           </span>
-          {validation.valid && !queryResult && subtopic.expectedOutput && (
-            <p className="practice-result-output">{subtopic.expectedOutput}</p>
+        )}
+      </div>
+
+      {/* ── Validation banner ── */}
+      {validation && (
+        <div className={`practice-result ${
+          validation.valid    ? 'practice-result--success' :
+          validation.mismatch ? 'practice-result--mismatch' :
+                                'practice-result--error'
+        }`}>
+          <span className="practice-result-status">
+            {validation.valid ? '✓' : validation.mismatch ? '◎' : '✕'} {validation.message}
+          </span>
+          {validation.mismatch && validation.expectedRowCount != null && (
+            <p className="practice-result-hint">
+              💡 Expected {validation.expectedRowCount} row{validation.expectedRowCount !== 1 ? 's' : ''}.
+              Your query returned {queryResult?.rowCount ?? 0}.
+            </p>
           )}
         </div>
       )}
 
-      {/* Mock query result table */}
+      {/* ── Live query result ── */}
       {queryResult && (
-        <QueryResultTable result={queryResult} expectedOutput={subtopic.expectedOutput} />
+        <QueryResultTable
+          result={queryResult}
+          expectedOutput={subtopic.expectedOutput}
+          open={resultsOpen}
+          onToggle={() => setResultsOpen(o => !o)}
+          execTime={queryResult.execTime}
+        />
       )}
 
+      {/* ── Actions ── */}
       <div className="practice-actions">
-        {subtopic.solution && (
+        {showRunButton && (
           <button
             type="button"
-            className={`practice-run-btn${validation?.valid ? ' practice-run-btn--success' : ''}`}
+            className={`practice-run-btn${validation?.valid ? ' practice-run-btn--success' : ''}${running ? ' practice-run-btn--running' : ''}`}
             onClick={handleRun}
-            disabled={!answer.trim()}
+            disabled={!canRun}
             aria-label="Run and validate your SQL query"
           >
-            {validation?.valid ? '✓ Correct' : '▶ Run Query'}
+            {running ? (
+              <><span className="btn-spinner" aria-hidden="true" /> Running…</>
+            ) : validation?.valid ? (
+              '✓ Correct'
+            ) : (
+              '▶ Run Query'
+            )}
           </button>
         )}
         {answer && (
@@ -148,6 +291,7 @@ export function PracticeCard({ subtopic, completed, onToggleComplete }) {
         )}
       </div>
 
+      {/* ── Hint / Solution reveals ── */}
       {showHint && subtopic.hint && (
         <div className="practice-reveal practice-hint">
           <span>Hint</span>
@@ -160,6 +304,15 @@ export function PracticeCard({ subtopic, completed, onToggleComplete }) {
           <span>Solution</span>
           <CodeBlock code={subtopic.solution} />
         </div>
+      )}
+
+      {/* ── Query history ── */}
+      {sqlMode && (
+        <QueryHistory
+          history={history}
+          onRerun={handleRerun}
+          onClear={clearHistory}
+        />
       )}
     </div>
   );
