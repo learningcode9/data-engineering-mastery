@@ -1,155 +1,339 @@
 # Database Schema
 
-All tables live in the Supabase `public` schema with Row Level Security enabled.
-Users can only access their own rows.
+**Migration file:** `supabase/migrations/001_initial_schema.sql`
 
-## Entity Relationship Overview
+---
+
+## Table Overview
+
+| Table | Rows grow when… | User-owned? |
+|---|---|---|
+| `profiles` | User signs up | Yes — 1 row per user |
+| `learning_progress` | User opens or completes a topic | Yes |
+| `topic_completion` | User completes a section | Yes |
+| `saved_notes` | User saves a note | Yes |
+| `xp_history` | Any XP-earning action occurs | Yes — append-only |
+| `achievements` | Badge is unlocked | Yes — append-only |
+| `incidents` | Admin seeds scenarios | **No** — publicly readable |
+| `incident_attempts` | User resolves a simulation | Yes |
+| `sql_attempts` | User submits a SQL query | Yes — append-only |
+| `interview_sessions` | User completes an interview | Yes |
+| `ai_chat_history` | User sends an AI message | Yes |
+| `projects_progress` | User tracks a portfolio project | Yes |
+
+---
+
+## Relationships
 
 ```
 auth.users (Supabase Auth)
-    └── profiles (1:1)
-            ├── xp_ledger          (1:many)
-            ├── streaks             (1:1)
-            ├── achievements        (1:many)
-            ├── topic_progress      (1:many per topic+section)
-            ├── notes               (1:many per topic+section)
-            ├── practice_completions(1:many)
-            ├── sql_attempts        (1:many)
-            ├── saved_queries       (1:many)
-            ├── incident_sessions   (1:many)
-            │       └── incident_events (1:many per session)
+    └── profiles (1:1 — auto-created via trigger)
+            ├── learning_progress   (1:many per topic+module)
+            ├── topic_completion    (1:many per topic+section)
+            ├── saved_notes         (1:many per topic+section)
+            ├── xp_history          (1:many — append-only ledger)
+            ├── achievements        (1:many — append-only)
+            ├── incident_attempts   (1:many → incidents)
+            ├── sql_attempts        (1:many — append-only)
             ├── interview_sessions  (1:many)
-            │       └── interview_answers (1:many per session)
-            ├── question_mastery    (1:many per question)
-            ├── ai_threads          (1:many)
-            │       └── ai_messages (1:many per thread)
-            ├── career_enrollments  (1:many)
-            ├── daily_plans         (1:many per date)
-            └── user_files          (1:many)
+            ├── ai_chat_history     (1:many)
+            └── projects_progress   (1:many per project)
+
+incidents (reference data — no user FK)
+    └── incident_attempts (many users can attempt same incident)
 ```
 
-## Table Reference
+---
+
+## Table Definitions
 
 ### `profiles`
-Extends `auth.users`. Created automatically on signup via trigger.
+One row per authenticated user. Created automatically by the `handle_new_user` trigger whenever a new `auth.users` row is inserted.
 
 | Column | Type | Notes |
 |---|---|---|
-| id | uuid | PK, FK to auth.users |
-| email | text | unique |
-| full_name | text | nullable |
-| role | text | learner / pro / admin |
-| onboarded | boolean | gates onboarding flow |
-| target_role | text | e.g. "Senior Data Engineer" |
-| experience_level | text | junior / mid / senior / staff |
+| `id` | uuid | PK — FK to `auth.users(id)` |
+| `email` | text | |
+| `full_name` | text | nullable |
+| `avatar_url` | text | nullable |
+| `role` | text | `learner` / `pro` / `admin` |
+| `created_at` | timestamptz | |
+| `updated_at` | timestamptz | auto-updated by trigger |
 
-### `xp_ledger`
-Append-only ledger. Never updated — only inserted.
+---
 
-| Column | Type | Notes |
-|---|---|---|
-| amount | integer | XP points awarded |
-| source | text | topic_complete / sql_challenge / incident_resolve / interview / streak_bonus |
-| source_id | text | optional reference to source entity |
-
-**View:** `user_xp_totals` — aggregates total_xp, level, xp_in_current_level
-
-### `streaks`
-One row per user. Updated daily.
+### `learning_progress`
+Tracks overall completion percentage and status for each topic module a user has visited.
 
 | Column | Type | Notes |
 |---|---|---|
-| current_streak | integer | resets to 0 if gap > 1 day |
-| longest_streak | integer | all-time high |
-| last_activity_date | date | used to compute consecutive days |
+| `id` | uuid | PK |
+| `user_id` | uuid | FK → profiles |
+| `topic_id` | text | e.g. `"sql"`, `"pyspark"` |
+| `module_id` | text | sub-module within topic |
+| `progress_percent` | integer | 0–100 |
+| `status` | text | `not_started` / `in_progress` / `completed` |
+| `last_opened_section` | text | nullable — for "Continue Learning" |
+| `updated_at` | timestamptz | auto-updated by trigger |
 
-### `topic_progress`
-One row per (user, topic, section). Upserted on section completion.
+**Unique constraint:** `(user_id, topic_id, module_id)`
+
+---
+
+### `topic_completion`
+Append-only log of individual section completions. One row per section finished.
 
 | Column | Type | Notes |
 |---|---|---|
-| topic_id | text | e.g. 'sql', 'pyspark' |
-| section_id | text | section within topic |
-| completed | boolean | |
-| time_spent_sec | integer | cumulative seconds |
+| `id` | uuid | PK |
+| `user_id` | uuid | FK → profiles |
+| `topic_id` | text | |
+| `section_id` | text | e.g. `"joins"`, `"window-functions"` |
+| `completed_at` | timestamptz | |
 
-**View:** `topic_completion_summary` — pct_complete per topic
+**Unique constraint:** `(user_id, topic_id, section_id)` — prevents duplicate completions.
+
+---
+
+### `saved_notes`
+One note per user per section. Upserted on every autosave.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `user_id` | uuid | FK → profiles |
+| `topic_id` | text | |
+| `section_id` | text | |
+| `content` | text | |
+| `updated_at` | timestamptz | auto-updated by trigger |
+
+**Unique constraint:** `(user_id, topic_id, section_id)`
+
+---
+
+### `xp_history`
+Append-only XP ledger. Total XP is always `SUM(xp_amount)` — never stored as a running total. Exposed via `user_xp_summary` view.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `user_id` | uuid | FK → profiles |
+| `action` | text | human-readable label, e.g. `"Completed SQL Joins"` |
+| `xp_amount` | integer | must be > 0 |
+| `source_type` | text | enum — see `XPSourceType` in `src/types/database.ts` |
+| `source_id` | text | nullable — reference to the triggering entity |
+| `created_at` | timestamptz | |
+
+**View:** `user_xp_summary` — returns `total_xp`, `level` (total/500 + 1), and `xp_in_level`.
+
+---
+
+### `achievements`
+One row per badge earned. Duplicate `achievement_key` per user silently ignored via unique constraint.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `user_id` | uuid | FK → profiles |
+| `achievement_key` | text | e.g. `"sql_master"`, `"streak_7"` |
+| `title` | text | display name |
+| `unlocked_at` | timestamptz | |
+
+---
+
+### `incidents`
+Reference data for simulation scenarios. **Publicly readable** (no auth required). Written by seed data; not modified by users.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `title` | text | incident name |
+| `severity` | text | `P1` / `P2` / `P3` / `P4` |
+| `status` | text | `active` / `resolved` / `closed` |
+| `affected_system` | text | e.g. `"Azure Databricks"` |
+| `business_impact` | text | description of consequences |
+| `created_at` | timestamptz | |
+
+**Seeded incidents:**
+1. Spark OOM — wide join on patient cohort (P1)
+2. Kafka consumer lag — fraud scoring pipeline (P2)
+3. Schema drift — ADF orders pipeline failure (P2)
+4. ADF copy activity failure — raw to Bronze (P3)
+5. Delta small file problem — orders_silver table (P2)
+
+---
+
+### `incident_attempts`
+Records each time a user selects a resolution for an incident simulation.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `user_id` | uuid | FK → profiles |
+| `incident_id` | uuid | FK → incidents |
+| `selected_resolution` | text | which fix option was chosen |
+| `success` | boolean | whether the resolution was correct |
+| `xp_earned` | integer | 0 if incorrect |
+| `completed_at` | timestamptz | |
+
+---
 
 ### `sql_attempts`
-Append-only. Every query submission is recorded.
+Records every SQL challenge submission (append-only — history is preserved).
 
 | Column | Type | Notes |
 |---|---|---|
-| challenge_id | text | which challenge |
-| query | text | submitted SQL |
-| is_correct | boolean | |
-| score | integer | 0–100 |
-| execution_ms | integer | query execution time |
-| result_rows | jsonb | snapshot of output |
-| execution_plan | jsonb | query plan |
+| `id` | uuid | PK |
+| `user_id` | uuid | FK → profiles |
+| `challenge_id` | text | e.g. `"sql-window-rank"` |
+| `query_text` | text | the submitted SQL |
+| `is_correct` | boolean | |
+| `execution_time_ms` | integer | nullable |
+| `attempts_count` | integer | running attempt number for this challenge |
+| `created_at` | timestamptz | |
 
-**View:** `sql_best_attempts` — highest score per challenge per user
-
-### `incident_sessions`
-One session per incident run.
-
-| Column | Type | Notes |
-|---|---|---|
-| status | text | active / resolved / failed / abandoned |
-| severity | text | P1 / P2 / P3 / P4 |
-| steps_taken | jsonb | array of action objects |
-| rca_submitted | text | user's root cause analysis |
-| sla_met | boolean | whether resolved within SLA |
-| score | integer | 0–100 |
+---
 
 ### `interview_sessions`
-One session per interview run.
+One row per completed interview run.
 
 | Column | Type | Notes |
 |---|---|---|
-| mode | text | practice / timed / war_room |
-| category | text | sql / system_design / behavioral / mixed |
-| total_q / answered_q / correct_q | integer | progress |
+| `id` | uuid | PK |
+| `user_id` | uuid | FK → profiles |
+| `category` | text | nullable — e.g. `"sql"`, `"system_design"` |
+| `difficulty` | text | `junior` / `mid` / `senior` / `staff` |
+| `score` | integer | 0–100, nullable |
+| `completed_at` | timestamptz | |
 
-### `question_mastery`
-One row per (user, question). Upserted after each answer.
+---
+
+### `ai_chat_history`
+Stores AI copilot Q&A pairs.
 
 | Column | Type | Notes |
 |---|---|---|
-| status | text | unseen / learning / reviewing / mastered |
-| correct_streak | integer | consecutive correct answers |
+| `id` | uuid | PK |
+| `user_id` | uuid | FK → profiles |
+| `message` | text | user's prompt |
+| `response` | text | AI's response |
+| `context_type` | text | enum — see `AIContextType` in `src/types/database.ts` |
+| `created_at` | timestamptz | |
 
-### `ai_threads` + `ai_messages`
-Conversation history for AI copilot. Threaded by context type.
+---
 
-Context types: `sql_explain`, `interview_help`, `incident_rca`, `spark_explain`, `architecture_review`, `topic_summary`, `general`
+### `projects_progress`
+Tracks portfolio project completion per user.
 
-## Migrations
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid | PK |
+| `user_id` | uuid | FK → profiles |
+| `project_id` | text | e.g. `"end-to-end-pipeline"` |
+| `progress_percent` | integer | 0–100 |
+| `status` | text | `not_started` / `in_progress` / `completed` |
+| `updated_at` | timestamptz | auto-updated by trigger |
 
-Run in order:
-```
-001_users.sql           → profiles table + auth trigger
-002_xp_streaks.sql      → xp_ledger, streaks, achievements
-003_learning_progress.sql → topic_progress, notes, practice_completions
-004_sql_challenges.sql  → sql_attempts, saved_queries
-005_incidents.sql       → incident_sessions, incident_events
-006_interviews.sql      → interview_sessions, interview_answers, question_mastery
-007_ai_conversations.sql → ai_threads, ai_messages
-008_career_tracks.sql   → career_enrollments, daily_plans, user_files
-```
+**Unique constraint:** `(user_id, project_id)`
 
-## Local Setup
+---
+
+## Indexes
+
+| Index | Table | Columns | Purpose |
+|---|---|---|---|
+| `idx_learning_progress_user` | learning_progress | user_id | All progress for a user |
+| `idx_learning_progress_topic` | learning_progress | user_id, topic_id | Topic-specific progress |
+| `idx_learning_progress_status` | learning_progress | status | Filter by completion state |
+| `idx_topic_completion_user` | topic_completion | user_id | |
+| `idx_topic_completion_topic` | topic_completion | user_id, topic_id | |
+| `idx_saved_notes_user` | saved_notes | user_id | |
+| `idx_saved_notes_topic` | saved_notes | user_id, topic_id | |
+| `idx_xp_history_user` | xp_history | user_id | |
+| `idx_xp_history_created` | xp_history | user_id, created_at desc | XP timeline |
+| `idx_achievements_user` | achievements | user_id | |
+| `idx_incidents_status` | incidents | status | Active incident filter |
+| `idx_incidents_severity` | incidents | severity | |
+| `idx_incidents_created` | incidents | created_at desc | |
+| `idx_incident_attempts_user` | incident_attempts | user_id | |
+| `idx_incident_attempts_incident` | incident_attempts | incident_id | |
+| `idx_sql_attempts_user` | sql_attempts | user_id | |
+| `idx_sql_attempts_challenge` | sql_attempts | challenge_id | Per-challenge history |
+| `idx_sql_attempts_created` | sql_attempts | user_id, created_at desc | |
+| `idx_interview_sessions_user` | interview_sessions | user_id | |
+| `idx_ai_chat_user` | ai_chat_history | user_id | |
+| `idx_ai_chat_context` | ai_chat_history | user_id, context_type | |
+| `idx_projects_progress_user` | projects_progress | user_id | |
+
+---
+
+## Row Level Security (RLS)
+
+RLS is enabled on every table. All policies use `auth.uid()` to match `user_id`.
+
+| Table | Read | Write |
+|---|---|---|
+| profiles | Own row only | Own row only |
+| learning_progress | Own rows only | Own rows only |
+| topic_completion | Own rows only | Own rows only |
+| saved_notes | Own rows only | Own rows only |
+| xp_history | Own rows only | Insert own only |
+| achievements | Own rows only | Insert own only |
+| **incidents** | **Anyone** (public) | Admin only (via seed) |
+| incident_attempts | Own rows only | Own rows only |
+| sql_attempts | Own rows only | Insert own only |
+| interview_sessions | Own rows only | Own rows only |
+| ai_chat_history | Own rows only | Own rows only |
+| projects_progress | Own rows only | Own rows only |
+
+---
+
+## Running the migration
+
+### On Supabase Cloud
 
 ```bash
-# Install Supabase CLI
-brew install supabase/tap/supabase
+# Link CLI to your project (one-time)
+supabase link --project-ref your-project-ref
 
-# Start local Supabase
+# Apply migrations
+supabase db push
+```
+
+### Local development
+
+```bash
+# Start local Supabase stack
 supabase start
 
-# Apply migrations + seed
+# Apply migrations + seed data
 supabase db reset
+```
 
-# Generate TypeScript types
+### Verify
+
+```bash
+# Open local Supabase Studio
+open http://localhost:54323
+
+# Or check via CLI
+supabase db diff
+```
+
+### Regenerate TypeScript types after schema changes
+
+```bash
 supabase gen types typescript --local > src/types/database.types.ts
 ```
+
+---
+
+## Design decisions
+
+**Append-only tables** — `xp_history`, `topic_completion`, `sql_attempts`, and `achievements` never update existing rows. This gives a full audit trail and makes XP calculation accurate (`SUM`, not a running total that could drift).
+
+**`updated_at` triggers** — A single `set_updated_at()` function is reused across all tables that need it, rather than duplicating trigger logic.
+
+**`incidents` as reference data** — Incident scenarios are seeded once and publicly readable. Users never write to this table; they write to `incident_attempts` instead. This separates scenario definition from user activity.
+
+**`unique` constraints over application-level deduplication** — `topic_completion`, `saved_notes`, `learning_progress`, and `projects_progress` all use database-level unique constraints so upserts are safe even under concurrent requests.

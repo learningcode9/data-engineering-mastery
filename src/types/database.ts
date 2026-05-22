@@ -1,136 +1,191 @@
-// Shared application types for the Supabase database schema.
-// Phase 1: hand-authored. Later phases: auto-generate with
+// Shared application types aligned with supabase/migrations/001_initial_schema.sql
+// Update this file whenever the schema changes.
+// For production, replace with auto-generated types:
 //   supabase gen types typescript --local > src/types/database.types.ts
 
-// ─── User / Profile ───────────────────────────────────────────────────────────
+// ─── profiles ────────────────────────────────────────────────────────────────
+
+export type UserRole = 'learner' | 'pro' | 'admin'
 
 export interface Profile {
-  id: string
+  id: string            // uuid — FK to auth.users(id)
   email: string
-  fullName: string | null
-  avatarUrl: string | null
-  role: 'learner' | 'pro' | 'admin'
-  onboarded: boolean
-  targetRole: string | null
-  experienceLevel: 'junior' | 'mid' | 'senior' | 'staff' | null
-  createdAt: string
-  updatedAt: string
+  full_name: string | null
+  avatar_url: string | null
+  role: UserRole
+  created_at: string
+  updated_at: string
 }
 
-// ─── Learning Progress ────────────────────────────────────────────────────────
+// ─── learning_progress ───────────────────────────────────────────────────────
+
+export type ProgressStatus = 'not_started' | 'in_progress' | 'completed'
 
 export interface LearningProgress {
   id: string
-  userId: string
-  topicId: string
-  pctComplete: number        // 0–100
-  lastActivityAt: string | null
-  totalTimeSpentSec: number
-  updatedAt: string
+  user_id: string
+  topic_id: string
+  module_id: string
+  progress_percent: number      // 0–100
+  status: ProgressStatus
+  last_opened_section: string | null
+  updated_at: string
 }
 
-// ─── Topic Completion ─────────────────────────────────────────────────────────
+// ─── topic_completion ────────────────────────────────────────────────────────
 
 export interface TopicCompletion {
   id: string
-  userId: string
-  topicId: string
-  sectionId: string
-  completed: boolean
-  completedAt: string | null
-  timeSpentSec: number
+  user_id: string
+  topic_id: string
+  section_id: string
+  completed_at: string
 }
 
-// ─── Saved Notes ──────────────────────────────────────────────────────────────
+// ─── saved_notes ─────────────────────────────────────────────────────────────
 
 export interface SavedNote {
-  topicId: string
+  id: string
+  user_id: string
+  topic_id: string
+  section_id: string
   content: string
-  updatedAt: string
+  updated_at: string
 }
 
-// ─── Incident Attempt ─────────────────────────────────────────────────────────
+// ─── xp_history ──────────────────────────────────────────────────────────────
 
-export type IncidentSeverity = 'P1' | 'P2' | 'P3' | 'P4'
-export type IncidentStatus   = 'active' | 'resolved' | 'failed' | 'abandoned'
-
-export interface IncidentAttempt {
-  id: string
-  userId: string
-  incidentId: string
-  scenarioId: string
-  severity: IncidentSeverity
-  status: IncidentStatus
-  startedAt: string
-  resolvedAt: string | null
-  durationSec: number | null
-  score: number | null          // 0–100
-  slaMet: boolean | null
-  xpAwarded: number
-  rcaSubmitted: string | null
-}
-
-// ─── SQL Attempt ──────────────────────────────────────────────────────────────
-
-export interface SqlAttempt {
-  id: string
-  userId: string
-  challengeId: string
-  query: string
-  isCorrect: boolean
-  score: number                 // 0–100
-  executionMs: number | null
-  errorMessage: string | null
-  attemptedAt: string
-}
-
-// ─── Interview Session ────────────────────────────────────────────────────────
-
-export type InterviewMode = 'practice' | 'timed' | 'war_room'
-
-export interface InterviewSession {
-  id: string
-  mode: InterviewMode
-  category: string | null
-  totalQuestions: number
-  correctAnswers: number
-  score: number | null          // 0–100
-  startedAt: string
-  completedAt: string | null
-}
-
-// ─── Achievement ──────────────────────────────────────────────────────────────
-
-export interface Achievement {
-  badgeId: string
-  badgeName: string
-  badgeIcon: string | null
-  earnedAt: string
-}
-
-// ─── XP ───────────────────────────────────────────────────────────────────────
-
-export type XPSource =
+export type XPSourceType =
   | 'topic_complete'
+  | 'section_complete'
+  | 'practice_task'
   | 'sql_challenge'
   | 'incident_resolve'
   | 'interview'
   | 'streak_bonus'
   | 'achievement'
-  | 'practice_task'
 
-export interface XPEntry {
+export interface XPHistory {
   id: string
-  userId: string
-  amount: number
-  source: XPSource
-  label: string | null
-  createdAt: string
+  user_id: string
+  action: string
+  xp_amount: number
+  source_type: XPSourceType
+  source_id: string | null
+  created_at: string
 }
 
+// Derived from user_xp_summary view
 export interface UserXPSummary {
-  totalXP: number
+  user_id: string
+  total_xp: number
   level: number
-  xpInCurrentLevel: number
-  xpPerLevel: number
+  xp_in_level: number
 }
+
+// ─── achievements ────────────────────────────────────────────────────────────
+
+export interface Achievement {
+  id: string
+  user_id: string
+  achievement_key: string
+  title: string
+  unlocked_at: string
+}
+
+// ─── incidents ───────────────────────────────────────────────────────────────
+
+export type IncidentSeverity = 'P1' | 'P2' | 'P3' | 'P4'
+export type IncidentStatus   = 'active' | 'resolved' | 'closed'
+
+export interface Incident {
+  id: string
+  title: string
+  severity: IncidentSeverity
+  status: IncidentStatus
+  affected_system: string
+  business_impact: string
+  created_at: string
+}
+
+// ─── incident_attempts ───────────────────────────────────────────────────────
+
+export interface IncidentAttempt {
+  id: string
+  user_id: string
+  incident_id: string           // FK → incidents(id)
+  selected_resolution: string
+  success: boolean
+  xp_earned: number
+  completed_at: string
+}
+
+// ─── sql_attempts ────────────────────────────────────────────────────────────
+
+export interface SqlAttempt {
+  id: string
+  user_id: string
+  challenge_id: string
+  query_text: string
+  is_correct: boolean
+  execution_time_ms: number | null
+  attempts_count: number
+  created_at: string
+}
+
+// ─── interview_sessions ──────────────────────────────────────────────────────
+
+export type InterviewDifficulty = 'junior' | 'mid' | 'senior' | 'staff'
+
+export interface InterviewSession {
+  id: string
+  user_id: string
+  category: string | null
+  difficulty: InterviewDifficulty | null
+  score: number | null           // 0–100
+  completed_at: string
+}
+
+// ─── ai_chat_history ─────────────────────────────────────────────────────────
+
+export type AIContextType =
+  | 'sql_explain'
+  | 'interview_help'
+  | 'incident_rca'
+  | 'spark_explain'
+  | 'architecture_review'
+  | 'topic_summary'
+  | 'general'
+
+export interface AIChatHistory {
+  id: string
+  user_id: string
+  message: string
+  response: string
+  context_type: AIContextType
+  created_at: string
+}
+
+// ─── projects_progress ───────────────────────────────────────────────────────
+
+export interface ProjectProgress {
+  id: string
+  user_id: string
+  project_id: string
+  progress_percent: number       // 0–100
+  status: ProgressStatus
+  updated_at: string
+}
+
+// ─── Insert helpers (omit server-generated fields) ───────────────────────────
+
+export type InsertLearningProgress  = Omit<LearningProgress, 'id' | 'updated_at'>
+export type InsertTopicCompletion   = Omit<TopicCompletion, 'id' | 'completed_at'>
+export type InsertSavedNote         = Omit<SavedNote, 'id' | 'updated_at'>
+export type InsertXPHistory         = Omit<XPHistory, 'id' | 'created_at'>
+export type InsertAchievement       = Omit<Achievement, 'id' | 'unlocked_at'>
+export type InsertIncidentAttempt   = Omit<IncidentAttempt, 'id' | 'completed_at'>
+export type InsertSqlAttempt        = Omit<SqlAttempt, 'id' | 'created_at'>
+export type InsertInterviewSession  = Omit<InterviewSession, 'id' | 'completed_at'>
+export type InsertAIChatHistory     = Omit<AIChatHistory, 'id' | 'created_at'>
+export type InsertProjectProgress   = Omit<ProjectProgress, 'id' | 'updated_at'>
