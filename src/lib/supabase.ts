@@ -1,29 +1,34 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '../types/database.types'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
+const key = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    'Missing Supabase environment variables. Copy .env.example to .env.local and fill in your project credentials.'
-  )
+// Supabase client is nullable — the app runs in localStorage-only mode when
+// credentials are absent. Feature-flagged code checks isSupabaseReady() first.
+export const supabase: SupabaseClient<Database> | null =
+  url && key
+    ? createClient<Database>(url, key, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true,
+          storageKey: 'dem-auth-token',
+        },
+        realtime: { params: { eventsPerSecond: 10 } },
+      })
+    : null
+
+export function isSupabaseReady(): supabase is SupabaseClient<Database> {
+  return supabase !== null
 }
 
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-    storageKey: 'dem-auth-token',
-  },
-  realtime: {
-    params: { eventsPerSecond: 10 },
-  },
-})
-
-// Typed shorthand helpers
-export const db = supabase.from.bind(supabase)
-export const auth = supabase.auth
-export const storage = supabase.storage
-export const realtime = supabase.channel.bind(supabase)
+// Throws a helpful error when backend code is called without credentials
+export function requireSupabase(): SupabaseClient<Database> {
+  if (!supabase) {
+    throw new Error(
+      'Supabase client is not initialized. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in .env.local'
+    )
+  }
+  return supabase
+}

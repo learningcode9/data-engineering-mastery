@@ -151,10 +151,37 @@ const useLearningStore = create(
         if (!trackId || get().unlockedTracks.includes(trackId)) return;
         set(s => ({ unlockedTracks: [...s.unlockedTracks, trackId] }));
       },
+
+      // ─── Supabase sync actions ──────────────────────────────────────────────
+      // These extend the store without modifying existing localStorage behavior.
+      // Call these from useSyncXP / useSyncProgress hooks when backend is enabled.
+
+      setSupabaseUserId(userId) {
+        set({ _supabaseUserId: userId ?? null });
+      },
+
+      // Merge hydrated Supabase state (called once on auth + backend enabled)
+      hydrateFromSupabase({ xp, streakCount, completedTopics, achievements } = {}) {
+        set(s => ({
+          xp:             xp             ?? s.xp,
+          streakCount:    streakCount    ?? s.streakCount,
+          completedTopics: completedTopics
+            ? { ...s.completedTopics, ...completedTopics }
+            : s.completedTopics,
+          achievements:   achievements
+            ? { ...s.achievements, ...achievements }
+            : s.achievements,
+        }));
+      },
     }),
     {
       name: 'dem-learning-store-v1',
       version: 1,
+      // Don't persist Supabase user ID — it comes from auth session
+      partialize: s => {
+        const { _supabaseUserId, ...rest } = s;
+        return rest;
+      },
     }
   )
 );

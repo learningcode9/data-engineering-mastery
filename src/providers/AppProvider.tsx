@@ -1,14 +1,14 @@
 import type { ReactNode } from 'react'
 import { AuthProvider } from '../lib/auth/AuthProvider'
+import { logEnvStatus } from '../config/env'
 
-// Root provider tree — add more providers here as the app grows
-// Order matters: AuthProvider must wrap anything that needs auth context
+// Called once on app startup
+logEnvStatus()
 
-interface Props {
-  children: ReactNode
-}
+// Root provider tree. Order: AuthProvider must wrap all children.
+// Additional providers (Realtime, AI, Notifications) slot in here as features ship.
 
-export function AppProvider({ children }: Props) {
+export function AppProvider({ children }: { children: ReactNode }) {
   return (
     <AuthProvider>
       {children}
