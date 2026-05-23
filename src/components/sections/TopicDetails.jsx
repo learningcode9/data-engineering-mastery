@@ -437,7 +437,7 @@ function NextStepCard({ nextStep, currentStep, onSelectTopic }) {
       <div className="next-step-card next-step-card--final">
         <span className="next-step-icon" aria-hidden="true">✓</span>
         <div>
-          <strong>All 7 topics complete!</strong>
+          <strong>All topics complete!</strong>
           <p>You have the full skill stack. Now build projects and ace your interviews.</p>
         </div>
       </div>

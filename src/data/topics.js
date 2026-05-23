@@ -5,8 +5,10 @@ import { adfModule }        from './modules/azure-data-factory.js';
 import { databricksModule } from './modules/azure-databricks.js';
 import { awsGlueModule }    from './modules/aws-glue.js';
 import { aiModule }         from './modules/ai-for-data-engineers.js';
+import { newTopics }        from './newTopics.js';
+import { phases }           from './phases.js';
 
-export const topics = [
+const coreTopics = [
   {
     id: 'sql',
     title: 'SQL',
@@ -298,3 +300,121 @@ export const topics = [
     nextStep: null,
   },
 ];
+
+const REQUIRED_TITLE_OVERRIDES = {
+  'linux-cli': 'Linux & Command Line',
+  'cloud-storage': 'ADLS / S3',
+  'kafka-basics': 'Kafka',
+  'checkpointing': 'Checkpointing & Watermarking',
+  'retry-handling': 'Retry & Failure Recovery',
+  'unity-catalog': 'Unity Catalog / RBAC',
+  'de-projects': 'Real-world Projects',
+  'llm-pipelines': 'LLM-assisted Pipelines',
+};
+
+const phaseByTopicId = phases.reduce((acc, phase) => {
+  for (const topicId of phase.topicIds) acc[topicId] = phase.id;
+  return acc;
+}, {});
+
+function uniqueById(items) {
+  const seen = new Set();
+  return items.filter(item => {
+    if (!item?.id || seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+}
+
+function practiceTasksFor(topic) {
+  const overviewTasks = (topic.overview ?? [])
+    .filter(item => item.title?.toLowerCase().includes('practice'))
+    .map(item => item.body)
+    .filter(Boolean);
+
+  const moduleTasks = (topic.module?.sections ?? [])
+    .flatMap(section => section.subtopics ?? [])
+    .map(subtopic => subtopic.practice)
+    .filter(Boolean)
+    .slice(0, 5);
+
+  const tasks = [...overviewTasks, ...moduleTasks];
+  if (tasks.length > 0) return tasks;
+
+  return [
+    `Create a short implementation plan showing how ${topic.title} would be used in a production data engineering pipeline.`,
+  ];
+}
+
+function learningObjectivesFor(topic) {
+  if (topic.learningObjectives?.length) return topic.learningObjectives;
+
+  const overviewObjectives = (topic.overview ?? [])
+    .filter(item => !item.title?.toLowerCase().includes('practice'))
+    .map(item => item.body)
+    .filter(Boolean)
+    .slice(0, 3);
+
+  if (overviewObjectives.length > 0) return overviewObjectives;
+
+  return [
+    `Explain what ${topic.title} is and where it fits in a modern data engineering platform.`,
+    `Identify production use cases, trade-offs, and failure modes for ${topic.title}.`,
+    `Practice applying ${topic.title} in a realistic pipeline or interview scenario.`,
+  ];
+}
+
+function miniProjectFor(topic, practiceTasks) {
+  if (topic.miniProject) return topic.miniProject;
+  if (topic.module?.miniProject) return topic.module.miniProject;
+  if (topic.module?.miniProjects?.length) return topic.module.miniProjects[0];
+
+  return {
+    title: `${topic.title} Mini Project`,
+    goal: `Apply ${topic.title} in a realistic data engineering workflow.`,
+    tasks: practiceTasks,
+    expectedOutput: `A concise artifact showing the design, implementation approach, and validation checks for ${topic.title}.`,
+  };
+}
+
+function normalizeTopic(topic) {
+  const title = REQUIRED_TITLE_OVERRIDES[topic.id] ?? topic.title;
+  const estimatedTime = topic.estimatedTime ?? topic.timeEstimate ?? '1–2 weeks';
+  const practiceTasks = practiceTasksFor({ ...topic, title });
+
+  return {
+    ...topic,
+    title,
+    phase: topic.phase ?? phaseByTopicId[topic.id] ?? 'foundation',
+    category: topic.category ?? 'General',
+    difficulty: topic.difficulty ?? 'Beginner',
+    estimatedTime,
+    timeEstimate: topic.timeEstimate ?? estimatedTime,
+    prerequisites: topic.prerequisites ?? [],
+    whyItMatters: topic.whyItMatters ?? topic.careerContext?.whyItMatters ?? topic.overview?.find(item => item.title === 'Why do we use it?')?.body ?? '',
+    learningObjectives: learningObjectivesFor({ ...topic, title }),
+    realWorldUseCase: topic.realWorldUseCase ?? topic.careerContext?.realWorldUseCase ?? '',
+    commonMistakes: topic.commonMistakes ?? [],
+    practiceTasks,
+    interviewQuestions: topic.interviewQuestions ?? topic.questions ?? [],
+    miniProject: miniProjectFor({ ...topic, title }, practiceTasks),
+    nextStep: topic.nextStep ?? null,
+  };
+}
+
+const normalizedTopics = uniqueById([...coreTopics, ...newTopics])
+  .map(normalizeTopic)
+  .sort((a, b) => (a.step ?? 999) - (b.step ?? 999));
+
+export const topics = normalizedTopics.map((topic, index, allTopics) => {
+  if (topic.nextStep || index === allTopics.length - 1) return topic;
+  const next = allTopics[index + 1];
+  return {
+    ...topic,
+    nextStep: {
+      id: next.id,
+      title: next.title,
+      reason: `Continue with ${next.title} to build on ${topic.title} without skipping the learning path.`,
+    },
+  };
+});
