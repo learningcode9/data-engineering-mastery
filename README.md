@@ -1,63 +1,77 @@
 # Data Engineering Mastery
 
-> An immersive, enterprise-grade learning platform for data engineers — built with React, featuring live SQL execution, incident simulation, war-room interview prep, architecture diagrams, and XP-based progression.
+> An interactive learning platform for data engineers — covering SQL, Python, PySpark, Azure, AWS, and AI, with hands-on practice, interview prep, and portfolio projects.
 
-**v1.0.0 — Major Milestone Release**
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](https://react.dev)
+[![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)](https://vitejs.dev)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Deploy on Vercel](https://img.shields.io/badge/Deploy-Vercel-black?logo=vercel)](https://vercel.com)
+
+**[Live Demo](#)** · **[Screenshots](#screenshots)** · **[Quick Start](#quick-start)**
 
 ---
 
-## Features
+## What It Is
 
-### Learning Platform
-- **7 deep-dive topic modules**: SQL, Python, PySpark, Azure Data Factory, Azure Databricks, AWS Glue, AI for Data Engineers
-- One-section-at-a-time accordion UX to eliminate scroll fatigue
-- Topic notes with autosave timestamps and copy support
-- Global search across topics, sections, interview questions, and projects
-- Visual roadmap tracks with curated learning paths
+Data Engineering Mastery is a self-contained, portfolio-ready learning app that runs entirely in the browser. No account required — all progress saves to localStorage, with optional Supabase sync.
+
+It covers the full data engineering interview and project lifecycle: from SQL fundamentals and PySpark internals to real-world incident response and resume-ready portfolio projects.
+
+---
+
+## Screenshots
+
+| Section | Preview |
+|---|---|
+| Dashboard | ![Dashboard](docs/screenshots/dashboard.png) |
+| SQL Practice | ![SQL Lab](docs/screenshots/sql-lab.png) |
+| Interview Prep | ![Interview Prep](docs/screenshots/interview-prep.png) |
+| Projects | ![Projects](docs/screenshots/projects.png) |
+| Roadmap | ![Roadmap](docs/screenshots/roadmap.png) |
+| AI Coach | ![AI Coach](docs/screenshots/ai-coach.png) |
+
+> Screenshots live in `docs/screenshots/`. See [docs/screenshots/README.md](docs/screenshots/README.md) for instructions on adding your own.
+
+---
+
+## Core Features
+
+### Learning Topics
+Seven deep-dive modules with accordion sections, syntax examples, real-world code, interview Q&A, and hands-on practice exercises:
+
+- **SQL** — window functions, CTEs, joins, performance tuning
+- **Python** — data pipelines, pandas, testing patterns
+- **PySpark** — distributed processing, partitioning, optimization
+- **Azure Data Factory** — pipelines, triggers, linked services
+- **Azure Databricks** — clusters, Delta Lake, Unity Catalog
+- **AWS Glue** — ETL jobs, crawlers, data catalog
+- **AI for Data Engineers** — LLM pipelines, embeddings, vector stores
 
 ### SQL Lab
-- Full in-browser SQL engine with real dataset tables
-- Query execution plan visualization and result tables
-- Query history, saved queries, and performance hints
-- Interview-style SQL challenges with expected output validation
+Full in-browser SQLite engine (sql.js / WebAssembly) with a realistic 8-table dataset. Write and run real queries, validate against expected output, and track completion per challenge.
 
-### Enterprise Simulation
-- **Enterprise Simulator**: work through realistic data engineering scenarios at Fortune-500-style companies
-- **Incident Simulator**: diagnose and resolve production pipeline failures under time pressure
-- **Investigation Workspace**: root-cause analysis with guided clues and resolution tracking
-- **Scenario Engine**: role-based challenges (Junior → Staff Engineer)
-- **Simulation HUD**: live timer, score, and feedback overlay
-
-### Interview War Room
-- Curated interview question bank across SQL, system design, and behavioral categories
-- Timed mock interview mode with answer tracking
-- War room mode: rapid-fire Q&A under pressure with mastery indicators
-- Learned / needs-revision tracking per question
-
-### Architecture & Diagrams
-- Visual architecture diagrams for common data engineering patterns
-- Databricks notebook-style interactive walkthroughs
-- Daily standup simulator for team workflow practice
+### Interview Prep
+Curated question bank with learned/revision tracking. Browse by level (Junior → Staff) or filter by topic. Mastery percentage tracked across all questions.
 
 ### Portfolio Projects
-- 7 realistic end-to-end project breakdowns
-- Each project includes: goals, architecture, implementation steps, code snippets, tools used, and resume bullets
-- Project detail modal with full context
+Six end-to-end project breakdowns with architecture diagrams, step-by-step implementation guides, code snippets, tools used, and pre-written resume bullet points.
 
-### Analytics & Progress
-- Skill graph with competency radar across all topic domains
-- XP system with level progression and streak tracking
-- Achievement badges and toast notifications
-- Interview readiness score and role readiness percentage
-- Topic mastery heatmap
+### Learning Roadmap
+Four curated tracks (Data Engineering Foundations, Cloud Specialist, Analytics Engineer, ML Platform Engineer) with phase-by-phase skill milestones.
 
-### UX & Accessibility
-- Responsive layout: sidebar nav on desktop, bottom nav on mobile
-- Command palette (⌘K) for keyboard-first navigation
-- Floating AI coach for contextual guidance
-- Dark mode with design token system
-- Notification center and scroll progress indicator
-- Persistent state via localStorage (no backend required)
+### AI Coach
+Personalized study path based on your progress, spaced-repetition revision queue, and a prompt library for AI-assisted practice sessions.
+
+### Labs (Advanced)
+Available via the collapsible Labs section in the sidebar:
+- **Incident Simulator** — diagnose production pipeline failures under time pressure
+- **Architecture Diagrams** — visual reference for common DE patterns
+- **Skill Graph** — competency radar across all topic domains
+- **Enterprise Scenarios** — role-based challenges at simulated companies
+- **Interview War Room** — rapid-fire timed Q&A mode
+- **Daily Standup** — team workflow practice
+- **Databricks Notebook** — interactive walkthrough in notebook style
+- **Analytics** — XP, readiness score, topic mastery heatmap
 
 ---
 
@@ -65,166 +79,160 @@
 
 | Area | Technology |
 |---|---|
-| Framework | React 18 |
-| Build Tool | Vite |
-| Language | JavaScript / JSX |
-| Styling | Vanilla CSS with custom design tokens |
-| State | React hooks + Zustand stores + localStorage |
-| SQL Engine | Custom in-browser SQL interpreter |
-| Tooling | ESLint, Vite production build |
+| Framework | React 19 |
+| Build | Vite 8 (Rolldown bundler, Lightning CSS) |
+| Language | JavaScript / JSX + TypeScript (services layer) |
+| Styling | Vanilla CSS with custom design tokens — no Tailwind |
+| State | React hooks + Zustand v5 + localStorage |
+| SQL Engine | sql.js 1.14 (SQLite compiled to WebAssembly) |
+| Backend (optional) | Supabase (Auth + Postgres + Realtime) |
+| AI (optional) | OpenAI via Supabase Edge Function |
+| Deployment | Vercel |
 
 ---
 
-## Architecture Overview
-
-```
-src/
-├── App.jsx                          # Root router and layout shell
-├── index.css                        # Global styles and design tokens
-│
-├── components/
-│   ├── layout/
-│   │   ├── Sidebar.jsx              # Desktop navigation
-│   │   └── TopHeader.jsx            # Search, command palette, notifications
-│   ├── sections/                    # Feature pages (lazy-loaded)
-│   │   ├── Dashboard.jsx            # Home with continue-learning card
-│   │   ├── Topics.jsx               # Topic module grid
-│   │   ├── TopicDetails.jsx         # Deep-dive accordion sections
-│   │   ├── SQLLab.jsx               # In-browser SQL workspace
-│   │   ├── Projects.jsx             # Portfolio project cards
-│   │   ├── ProjectDetail.jsx        # Full project breakdown modal
-│   │   ├── Analytics.jsx            # Progress and readiness dashboard
-│   │   ├── SkillGraph.jsx           # Competency radar chart
-│   │   ├── RoadmapTracks.jsx        # Curated learning paths
-│   │   ├── EnterpriseSimulator.jsx  # Company scenario engine
-│   │   ├── IncidentSimulator.jsx    # Pipeline incident response
-│   │   ├── InvestigationWorkspace.jsx # Root-cause analysis
-│   │   ├── InterviewPrep.jsx        # Question bank and practice
-│   │   ├── InterviewWarRoom.jsx     # Timed war-room mode
-│   │   ├── ArchDiagrams.jsx         # Architecture diagram viewer
-│   │   ├── DatabricksNB.jsx         # Notebook-style walkthroughs
-│   │   ├── DailyStandup.jsx         # Standup workflow simulator
-│   │   ├── AILearning.jsx           # AI for data engineers module
-│   │   └── Scenarios.jsx            # Role-based scenario engine
-│   ├── ui/                          # Shared UI components
-│   │   ├── SqlEditor.jsx            # Syntax-highlighted SQL editor
-│   │   ├── CommandPalette.jsx       # ⌘K global command palette
-│   │   ├── FloatingCoach.jsx        # Contextual AI coach overlay
-│   │   ├── SimulationHUD.jsx        # Live timer and score HUD
-│   │   ├── AchievementToast.jsx     # XP and badge notifications
-│   │   ├── NotificationCenter.jsx   # Notification inbox
-│   │   ├── ExecutionPlan.jsx        # SQL query plan visualizer
-│   │   └── ...                      # Cards, accordions, progress bars
-│   └── workspace/
-│       └── SQLWorkspace.jsx         # SQL Lab workspace container
-│
-├── data/
-│   ├── modules/                     # Topic learning content (per module)
-│   ├── appData.js                   # Navigation and platform config
-│   ├── scenarios.js                 # Enterprise scenario definitions
-│   ├── incidents.js                 # Incident simulation data
-│   ├── warRoomQuestions.js          # Interview war room question bank
-│   ├── skillGraph.js                # Competency node graph data
-│   ├── roadmaps.js                  # Learning track definitions
-│   ├── sqlDataset.js                # In-browser SQL tables and rows
-│   └── enterpriseCompanies.js       # Company profiles for simulation
-│
-├── hooks/
-│   ├── useXP.js                     # XP and level progression
-│   ├── useStreak.js                 # Daily learning streak
-│   ├── useAchievements.js           # Badge and achievement engine
-│   ├── useSqlEngine.js              # SQL execution hook
-│   └── useLearningMemory.js         # Cross-session learning state
-│
-├── store/
-│   ├── learningStore.js             # Global learning state (Zustand)
-│   └── simulationStore.js           # Simulation session state (Zustand)
-│
-├── utils/
-│   ├── sqlEngine.js                 # Custom SQL interpreter
-│   ├── queryAnalyzer.js             # Query plan and hint generator
-│   ├── searchUtils.js               # Global fuzzy search
-│   └── sqlValidation.js             # Answer validation logic
-│
-└── design/
-    └── tokens.js                    # Design system tokens
-```
-
----
-
-## Screenshots
-
-| View | Description |
-|---|---|
-| `docs/screenshots/dashboard.png` | Dashboard with XP, streak, and continue-learning |
-| `docs/screenshots/sql-lab.png` | SQL Lab with editor, results, and execution plan |
-| `docs/screenshots/enterprise-sim.png` | Enterprise simulator scenario in progress |
-| `docs/screenshots/incident-sim.png` | Incident response with countdown HUD |
-| `docs/screenshots/war-room.png` | Interview war room timed mode |
-| `docs/screenshots/skill-graph.png` | Competency radar and skill graph |
-| `docs/screenshots/analytics.png` | Progress analytics and readiness scores |
-| `docs/screenshots/roadmap.png` | Learning roadmap tracks |
-
----
-
-## Getting Started
+## Quick Start
 
 ### Prerequisites
-
 - Node.js 18+
 - npm 9+
 
-### Install
+### Install and run
 
 ```bash
-git clone https://github.com/learningcode9/data-engineering-mastery.git
+git clone https://github.com/your-username/data-engineering-mastery.git
 cd data-engineering-mastery
 npm install
-```
-
-### Run Locally
-
-```bash
 npm run dev
 ```
 
-Opens at `http://localhost:5173`
+Opens at `http://localhost:5173`. No environment variables needed — the app works fully offline using localStorage.
 
-### Production Build
-
-```bash
-npm run build
-npm run preview
-```
-
-### Lint
+### Production build
 
 ```bash
-npm run lint
+npm run build    # outputs to dist/
+npm run preview  # serve the built output locally
 ```
 
 ---
 
-## Design Principles
+## Environment Variables
 
-- **No backend required** — all state persists via localStorage, making this a zero-infrastructure portfolio demo
-- **Performance-first** — heavy sections are lazy-loaded; initial bundle is minimal
-- **Dependency-light** — no UI framework, no CSS library; custom design token system
-- **Portfolio-ready** — every feature is built to demonstrate production-level thinking
+The app runs without any environment variables. For optional cloud features, copy `.env.example`:
+
+```bash
+cp .env.example .env.local
+```
+
+| Variable | Required | Description |
+|---|---|---|
+| `VITE_SUPABASE_URL` | No | Supabase project URL |
+| `VITE_SUPABASE_ANON_KEY` | No | Supabase anon key |
+| `VITE_ENABLE_BACKEND` | No | Set `true` to use Supabase instead of localStorage |
+| `VITE_ENABLE_AI` | No | Set `true` to enable AI copilot |
+| `VITE_AI_PROVIDER` | No | `mock` (default) or `openai` |
+| `VITE_OPENAI_API_KEY` | No | OpenAI key (route through Edge Function in production) |
+
+See [docs/deployment.md](docs/deployment.md) for full Vercel + Supabase setup.
+
+---
+
+## Project Structure
+
+```
+data-engineering-mastery/
+├── public/                        # Static assets (favicon, sql.js WASM)
+├── src/
+│   ├── App.jsx                    # Root layout + all state
+│   ├── main.jsx                   # Entry point
+│   ├── index.css                  # Global styles + design tokens
+│   │
+│   ├── components/
+│   │   ├── layout/                # Sidebar, TopHeader, RightRail
+│   │   ├── sections/              # All page sections (lazy-loaded)
+│   │   │   ├── Dashboard.jsx      # Home: XP, streak, continue card
+│   │   │   ├── Topics.jsx         # Topic grid + detail panel
+│   │   │   ├── TopicDetails.jsx   # Accordion deep-dive content
+│   │   │   ├── SQLLab.jsx         # In-browser SQL workspace
+│   │   │   ├── InterviewPrep.jsx  # Question bank + tracking
+│   │   │   ├── Projects.jsx       # Portfolio project cards
+│   │   │   ├── ProjectDetail.jsx  # Full project modal
+│   │   │   ├── RoadmapTracks.jsx  # Learning path viewer
+│   │   │   ├── AILearning.jsx     # AI coach + study path
+│   │   │   └── ...                # Labs: Analytics, SkillGraph, Incidents, etc.
+│   │   ├── ui/                    # Shared components: cards, accordions, toasts
+│   │   └── workspace/             # SQL workspace sub-components
+│   │
+│   ├── data/
+│   │   ├── modules/               # Topic content (one file per topic)
+│   │   ├── topics.js              # Topic list + module references
+│   │   ├── projectDetails.js      # Portfolio project definitions
+│   │   ├── interviewQuestions.js  # Interview question bank
+│   │   ├── roadmaps.js            # Learning track definitions
+│   │   ├── sqlDataset.js          # 8-table realistic SQL dataset
+│   │   └── incidents.js           # 6 production incident scenarios
+│   │
+│   ├── hooks/                     # useXP, useStreak, useSqlEngine, etc.
+│   ├── store/                     # Zustand: learningStore, simulationStore
+│   ├── services/supabase/         # Optional Supabase service layer
+│   ├── providers/                 # AppProvider, UserProvider (auth context)
+│   ├── utils/                     # SQL engine, search, toast, cn()
+│   └── config/                    # env.ts — feature flag helpers
+│
+├── docs/
+│   ├── screenshots/               # App screenshots for README
+│   ├── deployment.md              # Vercel + Supabase setup guide
+│   ├── sql-engine.md              # SQL execution architecture
+│   ├── auth-flow.md               # Supabase auth flow
+│   └── release-v1.md              # v1.0 release notes
+│
+└── supabase/                      # Supabase local dev config
+```
+
+---
+
+## How the SQL Engine Works
+
+The SQL Lab uses [sql.js](https://sql.js.org/) — SQLite compiled to WebAssembly — to execute real SQL in the browser with zero server-side infrastructure. The WASM binary is copied from `node_modules` at build time and served as a static asset.
+
+An 8-table dataset (customers, products, orders, employees, transactions, events, shipments, inventory — 20–40 rows each) gives learners a realistic schema to practice joins, window functions, CTEs, and aggregations.
+
+Answer validation compares query result sets row-by-row against a reference solution.
+
+---
+
+## Deployment
+
+See **[docs/deployment.md](docs/deployment.md)** for the full guide. Short version:
+
+**Vercel (one command):**
+```bash
+npx vercel --prod
+```
+
+No build configuration needed — Vercel auto-detects Vite. The sql.js WASM files are copied during the build step automatically.
+
+**GitHub Pages:**
+```bash
+npm run build
+# deploy dist/ to gh-pages branch
+```
 
 ---
 
 ## Roadmap
 
-- [ ] Deploy to Vercel / GitHub Pages with live demo link
+- [ ] Live demo deployment on Vercel with public URL
 - [ ] Add screenshots and demo GIF to README
-- [ ] Add optional cloud-synced progress (Supabase or Firebase)
-- [ ] Add Python and PySpark interactive runners
-- [ ] Add automated accessibility audit (axe-core)
-- [ ] Add unit tests for SQL engine, search, and progress calculations
+- [ ] Python and PySpark interactive runners (Pyodide)
+- [ ] Optional cloud-synced progress (Supabase integration)
+- [ ] Accessibility audit (axe-core)
+- [ ] Unit tests for SQL engine, search, and progress calculations
+- [ ] Mobile app wrapper (Capacitor)
 
 ---
 
 ## License
 
-MIT
+MIT © 2025

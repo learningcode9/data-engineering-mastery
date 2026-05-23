@@ -28,9 +28,9 @@ const RightRail = memo(function RightRail({ onNavigate }) {
       <div className="right-rail-body" aria-hidden={collapsed ? 'true' : undefined}>
         <div className="right-rail-body-inner">
           <section className="card focus-card">
-            <p className="eyebrow">This Week</p>
-            <h2>Cloud pipeline sprint</h2>
-            <p>Finish a small Azure ingestion flow and document the tradeoffs.</p>
+            <p className="eyebrow">Learning Focus</p>
+            <h2>Master SQL Fundamentals</h2>
+            <p>Work through the SQL topic sections and complete at least one practice exercise today.</p>
           </section>
 
           <section className="card quick-links">

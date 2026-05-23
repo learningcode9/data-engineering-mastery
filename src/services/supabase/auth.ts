@@ -1,9 +1,10 @@
 // Auth service — wraps Supabase Auth with clean, typed methods.
-// The app calls this service; it never imports supabase.auth directly in components.
+// Returns a mock guest user when the backend is not configured so the
+// app never crashes without Supabase credentials.
 
 import { requireSupabase } from './client'
 import { isBackendEnabled } from '../../config/env'
-import type { Profile } from '../../types/database.types'
+import type { Profile } from '../../types/database'
 
 export interface AuthUser {
   id: string
@@ -17,10 +18,17 @@ export interface SignInResult {
   isNewUser: boolean
 }
 
+const MOCK_GUEST: AuthUser = {
+  id: 'local-guest',
+  email: 'guest@localhost',
+  fullName: 'Guest User',
+  avatarUrl: null,
+}
+
 // ─── Session ──────────────────────────────────────────────────────────────────
 
 export async function getCurrentUser(): Promise<AuthUser | null> {
-  if (!isBackendEnabled()) return null
+  if (!isBackendEnabled()) return MOCK_GUEST
   const sb = requireSupabase()
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return null
@@ -61,7 +69,7 @@ export async function signUpWithEmail(
   const u = data.user!
   return {
     user: { id: u.id, email: u.email!, fullName: fullName ?? null, avatarUrl: null },
-    isNewUser: data.session === null, // true = email confirm required
+    isNewUser: data.session === null,
   }
 }
 
@@ -74,6 +82,7 @@ export async function signInWithGoogle(): Promise<void> {
 }
 
 export async function signOut(): Promise<void> {
+  if (!isBackendEnabled()) return
   const { error } = await requireSupabase().auth.signOut()
   if (error) throw new Error(error.message)
 }
@@ -81,6 +90,7 @@ export async function signOut(): Promise<void> {
 // ─── Profile ──────────────────────────────────────────────────────────────────
 
 export async function getProfile(userId: string): Promise<Profile | null> {
+  if (!isBackendEnabled()) return null
   const { data, error } = await requireSupabase()
     .from('profiles')
     .select('*')
@@ -92,7 +102,7 @@ export async function getProfile(userId: string): Promise<Profile | null> {
 
 export async function updateProfile(
   userId: string,
-  updates: Partial<Pick<Profile, 'full_name' | 'avatar_url' | 'target_role' | 'experience_level' | 'onboarded'>>
+  updates: Partial<Pick<Profile, 'full_name' | 'avatar_url'>>
 ): Promise<Profile> {
   const { data, error } = await requireSupabase()
     .from('profiles')

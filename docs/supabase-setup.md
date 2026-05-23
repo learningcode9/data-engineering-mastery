@@ -165,13 +165,50 @@ Setting `VITE_ENABLE_BACKEND=true` requires valid Supabase credentials and migra
 
 ---
 
+---
+
+## localStorage fallback behaviour (Phase 3)
+
+Every service function works without any Supabase configuration.
+When `VITE_ENABLE_BACKEND=false` (or credentials are missing), the service layer:
+
+- Reads and writes to `localStorage` using namespaced keys (`dem-*`)
+- Returns typed responses with the same shape as Supabase rows
+- Returns a mock guest user from `auth.ts` so the app never shows an auth wall
+
+### Switching to real Supabase
+
+1. Set credentials in `.env.local`
+2. Apply migrations: `supabase db push`
+3. Set `VITE_ENABLE_BACKEND=true` in `.env.local`
+4. Restart dev server
+
+The service layer will automatically route to Supabase.  
+Existing localStorage data is not migrated — only new events go to Supabase.
+
+### Service file reference
+
+| File | Purpose | Tables |
+|---|---|---|
+| `auth.ts` | Sign in / sign up / profile | `profiles` |
+| `progress.ts` | Topic progress + section completion | `learning_progress`, `topic_completion` |
+| `notes.ts` | Topic notes | `saved_notes` |
+| `sqlLab.ts` | SQL challenge attempts | `sql_attempts` |
+| `interview.ts` | Interview sessions + question mastery | `interview_sessions` |
+| `incidents.ts` | Scenario definitions + attempt records | `incidents`, `incident_attempts` |
+| `xp.ts` | XP ledger + achievements | `xp_history`, `achievements` |
+| `ai.ts` | AI copilot persistence | `ai_chat_history` |
+
+---
+
 ## Phase completion checklist
 
 - [x] Phase 1 — Supabase foundation (client, env, service structure, types)
-- [ ] Phase 2 — Database schema + migrations applied to real project
-- [ ] Phase 3 — Auth UI + protected routes
-- [ ] Phase 4 — Global user state sync (XP, streaks, progress → Supabase)
-- [ ] Phase 5 — SQL Lab real persistence
-- [ ] Phase 6 — Incident engine persistence
-- [ ] Phase 7 — AI copilot live integration
-- [ ] Phase 8 — Realtime subscriptions
+- [x] Phase 2 — Database schema + single canonical migration
+- [x] Phase 3 — Service layer with localStorage fallback (all services updated to Phase 2 schema)
+- [ ] Phase 4 — Auth UI + protected routes
+- [ ] Phase 5 — Global user state sync (XP, streaks, progress → Supabase)
+- [ ] Phase 6 — SQL Lab real persistence
+- [ ] Phase 7 — Incident engine persistence
+- [ ] Phase 8 — AI copilot live integration
+- [ ] Phase 9 — Realtime subscriptions

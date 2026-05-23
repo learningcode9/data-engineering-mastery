@@ -14,20 +14,23 @@ function buildCommands({ onNavigate, startIncident, openInvestigation, activeInc
   const nav = (section) => () => onNavigate(section);
 
   const PAGES = [
-    { id: 'cmd-dash',        label: 'Dashboard',                   icon: '⌂',  group: 'Navigate', action: nav('dashboard')       },
-    { id: 'cmd-topics',      label: 'Learning Topics',             icon: '▦',  group: 'Navigate', action: nav('topics')          },
-    { id: 'cmd-roadmap',     label: 'Roadmap Tracks',              icon: '◇',  group: 'Navigate', action: nav('roadmap')         },
-    { id: 'cmd-projects',    label: 'Projects',                    icon: '▣',  group: 'Navigate', action: nav('projects')        },
-    { id: 'cmd-arch',        label: 'Architecture Diagrams',       icon: '◫',  group: 'Navigate', action: nav('architecture')    },
-    { id: 'cmd-enterprise',  label: 'Enterprise Simulator',        icon: '◈',  group: 'Navigate', action: nav('enterprise')      },
-    { id: 'cmd-skillgraph',  label: 'Skill Graph',                 icon: '◉',  group: 'Navigate', action: nav('skill-graph')     },
-    { id: 'cmd-incidents',   label: 'Incident Lab',                icon: '⊗',  group: 'Navigate', action: nav('incidents')       },
-    { id: 'cmd-warroom',     label: 'Interview War Room',          icon: '⊘',  group: 'Navigate', action: nav('war-room')        },
-    { id: 'cmd-standup',     label: 'Daily Standup',               icon: '◷',  group: 'Navigate', action: nav('standup')         },
-    { id: 'cmd-databricks',  label: 'Databricks Notebook',        icon: '⚡',  group: 'Navigate', action: nav('databricks')      },
-    { id: 'cmd-interview',   label: 'Interview Prep',              icon: '◌',  group: 'Navigate', action: nav('interview-prep')  },
-    { id: 'cmd-analytics',   label: 'Analytics Dashboard',         icon: '▧',  group: 'Navigate', action: nav('analytics')       },
-    { id: 'cmd-ai',          label: 'AI Learning',                 icon: '✦',  group: 'Navigate', action: nav('ai-learning')     },
+    // Core MVP sections
+    { id: 'cmd-dash',       label: 'Dashboard',       icon: '⌂', group: 'Navigate', action: nav('dashboard')      },
+    { id: 'cmd-topics',     label: 'Learning Topics', icon: '▦', group: 'Navigate', action: nav('topics')         },
+    { id: 'cmd-sqllab',     label: 'SQL Lab',         icon: '▤', group: 'Navigate', action: nav('sql-lab')        },
+    { id: 'cmd-interview',  label: 'Interview Prep',  icon: '◌', group: 'Navigate', action: nav('interview-prep') },
+    { id: 'cmd-projects',   label: 'Projects',        icon: '▣', group: 'Navigate', action: nav('projects')       },
+    { id: 'cmd-roadmap',    label: 'Roadmap',         icon: '◇', group: 'Navigate', action: nav('roadmap')        },
+    { id: 'cmd-ai',         label: 'AI Learning',     icon: '✦', group: 'Navigate', action: nav('ai-learning')    },
+    // Labs — advanced features
+    { id: 'cmd-arch',       label: 'Architecture',    icon: '◫', group: 'Labs', action: nav('architecture')  },
+    { id: 'cmd-skillgraph', label: 'Skill Graph',     icon: '◉', group: 'Labs', action: nav('skill-graph')   },
+    { id: 'cmd-incidents',  label: 'Incident Lab',    icon: '⊗', group: 'Labs', action: nav('incidents')     },
+    { id: 'cmd-enterprise', label: 'Enterprise Sim',  icon: '◈', group: 'Labs', action: nav('enterprise')    },
+    { id: 'cmd-warroom',    label: 'War Room',        icon: '⊘', group: 'Labs', action: nav('war-room')      },
+    { id: 'cmd-standup',    label: 'Daily Standup',   icon: '◷', group: 'Labs', action: nav('standup')       },
+    { id: 'cmd-databricks', label: 'Databricks NB',   icon: '⚡', group: 'Labs', action: nav('databricks')    },
+    { id: 'cmd-analytics',  label: 'Analytics',       icon: '▧', group: 'Labs', action: nav('analytics')     },
   ];
 
   const TOPIC_CMDS = topics.map(t => ({

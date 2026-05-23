@@ -1,8 +1,13 @@
 // Service-layer entry point for all Supabase access.
 // Re-exports the typed client with operational helpers used across services.
 
+import { supabase as _supabase } from '../../lib/supabase'
 export { supabase, isSupabaseReady, requireSupabase } from '../../lib/supabase'
 export type { Database } from '../../types/database.types'
+
+export function isSupabaseConfigured(): boolean {
+  return _supabase !== null
+}
 
 // Generic typed query wrapper — logs errors in dev, re-throws for callers
 export async function query<T>(

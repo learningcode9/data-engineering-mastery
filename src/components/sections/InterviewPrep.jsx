@@ -267,8 +267,8 @@ const InterviewPrep = memo(function InterviewPrep() {
 
   const levelKeys      = Object.keys(LEVEL_META);
   const totalQuestions = Object.values(sqlInterviewQuestions).reduce((a, b) => a + b.length, 0);
-  const totalLearned   = Object.values(learnedSet).filter(Boolean).length;
-  const totalRevision  = Object.values(revisionSet).filter(Boolean).length;
+  const totalLearned   = Object.values(learnedSet ?? {}).filter(Boolean).length;
+  const totalRevision  = Object.values(revisionSet ?? {}).filter(Boolean).length;
   const masteryPct     = Math.round((totalLearned / totalQuestions) * 100);
 
   const anyResult = useMemo(() => {

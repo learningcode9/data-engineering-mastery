@@ -1,8 +1,8 @@
-import { useState, useMemo, useCallback, useEffect, memo, lazy, Suspense } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef, memo, lazy, Suspense } from 'react';
 import Sidebar from './components/layout/Sidebar.jsx';
 import TopHeader from './components/layout/TopHeader.jsx';
 import RightRail from './components/layout/RightRail.jsx';
-import { SummaryGrid, ContinueCard, PlanCard, SmartBanner } from './components/sections/Dashboard.jsx';
+import { SummaryGrid, ContinueCard, SmartBanner, OnboardingCTA, CareerPathTrack, JobReadinessChecklist, StartHereCard, DailyGoalCard, WeeklyProgress, NextActionCard } from './components/sections/Dashboard.jsx';
 import Topics from './components/sections/Topics.jsx';
 import AchievementToast from './components/ui/AchievementToast.jsx';
 import { ToastContainer } from './components/ui/Toast.jsx';
@@ -16,7 +16,9 @@ import { useToast } from './hooks/useToast.js';
 import { useXP, XP_PER_TASK, XP_PER_TOPIC } from './hooks/useXP.js';
 import { useStreak } from './hooks/useStreak.js';
 import { computeSearchResults } from './utils/searchUtils.js';
+import { computeAllTopicStates, getNextRecommendedAction, computeOverallReadiness } from './utils/learningState.js';
 import { topics } from './data/topics.js';
+import { phases } from './data/phases.js';
 import { checklist } from './data/appData.js';
 import { projectDetails } from './data/projectDetails.js';
 import { toast } from './utils/toast.js';
@@ -25,8 +27,17 @@ import useLearningStore from './store/learningStore.js';
 import { SimulationHUD } from './components/ui/SimulationHUD.jsx';
 import { InvestigationWorkspace } from './components/sections/InvestigationWorkspace.jsx';
 import { CommandPalette } from './components/ui/CommandPalette.jsx';
+import { useUser } from './providers/UserProvider';
+import { useSyncXP } from './hooks/useSyncXP.js';
+import { syncPracticeTask, useHydrateFromSupabase } from './hooks/useSyncProgress.js';
+import * as notesService from './services/supabase/notes';
+import { useOnboarding } from './hooks/useOnboarding';
+import { getRecommendation, DEFAULT_RECOMMENDATION } from './services/recommendations/recommendationEngine';
 
-const SQLLab = lazy(() => import('./components/sections/SQLLab.jsx'));
+const SQLLab       = lazy(() => import('./components/sections/SQLLab.jsx'));
+const ResumeOutput = lazy(() => import('./components/sections/ResumeOutput.jsx'));
+const AuthPage       = lazy(() => import('./pages/AuthPage.tsx').then(m => ({ default: m.AuthPage })));
+const OnboardingPage = lazy(() => import('./pages/OnboardingPage.tsx').then(m => ({ default: m.OnboardingPage })));
 const RoadmapTracks = lazy(() => import('./components/sections/RoadmapTracks.jsx'));
 const Projects = lazy(() => import('./components/sections/Projects.jsx'));
 const InterviewPrep = lazy(() => import('./components/sections/InterviewPrep.jsx'));
@@ -35,7 +46,7 @@ const ArchDiagrams = lazy(() => import('./components/sections/ArchDiagrams.jsx')
 const DatabricksNB = lazy(() => import('./components/sections/DatabricksNB.jsx'));
 const Analytics = lazy(() => import('./components/sections/Analytics.jsx'));
 const Scenarios = lazy(() => import('./components/sections/Scenarios.jsx'));
-const FloatingCoach = lazy(() => import('./components/ui/FloatingCoach.jsx'));
+const AICopilotPanel = lazy(() => import('./components/ai/AICopilotPanel.tsx').then(m => ({ default: m.AICopilotPanel })));
 const EnterpriseSimulator = lazy(() => import('./components/sections/EnterpriseSimulator.jsx').then(m => ({ default: m.EnterpriseSimulator })));
 const SkillGraph = lazy(() => import('./components/sections/SkillGraph.jsx').then(m => ({ default: m.SkillGraph })));
 const IncidentSimulator = lazy(() => import('./components/sections/IncidentSimulator.jsx').then(m => ({ default: m.IncidentSimulator })));
@@ -53,6 +64,13 @@ function SectionFallback() {
 }
 
 const App = memo(function App() {
+  // ─── Backend sync + auth ─────────────────────────────────────────────────────
+  const { userId, authPageOpen, onboardingPageOpen, closeOnboardingPage, openOnboardingPage } = useUser();
+  useSyncXP();
+
+  // ─── Onboarding + personalised recommendations ───────────────────────────────
+  const { onboardingProfile, isCompleted: onboardingCompleted } = useOnboarding();
+
   const [isDark, setIsDark]                   = useState(false);
   const [sidebarOpen, setSidebarOpen]         = useState(false);
   const [sidebarCompact, setSidebarCompact]   = useLocalStorage('dem-sidebar-compact', false);
@@ -68,6 +86,7 @@ const App = memo(function App() {
 
   const completedTopics = useLearningStore(s => s.completedTopics);
   const setCompletedTopics = useLearningStore(s => s.setCompletedTopics);
+  useHydrateFromSupabase(userId, setCompletedTopics);
   const [topicNotes,       setTopicNotes]       = useLocalStorage('dem-topic-notes', {});
   const [practiceProgress, setPracticeProgress] = useLocalStorage('dem-practice-progress', {});
   const dailyPlan = useLearningStore(s => s.dailyTasks);
@@ -87,7 +106,7 @@ const App = memo(function App() {
   }, [selectedTopicId, setLastOpenTopicId]);
 
   const completedCount = useMemo(
-    () => topics.filter(t => completedTopics[t.id]).length,
+    () => topics.filter(t => (completedTopics ?? {})[t.id]).length,
     [completedTopics]
   );
 
@@ -110,18 +129,44 @@ const App = memo(function App() {
   }, [practiceProgress]);
 
   const inProgressCount = useMemo(
-    () => topics.filter(t => (allTopicsProgress[t.id] ?? 0) > 0 && !completedTopics[t.id]).length,
+    () => topics.filter(t => (allTopicsProgress[t.id] ?? 0) > 0 && !(completedTopics ?? {})[t.id]).length,
     [allTopicsProgress, completedTopics]
+  );
+
+  // ─── Learning State Engine ──────────────────────────────────────────────────
+  const topicStates = useMemo(
+    () => computeAllTopicStates(topics, completedTopics, practiceProgress),
+    [completedTopics, practiceProgress]
+  );
+
+  const nextAction = useMemo(
+    () => getNextRecommendedAction(topics, topicStates),
+    [topicStates]
+  );
+
+  const overallReadiness = useMemo(
+    () => computeOverallReadiness(topics, topicStates),
+    [topicStates]
+  );
+
+  const personalizedRec = useMemo(
+    () => onboardingProfile
+      ? getRecommendation(onboardingProfile, allTopicsProgress)
+      : DEFAULT_RECOMMENDATION,
+    [onboardingProfile, allTopicsProgress]
   );
 
   const enrichedTopics = useMemo(() =>
     topics.map(t => ({
       ...t,
-      progress:   `${allTopicsProgress[t.id] ?? 0}%`,
-      completed:  !!completedTopics[t.id],
-      inProgress: (allTopicsProgress[t.id] ?? 0) > 0 && !completedTopics[t.id],
+      progress:    `${allTopicsProgress[t.id] ?? 0}%`,
+      completed:   !!(completedTopics ?? {})[t.id],
+      inProgress:  (allTopicsProgress[t.id] ?? 0) > 0 && !(completedTopics ?? {})[t.id],
+      topicState:  topicStates[t.id]?.state ?? 'available',
+      masteryPct:  topicStates[t.id]?.masteryPct ?? 0,
+      prereqsMet:  topicStates[t.id]?.prereqsMet ?? true,
     })),
-    [allTopicsProgress, completedTopics]
+    [allTopicsProgress, completedTopics, topicStates]
   );
 
   const searchResults = useMemo(
@@ -132,13 +177,13 @@ const App = memo(function App() {
   // Achievement checks — run whenever key state changes
   useEffect(() => {
     const totalTasks = Object.values(practiceProgress ?? {}).filter(Boolean).length;
-    const completedTopicsCount = Object.values(completedTopics).filter(Boolean).length;
+    const completedTopicsCount = Object.values(completedTopics ?? {}).filter(Boolean).length;
     checkAchievements({
       totalTasks,
       streak,
       progress: allTopicsProgress,
       completedTopicsCount,
-      learnedCount: Object.values(learnedSet).filter(Boolean).length,
+      learnedCount: Object.values(learnedSet ?? {}).filter(Boolean).length,
       engineeringMode,
       isDark,
     });
@@ -153,7 +198,8 @@ const App = memo(function App() {
 
   const toggleComplete = useCallback(id => {
     setCompletedTopics(p => {
-      const wasComplete = p[id];
+      const safe = p ?? {};
+      const wasComplete = safe[id];
       if (!wasComplete) {
         addXP(XP_PER_TOPIC);
         recordActivity();
@@ -161,15 +207,23 @@ const App = memo(function App() {
         addToActivityLog(`Finished topic: ${topicTitle}`, 'topic', XP_PER_TOPIC);
         toast(`Topic complete! +${XP_PER_TOPIC} XP`, 'success');
       }
-      return { ...p, [id]: !p[id] };
+      return { ...safe, [id]: !safe[id] };
     });
   }, [setCompletedTopics, addXP, recordActivity, addToActivityLog]);
 
-  const updateNotes    = useCallback((id, text) => setTopicNotes(p => ({ ...p, [id]: text })), [setTopicNotes]);
-  const togglePlan     = useCallback(id => setDailyPlan(p => ({ ...p, [id]: !p[id] })), [setDailyPlan]);
+  const notesSyncTimers = useRef({});
+  const updateNotes = useCallback((id, text) => {
+    setTopicNotes(p => ({ ...p, [id]: text }));
+    // Debounced Supabase sync — uses topic-level note with sentinel section_id
+    clearTimeout(notesSyncTimers.current[id]);
+    notesSyncTimers.current[id] = setTimeout(() => {
+      notesService.saveNote(userId, id, 'main', text).catch(() => {});
+    }, 800);
+  }, [userId, setTopicNotes]);
+  const togglePlan     = useCallback(id => setDailyPlan(p => { const s = p ?? {}; return { ...s, [id]: !s[id] }; }), [setDailyPlan]);
 
   const togglePractice = useCallback((id, title) => {
-    const isCurrentlyDone = !!practiceProgress[id];
+    const isCurrentlyDone = !!(practiceProgress ?? {})[id];
     if (!isCurrentlyDone) {
       addXP(XP_PER_TASK);
       recordActivity();
@@ -178,9 +232,11 @@ const App = memo(function App() {
         'practice',
         XP_PER_TASK
       );
+      // Fire-and-forget: persist to Supabase when configured
+      syncPracticeTask(userId, id);
     }
     setPracticeProgress(p => ({ ...p, [id]: !p[id] }));
-  }, [practiceProgress, setPracticeProgress, addXP, recordActivity, addToActivityLog]);
+  }, [userId, practiceProgress, setPracticeProgress, addXP, recordActivity, addToActivityLog]);
 
   // Command palette
   const [cmdPaletteOpen, setCmdPaletteOpen] = useState(false);
@@ -201,9 +257,11 @@ const App = memo(function App() {
   // Scroll-based active section detection — uses actual DOM element IDs
   useEffect(() => {
     const SECTION_IDS = [
-      'topics', 'roadmap', 'projects', 'architecture',
-      'enterprise', 'skill-graph', 'incidents', 'war-room', 'standup',
-      'databricks', 'interview-prep', 'analytics', 'ai-learning',
+      // Core MVP sections
+      'topics', 'sql-lab', 'interview-prep', 'projects', 'roadmap', 'ai-learning',
+      // Labs sections
+      'architecture', 'skill-graph', 'incidents', 'enterprise',
+      'war-room', 'standup', 'databricks', 'scenarios', 'analytics',
     ];
     const targets = SECTION_IDS.map(id => document.getElementById(id)).filter(Boolean);
     if (!targets.length) return;
@@ -235,6 +293,11 @@ const App = memo(function App() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }, []);
+
+  const handlePathStepClick = useCallback((topicId, section) => {
+    if (topicId) { setSelectedTopicId(topicId); navigate('topics'); }
+    else if (section) { navigate(section); }
+  }, [navigate, setSelectedTopicId]);
 
   function scrollToTopicSection(topicId, idx) {
     const sectionEl = document.getElementById(`${topicId}-section-${idx}`);
@@ -333,19 +396,49 @@ const App = memo(function App() {
             if (first) openInvestigation(first.uid);
           }}
         />
-        <SmartBanner allTopicsProgress={allTopicsProgress} streak={streak} onNavigate={navigate} />
+        <SmartBanner allTopicsProgress={allTopicsProgress} streak={streak} onNavigate={navigate} personalizedRec={personalizedRec} />
+        {!onboardingCompleted && <OnboardingCTA onOpen={openOnboardingPage} />}
         <SummaryGrid completedCount={completedCount} totalTopics={topics.length} inProgressCount={inProgressCount} />
 
         <div className="dashboard-grid">
           <div className="primary-column">
 
-            {/* 1. Continue Learning + Daily Plan */}
+            {/* 1. Start Here (first-time users only, self-dismissing) */}
+            <StartHereCard onStart={() => { setSelectedTopicId('sql'); navigate('topics'); }} />
+
+            {/* 2. Next Recommended Action */}
+            <NextActionCard
+              nextAction={nextAction}
+              onNavigate={id => { setSelectedTopicId(id); navigate('topics'); }}
+            />
+
+            {/* 3. Career Path Track */}
+            <CareerPathTrack
+              topicStates={topicStates}
+              allTopicsProgress={allTopicsProgress}
+              completedTopics={completedTopics}
+              learnedCount={Object.values(learnedSet ?? {}).filter(Boolean).length}
+              onStepClick={handlePathStepClick}
+            />
+
+            {/* 3. Continue Learning + Daily Goals */}
             <div className="learning-row">
               <ContinueCard sqlProgress={sqlProgress} onResume={handleResume} />
-              <PlanCard checkedItems={dailyPlan} onTogglePlan={togglePlan} />
+              <DailyGoalCard enrichedTopics={enrichedTopics} />
             </div>
 
-            {/* 2. Learning Topics */}
+            {/* 5. Weekly Progress + Job Readiness */}
+            <div className="learning-row">
+              <WeeklyProgress activityLog={activityLog} />
+              <JobReadinessChecklist
+                topicStates={topicStates}
+                completedTopics={completedTopics}
+                learnedCount={Object.values(learnedSet ?? {}).filter(Boolean).length}
+                overallReadiness={overallReadiness}
+              />
+            </div>
+
+            {/* 4. Learning Topics */}
             <Topics
               topics={enrichedTopics}
               selectedTopicId={selectedTopicId}
@@ -357,58 +450,49 @@ const App = memo(function App() {
               searchTerm={searchTerm}
               practiceProgress={practiceProgress}
               onTogglePractice={togglePractice}
+              phases={phases}
+              topicStates={topicStates}
             />
 
             <Suspense fallback={<SectionFallback />}>
-              {/* 3. Roadmap Tracks */}
-              <RoadmapTracks />
+              {/* ── Core MVP sections ──────────────────────────── */}
 
-              {/* 4. Architecture Diagrams */}
-              <ArchDiagrams />
+              {/* Resume Output */}
+              <ResumeOutput />
 
-              {/* 5. Enterprise Simulation */}
-              <EnterpriseSimulator />
-
-              {/* 6. Skill Dependency Graph */}
-              <SkillGraph onNavigate={navigate} />
-
-              {/* 6. Production Incident Simulator */}
-              <IncidentSimulator />
-
-              {/* 7. Interview War Room */}
-              <InterviewWarRoom />
-
-              {/* 8. Daily Engineering Standup */}
-              <DailyStandup />
-
-              {/* 9. Projects */}
-              <Projects />
-
-              {/* 6. SQL Lab */}
+              {/* SQL Practice */}
               <SQLLab />
 
-              {/* 6b. Databricks Notebook Simulator */}
-              <DatabricksNB />
-
-              {/* 7. Interview Prep */}
+              {/* Interview Prep */}
               <InterviewPrep />
 
-              {/* 8. Day in the Life Scenarios */}
-              <Scenarios />
+              {/* Projects */}
+              <Projects />
 
-              {/* 9. Analytics Dashboard */}
-              <Analytics
-                topics={enrichedTopics}
-                progress={allTopicsProgress}
-                practiceProgress={practiceProgress}
-                activityLog={activityLog}
-                xp={xp}
-                streak={streak}
-                learnedCount={Object.values(learnedSet).filter(Boolean).length}
-              />
-
-              {/* 10. AI Coach */}
+              {/* AI Coach */}
               <AILearning />
+
+              {/* ── Engineering Mode — advanced lab sections ──── */}
+              {engineeringMode && <RoadmapTracks />}
+              {engineeringMode && <ArchDiagrams />}
+              {engineeringMode && <SkillGraph onNavigate={navigate} />}
+              {engineeringMode && <IncidentSimulator />}
+              {engineeringMode && <EnterpriseSimulator />}
+              {engineeringMode && <InterviewWarRoom />}
+              {engineeringMode && <DailyStandup />}
+              {engineeringMode && <DatabricksNB />}
+              {engineeringMode && <Scenarios />}
+              {engineeringMode && (
+                <Analytics
+                  topics={enrichedTopics}
+                  progress={allTopicsProgress}
+                  practiceProgress={practiceProgress}
+                  activityLog={activityLog}
+                  xp={xp}
+                  streak={streak}
+                  learnedCount={Object.values(learnedSet ?? {}).filter(Boolean).length}
+                />
+              )}
             </Suspense>
           </div>
 
@@ -417,12 +501,27 @@ const App = memo(function App() {
       </main>
 
       <Suspense fallback={null}>
-        <FloatingCoach activeSection={activeSection} engineeringMode={engineeringMode} />
+        <AICopilotPanel activeSection={activeSection} engineeringMode={engineeringMode} />
       </Suspense>
       {pendingAchievement && (
         <AchievementToast achievement={pendingAchievement} onDismiss={shiftQueue} />
       )}
       <MobileBottomNav activeSection={activeSection} onNavigate={navigate} />
+
+      {/* Auth overlay — rendered on demand, does not block the app */}
+      <Suspense fallback={null}>
+        {authPageOpen && <AuthPage />}
+      </Suspense>
+
+      {/* Onboarding overlay — non-blocking preferences editor */}
+      <Suspense fallback={null}>
+        {onboardingPageOpen && (
+          <OnboardingPage
+            onComplete={closeOnboardingPage}
+            onSkip={closeOnboardingPage}
+          />
+        )}
+      </Suspense>
     </div>
   );
 });

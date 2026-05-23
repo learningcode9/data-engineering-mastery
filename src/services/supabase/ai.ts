@@ -4,7 +4,7 @@
 import { isAIEnabled, env } from '../../config/env'
 import { isBackendEnabled } from '../../config/env'
 import { requireSupabase } from './client'
-import type { AIContext } from '../../types/database.types'
+import type { AIContextType, AIChatHistory, InsertAIChatHistory } from '../../types/database'
 
 // ─── Prompt templates (system prompts per context) ────────────────────────────
 
@@ -176,33 +176,38 @@ export const summarizeTopic = (topicId: string, sectionTitle: string) =>
   complete(`Summarize key concepts from "${sectionTitle}" in the ${topicId} topic for a practicing data engineer.`,
     { context: 'topic_summary' })
 
-// ─── Conversation persistence (when backend is enabled) ───────────────────────
+// ─── Conversation persistence ─────────────────────────────────────────────────
 
-export async function saveConversation(
+export async function saveAIMessage(
   userId: string | null,
-  context: AIContext,
-  userMessage: string,
-  assistantResponse: string
+  message: string,
+  response: string,
+  contextType: AIContextType = 'general'
 ): Promise<void> {
   if (!isBackendEnabled() || !userId) return
 
-  const sb = requireSupabase()
-  const { data: thread, error: threadErr } = await sb
-    .from('ai_threads')
-    .insert({ user_id: userId, context, title: userMessage.slice(0, 60) })
-    .select('id').single()
-  if (threadErr || !thread) return
-
-  await sb.from('ai_messages').insert([
-    { thread_id: thread.id, role: 'user', content: userMessage },
-    { thread_id: thread.id, role: 'assistant', content: assistantResponse },
-  ])
+  const payload: InsertAIChatHistory = { user_id: userId, message, response, context_type: contextType }
+  const { error } = await requireSupabase().from('ai_chat_history').insert(payload)
+  if (error) console.warn('[ai:save]', error.message)
 }
 
-export async function getConversationHistory(userId: string | null, context?: AIContext) {
+export async function getAIHistory(
+  userId: string | null,
+  contextType?: AIContextType,
+  limit = 50
+): Promise<AIChatHistory[]> {
   if (!isBackendEnabled() || !userId) return []
-  let q = requireSupabase().from('ai_threads').select('*, ai_messages(*)').eq('user_id', userId)
-  if (context) q = q.eq('context', context)
-  const { data } = await q.order('updated_at', { ascending: false }).limit(20)
-  return data ?? []
+
+  let q = requireSupabase()
+    .from('ai_chat_history')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (contextType) q = q.eq('context_type', contextType)
+
+  const { data, error } = await q
+  if (error) return []
+  return data
 }

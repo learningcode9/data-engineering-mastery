@@ -1,40 +1,97 @@
 # Deployment Guide
 
-## Vercel (Frontend)
+## Option A — Frontend only (simplest)
 
-The app is pre-configured for Vercel via `vercel.json`.
+The app works with zero backend configuration. All progress saves to localStorage. This is the recommended starting point for a portfolio demo.
 
 ```bash
-# Install Vercel CLI
-npm i -g vercel
+# 1. Clone
+git clone https://github.com/your-username/data-engineering-mastery.git
+cd data-engineering-mastery
 
-# Deploy preview
-vercel
+# 2. Install
+npm install
 
-# Deploy to production
+# 3. Build
+npm run build
+
+# 4. Preview locally
+npm run preview
+```
+
+The `dist/` folder is ready to deploy to any static host.
+
+---
+
+## Option B — Vercel (recommended)
+
+The repo includes a `vercel.json` pre-configured with:
+- Correct output directory (`dist/`)
+- SPA rewrite rule (all routes → `index.html`)
+- Immutable cache headers for JS/CSS assets
+- Correct `Content-Type: application/wasm` for the sql.js WASM binary
+
+### Deploy via Vercel dashboard
+
+1. Push the repo to GitHub
+2. Go to [vercel.com/new](https://vercel.com/new) → Import the repo
+3. Framework preset: **Vite** (auto-detected)
+4. No build configuration needed — `vercel.json` handles everything
+5. Click **Deploy**
+
+### Deploy via CLI
+
+```bash
+npm install -g vercel
 vercel --prod
 ```
 
-**Required environment variables in Vercel dashboard:**
+### Environment variables (optional)
 
-```
-VITE_SUPABASE_URL         = https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY    = your-anon-key
-VITE_ENABLE_BACKEND       = true
-VITE_ENABLE_REALTIME      = true
-VITE_ENABLE_AI            = true
-VITE_AI_PROVIDER          = mock     # or "openai" with key set
-```
+Set these in **Vercel dashboard → Settings → Environment Variables** if using Supabase:
 
-## Supabase (Database + Auth + Realtime)
+| Variable | Value |
+|---|---|
+| `VITE_SUPABASE_URL` | `https://your-project-ref.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | your anon key from Supabase dashboard |
+| `VITE_ENABLE_BACKEND` | `true` |
+| `VITE_ENABLE_AI` | `true` (optional) |
+| `VITE_AI_PROVIDER` | `mock` or `openai` |
 
-### 1. Create project
-- Go to https://supabase.com/dashboard
-- New project → choose region closest to Vercel deployment
+Without these, the app deploys fine using localStorage only.
 
-### 2. Apply migrations
+### Note on sql.js WASM
+
+The `sql-wasm.wasm` and `sql-wasm-browser.js` files are automatically copied from `node_modules/sql.js/dist/` into `public/` during the Vite build step (`vite build`). Vercel runs this build automatically — no manual step required.
+
+---
+
+## Option C — GitHub Pages
+
 ```bash
-# Install CLI
+npm run build
+# Push the dist/ folder to the gh-pages branch
+# Or use the gh-pages npm package:
+npx gh-pages -d dist
+```
+
+Add `base: '/your-repo-name/'` to `vite.config.js` if deploying to a project page (non-root URL).
+
+---
+
+## Option D — Supabase backend (optional)
+
+Only needed if you want cloud-synced progress, auth, and AI features.
+
+### 1. Create a Supabase project
+
+- Go to [supabase.com/dashboard](https://supabase.com/dashboard)
+- New project → choose the region closest to your Vercel deployment
+
+### 2. Apply database migrations
+
+```bash
+# Install Supabase CLI
 brew install supabase/tap/supabase
 
 # Link to your project
@@ -42,76 +99,64 @@ supabase link --project-ref your-project-ref
 
 # Push all migrations
 supabase db push
-
-# (Optional) Seed with demo data
-supabase db seed
 ```
 
 ### 3. Configure Auth
-In Supabase dashboard → Authentication:
-- Enable Email provider
-- Enable Google OAuth (add client ID/secret from Google Console)
-- Set Site URL to your Vercel deployment URL
-- Add `https://your-app.vercel.app/auth/callback` to Redirect URLs
 
-### 4. Storage buckets
-```sql
--- Run in Supabase SQL editor
-insert into storage.buckets (id, name, public)
-values ('user-files', 'user-files', false);
+In the Supabase dashboard → **Authentication → Providers**:
+- Enable **Email** (magic link or password)
+- Enable **Google OAuth** — add client ID and secret from [Google Console](https://console.cloud.google.com/)
+- Set **Site URL** to your Vercel deployment URL (e.g. `https://your-app.vercel.app`)
+- Add `https://your-app.vercel.app/auth/callback` to **Redirect URLs**
+
+### 4. Enable Supabase in the app
+
+In Vercel environment variables, set:
+```
+VITE_ENABLE_BACKEND=true
+VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
 ```
 
-Add storage policy:
-```sql
-create policy "Users upload own files"
-on storage.objects for insert
-with check (bucket_id = 'user-files' and auth.uid()::text = (storage.foldername(name))[1]);
+Redeploy — the app will now sync progress to Supabase instead of localStorage.
 
-create policy "Users view own files"
-on storage.objects for select
-using (bucket_id = 'user-files' and auth.uid()::text = (storage.foldername(name))[1]);
-```
+### 5. Regenerate TypeScript types (after schema changes)
 
-## Local Development
-
-```bash
-# 1. Clone and install
-git clone https://github.com/learningcode9/data-engineering-mastery.git
-cd data-engineering-mastery
-npm install
-
-# 2. Set up environment
-cp .env.example .env.local
-# Edit .env.local with your Supabase credentials
-
-# 3. (Optional) Run local Supabase
-supabase start
-supabase db reset   # applies migrations + seed
-
-# 4. Run frontend
-npm run dev
-```
-
-## Frontend-only mode (no Supabase)
-
-The app works without any backend — just leave `VITE_ENABLE_BACKEND=false` (or don't create `.env.local`).
-All progress is stored in localStorage. This is the default behavior and requires no setup.
-
-## Generating fresh TypeScript types
-
-After any schema changes:
 ```bash
 supabase gen types typescript --local > src/types/database.types.ts
 ```
 
+---
+
+## Local development with Supabase
+
+```bash
+# 1. Start local Supabase stack
+supabase start
+
+# 2. Apply migrations and seed data
+supabase db reset
+
+# 3. Copy environment file
+cp .env.example .env.local
+# Edit .env.local — use the local Supabase URL and keys printed by `supabase start`
+
+# 4. Run the app
+npm run dev
+```
+
+---
+
 ## Production Checklist
 
-- [ ] Supabase project created in correct region
-- [ ] All migrations applied via `supabase db push`
-- [ ] Auth providers configured (Email + Google)
-- [ ] Storage bucket created with RLS policies
-- [ ] Environment variables set in Vercel
-- [ ] Custom domain configured in Vercel
-- [ ] Supabase Site URL updated to production domain
-- [ ] TypeScript types regenerated from production schema
-- [ ] `npm run build` passes locally before deploying
+- [ ] `npm run build` passes locally
+- [ ] `vercel.json` present in repo root
+- [ ] Repo pushed to GitHub
+- [ ] Vercel project imported and auto-deployed
+- [ ] (If using Supabase) Supabase project created in correct region
+- [ ] (If using Supabase) Migrations applied via `supabase db push`
+- [ ] (If using Supabase) Auth providers configured
+- [ ] (If using Supabase) Environment variables set in Vercel dashboard
+- [ ] (If using Supabase) Site URL updated in Supabase auth settings
+- [ ] Custom domain configured in Vercel (optional)
+- [ ] Screenshots added to `docs/screenshots/` and linked in README

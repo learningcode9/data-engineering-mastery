@@ -43,10 +43,10 @@ function ProjectCard({ project, onClick }) {
         {firstTag && <span className="project-metric-tag">{firstTag}</span>}
       </div>
       <div className="project-card-tools">
-        {project.tools.slice(0, 3).map(t => (
+        {(project.tools ?? []).slice(0, 3).map(t => (
           <span key={t} className="project-tool-chip">{t}</span>
         ))}
-        {project.tools.length > 3 && (
+        {(project.tools?.length ?? 0) > 3 && (
           <span className="project-tool-more">+{project.tools.length - 3}</span>
         )}
       </div>

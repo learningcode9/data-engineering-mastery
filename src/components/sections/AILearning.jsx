@@ -51,11 +51,11 @@ function SmartInsights() {
   const [streak]           = useLocalStorage('dem-streak-count', 0);
 
   const topicProg = useMemo(() => computeTopicProgress(practiceProgress), [practiceProgress]);
-  const learnedCount = Object.values(learnedSet).filter(Boolean).length;
-  const totalTasks   = Object.values(practiceProgress).filter(Boolean).length;
+  const learnedCount = Object.values(learnedSet ?? {}).filter(Boolean).length;
+  const totalTasks   = Object.values(practiceProgress ?? {}).filter(Boolean).length;
 
   const inProgress = topicProg.filter(t => t.pct > 0 && t.pct < 100).sort((a, b) => b.pct - a.pct);
-  const notStarted = topicProg.filter(t => t.pct === 0 && !completedTopics[t.id]);
+  const notStarted = topicProg.filter(t => t.pct === 0 && !(completedTopics ?? {})[t.id]);
   const weakest    = [...topicProg].filter(t => t.pct < 25).sort((a, b) => a.pct - b.pct)[0];
   const nextTopic  = inProgress[0] ?? notStarted[0];
   const interviewPct = Math.min(Math.round((learnedCount / 20) * 100), 100);
@@ -184,9 +184,10 @@ function AdaptivePath() {
   const topicProg = useMemo(() => computeTopicProgress(practiceProgress), [practiceProgress]);
 
   const ordered = useMemo(() => {
-    const inProg    = topicProg.filter(t => t.pct > 0 && t.pct < 100 && !completedTopics[t.id]).sort((a, b) => b.pct - a.pct);
-    const notStart  = topicProg.filter(t => t.pct === 0 && !completedTopics[t.id]);
-    const done      = topicProg.filter(t => completedTopics[t.id] || t.pct === 100);
+    const ct = completedTopics ?? {};
+    const inProg    = topicProg.filter(t => t.pct > 0 && t.pct < 100 && !ct[t.id]).sort((a, b) => b.pct - a.pct);
+    const notStart  = topicProg.filter(t => t.pct === 0 && !ct[t.id]);
+    const done      = topicProg.filter(t => ct[t.id] || t.pct === 100);
     return [...inProg, ...notStart, ...done].slice(0, 5);
   }, [topicProg, completedTopics]);
 

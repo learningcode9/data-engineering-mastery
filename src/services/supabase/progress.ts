@@ -1,134 +1,102 @@
-// Progress service — routes to localStorage (current) OR Supabase based on feature flag.
-// This is the bridge layer: existing hooks call these functions transparently.
+// Progress service — routes learning progress and section completions to
+// localStorage (fallback) or Supabase (when backend is enabled).
 
 import { requireSupabase } from './client'
 import { isBackendEnabled } from '../../config/env'
-import type { TopicProgress, Note } from '../../types/database.types'
+import type {
+  LearningProgress,
+  TopicCompletion,
+  ProgressStatus,
+  InsertLearningProgress,
+  InsertTopicCompletion,
+} from '../../types/database'
 
-// ─── localStorage fallbacks (existing behavior) ───────────────────────────────
+const LS_PROGRESS_KEY    = 'dem-learning-progress'
+const LS_COMPLETIONS_KEY = 'dem-topic-completions'
 
 function lsGet<T>(key: string, fallback: T): T {
   try { return JSON.parse(localStorage.getItem(key) ?? 'null') ?? fallback } catch { return fallback }
 }
-
-function lsSet(key: string, value: unknown): void {
-  try { localStorage.setItem(key, JSON.stringify(value)) } catch {}
+function lsSet(key: string, val: unknown) {
+  try { localStorage.setItem(key, JSON.stringify(val)) } catch {}
 }
 
-// ─── Topic Progress ───────────────────────────────────────────────────────────
+// ─── Learning progress ────────────────────────────────────────────────────────
 
-export async function markSectionComplete(
+export async function getLearningProgress(
   userId: string | null,
   topicId: string,
-  sectionId: string,
-  timeSpentSec = 0
-): Promise<void> {
-  const key = `dem-section-${topicId}-${sectionId}`
+  moduleId: string
+): Promise<LearningProgress | null> {
+  const lsKey = `${topicId}::${moduleId}`
 
   if (!isBackendEnabled() || !userId) {
-    lsSet(key, { completed: true, completedAt: new Date().toISOString(), timeSpentSec })
-    return
+    const all = lsGet<Record<string, LearningProgress>>(LS_PROGRESS_KEY, {})
+    return all[lsKey] ?? null
   }
-
-  const sb = requireSupabase()
-  const { error } = await sb.from('topic_progress').upsert({
-    user_id: userId,
-    topic_id: topicId,
-    section_id: sectionId,
-    completed: true,
-    completed_at: new Date().toISOString(),
-    time_spent_sec: timeSpentSec,
-  }, { onConflict: 'user_id,topic_id,section_id' })
-  if (error) throw new Error(error.message)
-
-  // Mirror to localStorage so UI stays snappy (optimistic cache)
-  lsSet(key, { completed: true, completedAt: new Date().toISOString(), timeSpentSec })
-}
-
-export async function getAllProgress(userId: string | null): Promise<Record<string, boolean>> {
-  if (!isBackendEnabled() || !userId) {
-    // Reconstruct from scattered localStorage keys
-    const result: Record<string, boolean> = {}
-    for (let i = 0; i < localStorage.length; i++) {
-      const k = localStorage.key(i)
-      if (!k?.startsWith('dem-section-')) continue
-      const val = lsGet<{ completed: boolean }>(k, { completed: false })
-      if (val.completed) result[k.replace('dem-section-', '')] = true
-    }
-    return result
-  }
-
-  const sb = requireSupabase()
-  const { data, error } = await sb
-    .from('topic_progress')
-    .select('topic_id,section_id,completed')
-    .eq('user_id', userId)
-    .eq('completed', true)
-  if (error) throw new Error(error.message)
-
-  return Object.fromEntries(data.map(r => [`${r.topic_id}-${r.section_id}`, true]))
-}
-
-export async function getTopicSummaries(userId: string | null) {
-  if (!isBackendEnabled() || !userId) return null
 
   const { data, error } = await requireSupabase()
-    .from('topic_completion_summary')
+    .from('learning_progress')
     .select('*')
     .eq('user_id', userId)
-  if (error) throw new Error(error.message)
+    .eq('topic_id', topicId)
+    .eq('module_id', moduleId)
+    .maybeSingle()
+
+  if (error) return null
   return data
 }
 
-// ─── Notes ───────────────────────────────────────────────────────────────────
-
-export async function saveNote(
+export async function upsertLearningProgress(
   userId: string | null,
   topicId: string,
-  sectionId: string,
-  content: string
+  moduleId: string,
+  progressPercent: number,
+  status: ProgressStatus,
+  lastOpenedSection?: string
 ): Promise<void> {
-  const key = `dem-note-${topicId}-${sectionId}`
-  lsSet(key, content)  // always write to localStorage for instant persistence
+  const lsKey = `${topicId}::${moduleId}`
+  const now = new Date().toISOString()
+  const localRecord: LearningProgress = {
+    id: lsKey,
+    user_id: userId ?? 'local',
+    topic_id: topicId,
+    module_id: moduleId,
+    progress_percent: progressPercent,
+    status,
+    last_opened_section: lastOpenedSection ?? null,
+    updated_at: now,
+  }
+
+  // Always write to localStorage first
+  const all = lsGet<Record<string, LearningProgress>>(LS_PROGRESS_KEY, {})
+  all[lsKey] = localRecord
+  lsSet(LS_PROGRESS_KEY, all)
 
   if (!isBackendEnabled() || !userId) return
 
-  const { error } = await requireSupabase().from('notes').upsert({
+  const payload: InsertLearningProgress = {
     user_id: userId,
     topic_id: topicId,
-    section_id: sectionId,
-    content,
-  }, { onConflict: 'user_id,topic_id,section_id' })
-  if (error) console.warn('[progress:saveNote]', error.message)
-}
-
-export async function getNote(
-  userId: string | null,
-  topicId: string,
-  sectionId: string
-): Promise<string> {
-  const key = `dem-note-${topicId}-${sectionId}`
-
-  if (!isBackendEnabled() || !userId) {
-    return lsGet<string>(key, '')
+    module_id: moduleId,
+    progress_percent: progressPercent,
+    status,
+    last_opened_section: lastOpenedSection ?? null,
   }
+  const { error } = await requireSupabase()
+    .from('learning_progress')
+    .upsert(payload, { onConflict: 'user_id,topic_id,module_id' })
 
-  const { data, error } = await requireSupabase()
-    .from('notes')
-    .select('content')
-    .eq('user_id', userId)
-    .eq('topic_id', topicId)
-    .eq('section_id', sectionId)
-    .maybeSingle()
-
-  if (error) return lsGet<string>(key, '')  // fall back to localStorage on error
-  return data?.content ?? lsGet<string>(key, '')
+  if (error) console.warn('[progress:upsert]', error.message)
 }
 
-export async function getAllNotes(userId: string | null): Promise<Note[]> {
-  if (!isBackendEnabled() || !userId) return []
+export async function getAllLearningProgress(userId: string | null): Promise<LearningProgress[]> {
+  if (!isBackendEnabled() || !userId) {
+    const all = lsGet<Record<string, LearningProgress>>(LS_PROGRESS_KEY, {})
+    return Object.values(all)
+  }
   const { data, error } = await requireSupabase()
-    .from('notes')
+    .from('learning_progress')
     .select('*')
     .eq('user_id', userId)
     .order('updated_at', { ascending: false })
@@ -136,19 +104,68 @@ export async function getAllNotes(userId: string | null): Promise<Note[]> {
   return data
 }
 
-// ─── Practice completions ─────────────────────────────────────────────────────
+// ─── Topic section completions ────────────────────────────────────────────────
 
-export async function markPracticeComplete(
+export async function markTopicSectionComplete(
   userId: string | null,
   topicId: string,
-  taskId: string
+  sectionId: string
 ): Promise<void> {
+  const lsKey = `${topicId}::${sectionId}`
+  const completions = lsGet<Record<string, string>>(LS_COMPLETIONS_KEY, {})
+  if (!completions[lsKey]) {
+    completions[lsKey] = new Date().toISOString()
+    lsSet(LS_COMPLETIONS_KEY, completions)
+  }
+
   if (!isBackendEnabled() || !userId) return
 
-  const { error } = await requireSupabase().from('practice_completions').insert({
-    user_id: userId,
-    topic_id: topicId,
-    task_id: taskId,
-  }).onConflict('user_id,topic_id,task_id').ignore()
-  if (error) console.warn('[progress:markPracticeComplete]', error.message)
+  const payload: InsertTopicCompletion = { user_id: userId, topic_id: topicId, section_id: sectionId }
+  const { error } = await requireSupabase()
+    .from('topic_completion')
+    .insert(payload)
+
+  // Unique constraint means duplicate inserts are silently ignored at DB level;
+  // treat unique-violation as success.
+  if (error && !error.message.includes('unique') && !error.message.includes('duplicate')) {
+    console.warn('[progress:markComplete]', error.message)
+  }
+}
+
+export async function getTopicCompletions(
+  userId: string | null,
+  topicId?: string
+): Promise<TopicCompletion[]> {
+  if (!isBackendEnabled() || !userId) {
+    const completions = lsGet<Record<string, string>>(LS_COMPLETIONS_KEY, {})
+    return Object.entries(completions)
+      .filter(([key]) => !topicId || key.startsWith(`${topicId}::`))
+      .map(([key, completed_at]) => {
+        const [tid, sid] = key.split('::')
+        return { id: key, user_id: userId ?? 'local', topic_id: tid, section_id: sid, completed_at }
+      })
+  }
+
+  let q = requireSupabase()
+    .from('topic_completion')
+    .select('*')
+    .eq('user_id', userId)
+    .order('completed_at', { ascending: false })
+
+  if (topicId) q = q.eq('topic_id', topicId)
+
+  const { data, error } = await q
+  if (error) return []
+  return data
+}
+
+export async function getOverallProgress(userId: string | null) {
+  const all = await getAllLearningProgress(userId)
+  const completions = await getTopicCompletions(userId)
+
+  const completedTopics  = all.filter(p => p.status === 'completed').length
+  const inProgressTopics = all.filter(p => p.status === 'in_progress').length
+  const totalSections    = completions.length
+
+  return { completedTopics, inProgressTopics, totalSections, allProgress: all }
 }

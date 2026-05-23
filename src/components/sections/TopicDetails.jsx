@@ -285,6 +285,182 @@ function OverviewSection({ overview }) {
   );
 }
 
+// ── Locked topic banner ────────────────────────────────────────────────────────
+const PREREQ_NAMES = {
+  sql: 'SQL', python: 'Python', pyspark: 'PySpark',
+  'azure-data-factory': 'Azure Data Factory',
+  'azure-databricks': 'Azure Databricks',
+  'aws-glue': 'AWS Glue',
+  'ai-for-data-engineers': 'AI for Data Engineers',
+};
+
+function LockedBanner({ prerequisites }) {
+  const names = (prerequisites ?? []).map(id => PREREQ_NAMES[id] ?? id);
+  return (
+    <div className="topic-locked-banner">
+      <span className="locked-banner-icon" aria-hidden="true">🔒</span>
+      <div>
+        <strong>This topic is locked</strong>
+        <p>
+          Complete{' '}
+          {names.length === 1
+            ? <strong>{names[0]}</strong>
+            : names.map((n, i) => (
+                <span key={n}>{i > 0 && (i === names.length - 1 ? ' and ' : ', ')}<strong>{n}</strong></span>
+              ))
+          }
+          {' '}first to unlock this topic and its practice tasks.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ── Mastery meter ──────────────────────────────────────────────────────────────
+function MasteryMeter({ masteryPct, topicState }) {
+  if (!topicState || topicState === 'available' || topicState === 'locked') return null;
+  const isMastered = topicState === 'mastered';
+  const label = isMastered ? 'Mastered' : topicState === 'completed' ? 'Completed' : 'In Progress';
+  return (
+    <div className="mastery-meter">
+      <div className="mastery-meter-header">
+        <span className={`mastery-meter-label${isMastered ? ' mastery-meter-label--gold' : ''}`}>
+          {isMastered ? '⭐ ' : ''}{label}
+        </span>
+        <span className={`mastery-meter-pct${isMastered ? ' mastery-meter-pct--gold' : ''}`}>
+          {masteryPct}% mastery
+        </span>
+      </div>
+      <div className={`mastery-meter-track${isMastered ? ' mastery-meter-track--gold' : ''}`}>
+        <div className="mastery-meter-fill" style={{ width: `${masteryPct}%` }} />
+      </div>
+      {!isMastered && masteryPct < 60 && (
+        <p className="mastery-meter-hint">
+          Complete {60 - masteryPct}% more practice tasks to reach Mastered status
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ── Interview importance banner ────────────────────────────────────────────────
+const IMPORTANCE_CONFIG = {
+  critical: { label: 'Critical interview topic',  sub: 'Appears in nearly every Data Engineering interview.', cls: 'imp--critical' },
+  high:     { label: 'High interview importance',  sub: 'Frequently asked — expect multiple questions on this.', cls: 'imp--high'     },
+  medium:   { label: 'Common in interviews',       sub: 'Comes up regularly, especially for cloud-specific roles.', cls: 'imp--medium'  },
+  growing:  { label: 'Rapidly growing topic',      sub: 'Increasingly asked — early knowledge gives you an edge.', cls: 'imp--growing' },
+};
+
+function InterviewImportanceBanner({ importance }) {
+  const cfg = importance ? IMPORTANCE_CONFIG[importance] : null;
+  if (!cfg) return null;
+  return (
+    <div className={`interview-importance-banner ${cfg.cls}`}>
+      <span className="iib-icon" aria-hidden="true">◉</span>
+      <div>
+        <strong>{cfg.label}</strong>
+        <p>{cfg.sub}</p>
+      </div>
+    </div>
+  );
+}
+
+// ── Common mistakes section ────────────────────────────────────────────────────
+function CommonMistakes({ mistakes }) {
+  if (!mistakes?.length) return null;
+  return (
+    <section className="common-mistakes-section">
+      <h4 className="common-mistakes-heading">Common Mistakes to Avoid</h4>
+      <ul className="common-mistakes-list">
+        {mistakes.map((m, i) => {
+          const [headline, ...rest] = m.split(' — ');
+          return (
+            <li key={i} className="common-mistake-item">
+              <span className="mistake-icon" aria-hidden="true">✕</span>
+              <div>
+                <strong>{headline}</strong>
+                {rest.length > 0 && <p>{rest.join(' — ')}</p>}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+// ── Resume relevance callout ───────────────────────────────────────────────────
+function ResumeRelevance({ text }) {
+  if (!text) return null;
+  return (
+    <div className="resume-relevance-callout">
+      <span className="rrc-icon" aria-hidden="true">▣</span>
+      <div>
+        <strong>Resume tip</strong>
+        <p>{text}</p>
+      </div>
+    </div>
+  );
+}
+
+// ── Career context panel ───────────────────────────────────────────────────────
+function CareerContextPanel({ careerContext, step }) {
+  if (!careerContext) return null;
+  const items = [
+    { icon: '◎', label: 'Why it matters',      text: careerContext.whyItMatters    },
+    { icon: '▣', label: 'Real-world use case',  text: careerContext.realWorldUseCase },
+    { icon: '◉', label: 'Interview tip',        text: careerContext.interviewTip    },
+    { icon: '▤', label: 'Builds toward',        text: careerContext.projectLink     },
+  ];
+  return (
+    <section className="career-context-panel">
+      <h4 className="career-context-heading">Step {step} in Your DE Career</h4>
+      <div className="career-context-grid">
+        {items.map(item => (
+          <div key={item.label} className="career-context-item">
+            <span className="career-context-icon" aria-hidden="true">{item.icon}</span>
+            <div>
+              <span className="career-context-label">{item.label}</span>
+              <p>{item.text}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// ── Next step card ─────────────────────────────────────────────────────────────
+function NextStepCard({ nextStep, currentStep, onSelectTopic }) {
+  if (!nextStep) {
+    return (
+      <div className="next-step-card next-step-card--final">
+        <span className="next-step-icon" aria-hidden="true">✓</span>
+        <div>
+          <strong>All 7 topics complete!</strong>
+          <p>You have the full skill stack. Now build projects and ace your interviews.</p>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="next-step-card">
+      <div className="next-step-content">
+        <p className="eyebrow">Up next — Step {currentStep + 1}</p>
+        <strong className="next-step-title">{nextStep.title}</strong>
+        <p className="next-step-reason">{nextStep.reason}</p>
+      </div>
+      <button
+        type="button"
+        className="next-step-btn"
+        onClick={() => onSelectTopic?.(nextStep.id)}
+      >
+        Start {nextStep.title} →
+      </button>
+    </div>
+  );
+}
+
 // ── Quick Q&A ─────────────────────────────────────────────────────────────────
 function QuickQuestions({ questions }) {
   if (!questions?.length) return null;
@@ -414,7 +590,9 @@ const TopicDetails = memo(function TopicDetails({
   searchTerm,
   practiceProgress,
   onTogglePractice,
+  onSelectTopic,
 }) {
+  if (!topic) return null;
   const mod = topic.module;
 
   const totalSubtopics = mod?.sections?.reduce(
@@ -428,11 +606,15 @@ const TopicDetails = memo(function TopicDetails({
       )
     : 0;
 
+  const topicState = topic.topicState;
+  const masteryPct = topic.masteryPct ?? 0;
+  const isLocked   = topicState === 'locked';
+
   return (
     <article className="topic-details">
       <div className="topic-details-header">
         <div>
-          <p className="eyebrow">Topic Details</p>
+          <p className="eyebrow">Step {topic.step ?? ''} · {topic.category ?? 'Topic'}</p>
           <h3>{topic.title}</h3>
           {totalSubtopics > 0 && (
             <p className="topic-stats">
@@ -442,14 +624,21 @@ const TopicDetails = memo(function TopicDetails({
         </div>
         <button
           type="button"
-          className={`secondary-button${completed ? ' completed' : ''}`}
-          onClick={() => onToggleComplete(topic.id)}
+          className={`secondary-button${completed ? ' completed' : ''}${isLocked ? ' disabled' : ''}`}
+          onClick={() => !isLocked && onToggleComplete(topic.id)}
+          disabled={isLocked}
+          title={isLocked ? 'Complete prerequisites first' : undefined}
         >
           {completed ? '✓ Completed' : 'Mark completed'}
         </button>
       </div>
 
+      {isLocked && <LockedBanner prerequisites={topic.prerequisites} />}
+      <MasteryMeter masteryPct={masteryPct} topicState={topicState} />
+      <InterviewImportanceBanner importance={topic.interviewImportance} />
       <OverviewSection overview={topic.overview} />
+      <CareerContextPanel careerContext={topic.careerContext} step={topic.step} />
+      <CommonMistakes mistakes={topic.commonMistakes} />
       <QuickQuestions questions={topic.questions} />
 
       {mod?.sections?.length > 0 && (
@@ -488,6 +677,12 @@ const TopicDetails = memo(function TopicDetails({
       <AppliedScenarios groups={mod?.interviewGroups} />
 
       <NotesBox topicId={topic.id} notes={notes} onNotesChange={onNotesChange} />
+      <ResumeRelevance text={topic.resumeRelevance} />
+      <NextStepCard
+        nextStep={topic.nextStep}
+        currentStep={topic.step}
+        onSelectTopic={onSelectTopic}
+      />
     </article>
   );
 });

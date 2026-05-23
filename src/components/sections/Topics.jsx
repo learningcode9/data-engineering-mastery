@@ -2,6 +2,7 @@ import { memo, useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { TopicCard } from '../ui/Card.jsx';
 import TopicDetails from './TopicDetails.jsx';
 import { EmptyState } from '../ui/EmptyState.jsx';
+import PhaseStrip from './PhaseStrip.jsx';
 
 function matchesSubtopic(st, lc) {
   return (
@@ -55,11 +56,19 @@ const Topics = memo(function Topics({
   searchTerm,
   practiceProgress,
   onTogglePractice,
+  phases,
+  topicStates,
 }) {
-  const filtered = useMemo(
-    () => topics.filter(t => matchesTopic(t, searchTerm)),
-    [topics, searchTerm]
-  );
+  const [activePhaseId, setActivePhaseId] = useState(null);
+
+  const filtered = useMemo(() => {
+    let list = topics;
+    if (activePhaseId && phases) {
+      const phase = phases.find(p => p.id === activePhaseId);
+      if (phase) list = list.filter(t => phase.topicIds.includes(t.id));
+    }
+    return list.filter(t => matchesTopic(t, searchTerm));
+  }, [topics, searchTerm, activePhaseId, phases]);
 
   const selectedTopic = useMemo(
     () => topics.find(t => t.id === selectedTopicId),
@@ -121,13 +130,29 @@ const Topics = memo(function Topics({
     <section className="section" id="topics" ref={sectionRef}>
       <div className="section-title-row">
         <div>
-          <p className="eyebrow">Topics</p>
-          <h2>Learning Topics</h2>
+          <p className="eyebrow">Step-by-Step</p>
+          <h2>Your Learning Path</h2>
+          <p style={{ color: 'var(--muted)', fontSize: 13, margin: '4px 0 0' }}>
+            Follow the numbered steps in order — each skill builds on the last.
+          </p>
         </div>
         <span style={{ color: 'var(--muted)', fontSize: 13 }}>
           {filtered.length} / {topics.length}
         </span>
       </div>
+
+      {phases && phases.length > 0 && (
+        <PhaseStrip
+          phases={phases}
+          topics={topics}
+          topicStates={topicStates ?? {}}
+          activePhaseId={activePhaseId}
+          onPhaseSelect={id => {
+            setActivePhaseId(id);
+            onSelectTopic(null);
+          }}
+        />
+      )}
 
       {filtered.length === 0 ? (
         <EmptyState
@@ -185,6 +210,7 @@ const Topics = memo(function Topics({
             searchTerm={searchTerm}
             practiceProgress={practiceProgress}
             onTogglePractice={onTogglePractice}
+            onSelectTopic={handleSelect}
           />
         </div>
       )}

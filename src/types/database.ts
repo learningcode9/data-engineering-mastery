@@ -177,6 +177,32 @@ export interface ProjectProgress {
   updated_at: string
 }
 
+// ─── onboarding ──────────────────────────────────────────────────────────────
+
+export type TargetRole =
+  | 'azure-data-engineer'
+  | 'databricks-engineer'
+  | 'pyspark-engineer'
+  | 'analytics-engineer'
+  | 'ai-data-engineer'
+
+export type SkillLevel = 'beginner' | 'intermediate' | 'advanced'
+
+export type PreferredCloud = 'azure' | 'aws' | 'both'
+
+export type StudyTime = '30min' | '1hour' | '2hours'
+
+export type InterviewTimeline = '2weeks' | '1month' | '3months' | 'no-rush'
+
+export interface OnboardingProfile {
+  targetRole: TargetRole
+  skillLevel: SkillLevel
+  preferredCloud: PreferredCloud
+  studyTime: StudyTime
+  interviewTimeline: InterviewTimeline
+  completedAt: string
+}
+
 // ─── Insert helpers (omit server-generated fields) ───────────────────────────
 
 export type InsertLearningProgress  = Omit<LearningProgress, 'id' | 'updated_at'>

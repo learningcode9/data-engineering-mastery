@@ -2,97 +2,86 @@
  * useSyncProgress — bridges the existing localStorage-backed Zustand learningStore
  * with Supabase persistence when VITE_ENABLE_BACKEND=true.
  *
- * Usage: Drop into App.jsx once — runs silently in the background.
- * The UI continues reading from the Zustand store (instant, unchanged).
- * This hook asynchronously syncs writes to Supabase and hydrates on first load.
+ * Runs silently in the background. The UI continues reading from Zustand (instant).
+ * This hook mirrors writes to Supabase and hydrates on first load.
  */
 
 import { useEffect, useRef, useCallback } from 'react';
 import { isBackendEnabled } from '../config/env';
 import * as progressService from '../services/supabase/progress';
-import * as xpService from '../services/supabase/xp';
+import * as notesService from '../services/supabase/notes';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('SyncProgress');
 
-// Get current auth user ID — checks Supabase only if backend is enabled
-async function getCurrentUserId() {
-  if (!isBackendEnabled()) return null;
-  try {
-    const { requireSupabase } = await import('../lib/supabase');
-    const sb = requireSupabase();
-    const { data: { user } } = await sb.auth.getUser();
-    return user?.id ?? null;
-  } catch {
-    return null;
-  }
-}
+// ─── Hydration (once on load) ─────────────────────────────────────────────────
 
-/**
- * Hydrates learningStore from Supabase on app load.
- * Only runs if backend is enabled and user is authenticated.
- */
-export function useHydrateFromSupabase(setCompletedTopics) {
+export function useHydrateFromSupabase(userId, setCompletedTopics) {
   const hydrated = useRef(false);
 
   useEffect(() => {
-    if (!isBackendEnabled() || hydrated.current) return;
+    if (!isBackendEnabled() || !userId || hydrated.current) return;
 
     async function hydrate() {
-      const userId = await getCurrentUserId();
-      if (!userId) return;
-
       try {
-        // Get all completed sections from Supabase
-        const progress = await progressService.getAllProgress(userId);
-        if (Object.keys(progress).length > 0) {
-          // Merge Supabase state into local store (Supabase wins on conflicts)
-          const topicProgress = {};
-          for (const [key, completed] of Object.entries(progress)) {
-            const [topicId] = key.split('-');
-            if (completed) topicProgress[topicId] = true;
+        const completions = await progressService.getTopicCompletions(userId);
+        if (completions.length > 0) {
+          // Build a { topicId: true } map from completion records
+          const topicMap = {};
+          for (const c of completions) {
+            // Only count topic-level completions (section_id = '__topic_complete__')
+            if (c.section_id === '__topic_complete__') {
+              topicMap[c.topic_id] = true;
+            }
           }
-          setCompletedTopics(prev => ({ ...prev, ...topicProgress }));
-          logger.info('Hydrated from Supabase', { keys: Object.keys(progress).length });
+          if (Object.keys(topicMap).length > 0) {
+            setCompletedTopics(prev => ({ ...prev, ...topicMap }));
+            logger.info('Hydrated completed topics from Supabase', { count: Object.keys(topicMap).length });
+          }
         }
       } catch (err) {
         logger.warn('Hydration failed, using localStorage', err?.message);
       }
-
       hydrated.current = true;
     }
 
     hydrate();
-  }, [setCompletedTopics]);
+  }, [userId, setCompletedTopics]);
 }
 
-/**
- * Returns a wrapped toggleComplete that also syncs to Supabase.
- * Drop-in replacement for the existing toggleComplete in App.jsx.
- */
-export function useSupabaseSyncedToggle(originalToggle) {
+// ─── Practice task sync ───────────────────────────────────────────────────────
+
+export function useSupabaseSyncedToggle(userId, originalToggle) {
   const syncToggle = useCallback(async (topicId) => {
     // Run original immediately (localStorage stays snappy)
     originalToggle(topicId);
 
-    if (!isBackendEnabled()) return;
+    if (!isBackendEnabled() || !userId) return;
 
     try {
-      const userId = await getCurrentUserId();
-      if (!userId) return;
-      await progressService.markSectionComplete(userId, topicId, '__topic_complete__', 0);
+      await progressService.markTopicSectionComplete(userId, topicId, '__topic_complete__');
     } catch (err) {
-      logger.warn('Failed to sync toggle to Supabase', err?.message);
+      logger.warn('Failed to sync topic toggle to Supabase', err?.message);
     }
-  }, [originalToggle]);
+  }, [userId, originalToggle]);
 
   return syncToggle;
 }
 
-/**
- * Autosaves notes to Supabase with debounce.
- * Falls back to localStorage-only behavior when backend is disabled.
- */
+// ─── Practice task section sync ───────────────────────────────────────────────
+
+export async function syncPracticeTask(userId, taskId) {
+  if (!isBackendEnabled() || !userId) return;
+  try {
+    // Store practice completions under topic_id='practice', section_id=taskId
+    await progressService.markTopicSectionComplete(userId, 'practice', taskId);
+  } catch (err) {
+    logger.warn('Failed to sync practice task', err?.message);
+  }
+}
+
+// ─── Notes sync ───────────────────────────────────────────────────────────────
+
 export function useSupabaseSyncedNotes(userId, topicId, sectionId) {
   const timer = useRef(null);
 
@@ -100,7 +89,7 @@ export function useSupabaseSyncedNotes(userId, topicId, sectionId) {
     clearTimeout(timer.current);
     timer.current = setTimeout(async () => {
       try {
-        await progressService.saveNote(userId, topicId, sectionId, content);
+        await notesService.saveNote(userId, topicId, sectionId, content);
       } catch (err) {
         logger.warn('Note sync failed', err?.message);
       }

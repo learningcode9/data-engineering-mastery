@@ -238,7 +238,7 @@ export const DailyStandup = memo(function DailyStandup() {
     });
   }, [todayKey]);
 
-  const yesterdayDoneCount = Object.values(yesterdayCompletion).filter(Boolean).length;
+  const yesterdayDoneCount = Object.values(yesterdayCompletion ?? {}).filter(Boolean).length;
 
   const formattedDate = today.toLocaleDateString(undefined, {
     weekday: 'long',

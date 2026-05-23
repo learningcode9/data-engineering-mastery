@@ -11,23 +11,30 @@ export const quickLinks = [
   'Interview prompts',
 ];
 
-export const navItems = [
+// Core MVP navigation — shown in main sidebar
+export const coreNavItems = [
   { label: 'Dashboard',      icon: '⌂' },
-  { label: 'Roadmap',        icon: '◇' },
   { label: 'Topics',         icon: '▦' },
-  { label: 'Projects',       icon: '▣' },
-  { label: 'Architecture',   icon: '◫' },
-  { label: 'Enterprise',     icon: '◈', id: 'enterprise'   },
-  { label: 'Skill Graph',    icon: '◉', id: 'skill-graph'  },
-  { label: 'Incidents',      icon: '⊗', id: 'incidents'    },
-  { label: 'War Room',       icon: '⊘', id: 'war-room'     },
-  { label: 'Standup',        icon: '◷', id: 'standup'      },
-  { label: 'SQL Lab',        icon: '▤', id: 'sql-lab'   },
-  { label: 'Databricks',     icon: '⚡' },
+  { label: 'SQL Lab',        icon: '▤' },
   { label: 'Interview Prep', icon: '◌' },
-  { label: 'Analytics',      icon: '▧' },
+  { label: 'Projects',       icon: '▣' },
+  { label: 'Roadmap',        icon: '◇' },
   { label: 'AI Learning',    icon: '✦' },
 ];
+
+// Advanced features — shown under a collapsible Labs section
+export const labsNavItems = [
+  { label: 'Architecture',   icon: '◫' },
+  { label: 'Skill Graph',    icon: '◉' },
+  { label: 'Incidents',      icon: '⊗' },
+  { label: 'Enterprise',     icon: '◈' },
+  { label: 'War Room',       icon: '⊘' },
+  { label: 'Standup',        icon: '◷' },
+  { label: 'Databricks',     icon: '⚡' },
+  { label: 'Analytics',      icon: '▧' },
+];
+
+export const navItems = [...coreNavItems, ...labsNavItems];
 
 export const summaryCards = [
   { variant: 'teal',  icon: '▦', label: 'Topics',      value: '7',  sub: '2 in progress'    },

@@ -1,5 +1,5 @@
 import { memo, useState } from 'react';
-import { navItems } from '../../data/appData.js';
+import { coreNavItems, labsNavItems } from '../../data/appData.js';
 import { useLocalStorage } from '../../hooks/useLocalStorage.js';
 import { topics } from '../../data/topics.js';
 import { ACHIEVEMENTS, RARITY } from '../../hooks/useAchievements.js';
@@ -24,12 +24,13 @@ const Sidebar = memo(function Sidebar({ isOpen, activeSection, onClose, onNaviga
   const [learnedSet]       = useLocalStorage('dem-interview-learned', {});
   const completedTopics    = useLearningStore(s => s.completedTopics);
   const unlockedAch        = useLearningStore(s => s.achievements);
-  const [showAch, setShowAch] = useState(false);
+  const [showAch,  setShowAch]  = useState(false);
+  const [showLabs, setShowLabs] = useState(false);
 
   const overallPct   = computeOverallPct(practiceProgress);
-  const completedCnt = Object.values(completedTopics).filter(Boolean).length;
-  const interviewPct = Math.min(Math.round((Object.values(learnedSet).filter(Boolean).length / 20) * 100), 100);
-  const achCount     = Object.keys(unlockedAch).length;
+  const completedCnt = Object.values(completedTopics ?? {}).filter(Boolean).length;
+  const interviewPct = Math.min(Math.round((Object.values(learnedSet ?? {}).filter(Boolean).length / 20) * 100), 100);
+  const achCount     = Object.keys(unlockedAch ?? {}).length;
 
   const navProgress = {
     topics:           overallPct,
@@ -76,10 +77,10 @@ const Sidebar = memo(function Sidebar({ isOpen, activeSection, onClose, onNaviga
           </div>
         )}
 
-        {/* Nav list */}
+        {/* Core nav */}
         <nav aria-label="Sections">
           <ul className="nav-list" role="list">
-            {navItems.map(({ label, icon }) => {
+            {coreNavItems.map(({ label, icon }) => {
               const id     = label.toLowerCase().replace(/\s+/g, '-');
               const active = activeSection === id;
               const pct    = navProgress[id];
@@ -103,6 +104,45 @@ const Sidebar = memo(function Sidebar({ isOpen, activeSection, onClose, onNaviga
             })}
           </ul>
         </nav>
+
+        {/* Labs section — collapsed by default */}
+        {!compact && (
+          <div className="sidebar-labs">
+            <button
+              type="button"
+              className="sidebar-labs-toggle"
+              onClick={() => setShowLabs(s => !s)}
+              aria-expanded={showLabs}
+            >
+              <span>◬ Labs</span>
+              <span className="sidebar-labs-chevron">{showLabs ? '▲' : '▼'}</span>
+            </button>
+            {showLabs && (
+              <ul className="nav-list sidebar-labs-list" role="list">
+                {labsNavItems.map(({ label, icon }) => {
+                  const id     = label.toLowerCase().replace(/\s+/g, '-');
+                  const active = activeSection === id;
+                  return (
+                    <li key={label}>
+                      <SidebarItem
+                        href={`#${id}`}
+                        active={active}
+                        icon={icon}
+                        label={label}
+                        compact={compact}
+                        onClick={e => {
+                          e.preventDefault();
+                          onNavigate(id);
+                          onClose();
+                        }}
+                      />
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        )}
 
         {/* Achievements strip (full mode only) */}
         {!compact && achCount > 0 && (

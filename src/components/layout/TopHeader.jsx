@@ -3,6 +3,7 @@ import { RESULT_TYPES, groupResults } from '../../utils/searchUtils.js';
 import { navItems } from '../../data/appData.js';
 import { useLocalStorage } from '../../hooks/useLocalStorage.js';
 import { NotificationCenter } from '../ui/NotificationCenter.jsx';
+import { useUser } from '../../providers/UserProvider';
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
@@ -171,6 +172,87 @@ function SearchDropdown({ results, query, onSelect, focusedIndex, setFocusedInde
           })}
         </div>
       ))}
+    </div>
+  );
+}
+
+function getInitials(user) {
+  if (!user || user.id === 'local-guest') return 'DE';
+  if (user.fullName) {
+    return user.fullName.split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase() || 'DE';
+  }
+  return user.email?.[0]?.toUpperCase() ?? 'DE';
+}
+
+function UserMenu() {
+  const { currentUser, isMockUser, openAuthPage, signOut, openOnboardingPage } = useUser();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function onMouseDown(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, []);
+
+  const initials    = getInitials(currentUser);
+  const displayName = isMockUser ? 'Demo Learner' : (currentUser?.fullName ?? currentUser?.email ?? 'User');
+  const displayEmail = isMockUser ? 'demo mode — not signed in' : (currentUser?.email ?? '');
+
+  return (
+    <div className="user-menu" ref={ref}>
+      <button
+        type="button"
+        className="user-menu-btn"
+        onClick={() => setOpen(o => !o)}
+        aria-label="User profile menu"
+        aria-expanded={open}
+        aria-haspopup="true"
+        title={displayName}
+      >
+        {initials}
+      </button>
+
+      {open && (
+        <div className="user-menu-dropdown" role="menu">
+          <div className="user-menu-identity">
+            <p className="user-menu-name">{displayName}</p>
+            {displayEmail && <p className="user-menu-email">{displayEmail}</p>}
+            {isMockUser && <span className="user-menu-badge">Demo Mode</span>}
+          </div>
+          <div className="user-menu-actions">
+            <button
+              type="button"
+              className="user-menu-action"
+              role="menuitem"
+              onClick={() => { setOpen(false); openOnboardingPage(); }}
+            >
+              ◎ Learning Preferences
+            </button>
+            {isMockUser ? (
+              <button
+                type="button"
+                className="user-menu-action user-menu-action--signin"
+                role="menuitem"
+                onClick={() => { setOpen(false); openAuthPage(); }}
+              >
+                ↗ Sign In / Create Account
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="user-menu-action user-menu-action--signout"
+                role="menuitem"
+                onClick={() => { setOpen(false); signOut(); }}
+              >
+                ← Sign Out
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -388,7 +470,7 @@ const TopHeader = memo(function TopHeader({
 
         <NotificationCenter activityLog={activityLog} />
 
-        <div className="avatar" aria-label="User profile" title="Profile">DE</div>
+        <UserMenu />
 
         <button
           type="button"

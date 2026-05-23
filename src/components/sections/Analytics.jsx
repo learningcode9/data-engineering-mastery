@@ -8,8 +8,9 @@ function ReadinessScore({ topics, practiceProgress, learnedCount, streak }) {
   const score = useMemo(() => {
     const done = Object.values(practiceProgress ?? {}).filter(Boolean).length;
     const comp = topics.filter(t => t.completed).length;
+    const total = topics.length || 1;
     return Math.round(
-      Math.min((comp / topics.length) * 30, 30) +
+      Math.min((comp / total) * 30, 30) +
       Math.min((done / 40) * 30, 30) +
       Math.min((learnedCount / 20) * 25, 25) +
       Math.min(streak * 1.5, 15)
@@ -23,7 +24,7 @@ function ReadinessScore({ topics, practiceProgress, learnedCount, streak }) {
   const offset = circ - (score / 100) * circ;
 
   const breakdown = [
-    { label: 'Topics',    val: Math.round(Math.min((topics.filter(t => t.completed).length / topics.length) * 30, 30)), max: 30, color: '#2f756e' },
+    { label: 'Topics',    val: Math.round(Math.min((topics.filter(t => t.completed).length / (topics.length || 1)) * 30, 30)), max: 30, color: '#2f756e' },
     { label: 'Practice',  val: Math.round(Math.min((Object.values(practiceProgress ?? {}).filter(Boolean).length / 40) * 30, 30)), max: 30, color: '#95a85f' },
     { label: 'Interview', val: Math.round(Math.min((learnedCount / 20) * 25, 25)), max: 25, color: '#6b7cdb' },
     { label: 'Streak',    val: Math.round(Math.min(streak * 1.5, 15)), max: 15, color: '#f59e0b' },
@@ -184,10 +185,10 @@ const Analytics = memo(function Analytics({
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const totalTasks = Object.values(practiceProgress ?? {}).filter(Boolean).length;
-  const todayTasks = activityLog.filter(e => e.date?.startsWith(today) && e.type === 'practice').length;
+  const todayTasks = (activityLog ?? []).filter(e => e.date?.startsWith(today) && e.type === 'practice').length;
 
   const stats = [
-    { label: 'Total XP',   value: xp.toLocaleString(), variant: 'success' },
+    { label: 'Total XP',   value: (xp ?? 0).toLocaleString(), variant: 'success' },
     { label: 'Tasks Done', value: totalTasks,           variant: 'info' },
     { label: 'Today',      value: todayTasks,           variant: 'warning' },
     { label: 'Streak',     value: `${streak}d`,         variant: 'accent' },
