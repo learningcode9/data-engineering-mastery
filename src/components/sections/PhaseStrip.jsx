@@ -16,14 +16,11 @@ function getPhaseProgress(phase, topics, topicStates) {
 
   const pct = Math.round((done / phaseTopics.length) * 100);
 
-  let status = 'locked';
-  if (done === phaseTopics.length) status = 'complete';
-  else if (done > 0 || inProg) status = 'active';
-  else {
-    // Check if any topic in phase is available (not locked)
-    const anyUnlocked = phaseTopics.some(t => topicStates[t.id]?.state !== 'locked');
-    status = anyUnlocked ? 'active' : 'locked';
-  }
+  const anyUnlocked = phaseTopics.some(t => topicStates[t.id]?.state !== 'locked');
+  const status =
+    done === phaseTopics.length ? 'complete' :
+    done > 0 || inProg || anyUnlocked ? 'active' :
+    'locked';
 
   return { pct, done, total: phaseTopics.length, status };
 }

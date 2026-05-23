@@ -187,8 +187,7 @@ export async function saveAIMessage(
   if (!isBackendEnabled() || !userId) return
 
   const payload: InsertAIChatHistory = { user_id: userId, message, response, context_type: contextType }
-  const { error } = await requireSupabase().from('ai_chat_history').insert(payload)
-  if (error) console.warn('[ai:save]', error.message)
+  await requireSupabase().from('ai_chat_history').insert(payload)
 }
 
 export async function getAIHistory(

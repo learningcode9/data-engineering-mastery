@@ -49,8 +49,7 @@ export async function saveSqlAttempt(
     execution_time_ms: executionTimeMs ?? null,
     attempts_count: attemptsCount,
   }
-  const { error } = await requireSupabase().from('sql_attempts').insert(payload)
-  if (error) console.warn('[sqlLab:save]', error.message)
+  await requireSupabase().from('sql_attempts').insert(payload)
 }
 
 // ─── History ──────────────────────────────────────────────────────────────────

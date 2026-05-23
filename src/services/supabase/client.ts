@@ -16,7 +16,6 @@ export async function query<T>(
 ): Promise<T> {
   const { data, error } = await operation()
   if (error) {
-    if (import.meta.env.DEV) console.error(`[Supabase:${label}]`, error)
     throw error
   }
   if (data === null) throw new Error(`[Supabase:${label}] returned null`)
@@ -30,7 +29,6 @@ export async function maybeQuery<T>(
 ): Promise<T | null> {
   const { data, error } = await operation()
   if (error) {
-    if (import.meta.env.DEV) console.error(`[Supabase:${label}]`, error)
     throw error
   }
   return data

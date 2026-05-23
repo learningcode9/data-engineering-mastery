@@ -41,9 +41,6 @@ const ResumeOutput = memo(function ResumeOutput() {
   const comp = completedTopics ?? {};
   const learned = learnedSet ?? {};
 
-  const startedTopics = topics.filter(t =>
-    comp[t.id] || Object.keys(TOPIC_SKILLS).includes(t.id)
-  );
   const doneTopics = topics.filter(t => comp[t.id]);
   const learnedCount = Object.values(learned).filter(Boolean).length;
 

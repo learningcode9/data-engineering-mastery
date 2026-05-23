@@ -1,4 +1,3 @@
-import { ProgressBar } from './ProgressBar.jsx';
 import { cn } from '../../utils/cn.js';
 export { AppCard, MetricCard, StatPill, Badge, PrimaryButton, SecondaryButton, SectionHeader, SearchInput, PageContainer, SidebarItem } from './design-system.jsx';
 

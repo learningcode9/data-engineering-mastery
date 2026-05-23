@@ -1,103 +1,71 @@
-# Data Engineering Mastery
+# Data Engineering Mastery Platform
 
-> An interactive learning platform for data engineers — covering SQL, Python, PySpark, Azure, AWS, and AI, with hands-on practice, interview prep, and portfolio projects.
+An interactive SaaS-style learning platform for aspiring data engineers. The app combines a structured 39-topic curriculum, hands-on SQL practice, interview preparation, portfolio project guidance, and production-style learning surfaces in a polished browser-based experience.
 
-[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](https://react.dev)
-[![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)](https://vitejs.dev)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Deploy on Vercel](https://img.shields.io/badge/Deploy-Vercel-black?logo=vercel)](https://vercel.com)
+## Problem This Solves
 
-**[Live Demo](#)** · **[Screenshots](#screenshots)** · **[Quick Start](#quick-start)**
+Data engineering learners often jump between disconnected tutorials, interview lists, cloud notes, and project ideas. This platform brings the learning path into one focused product experience:
 
----
+- A clear progression from foundations to production and AI data engineering.
+- Practice-oriented topic pages instead of passive notes.
+- Portfolio-ready project guidance and interview preparation in the same workspace.
+- Local progress tracking so learners can resume without account setup.
+- Optional Supabase integration for cloud-backed persistence.
 
-## What It Is
+## Key MVP Features
 
-Data Engineering Mastery is a self-contained, portfolio-ready learning app that runs entirely in the browser. No account required — all progress saves to localStorage, with optional Supabase sync.
+- **39-topic curriculum** across Foundation, Pipeline, Big Data, Cloud, Streaming, Production, Career, and AI phases.
+- **Topic detail pages** with explanations, real-world use cases, common mistakes, practice tasks, interview questions, mini projects, and next-step guidance.
+- **Dashboard recommendations** for the next learning action, progress summary, daily goals, and readiness cues.
+- **SQL Lab** powered by in-browser SQLite via `sql.js`.
+- **Interview Prep** with categorized questions and progress tracking.
+- **Portfolio Projects** with practical project cards and implementation guidance.
+- **Roadmap view** for structured phase and career-track navigation.
+- **Progress persistence** with Zustand/localStorage, with optional Supabase-backed sync.
+- **Responsive SaaS UI** with reusable card, badge, metric, progress, search, sidebar, and layout primitives.
 
-It covers the full data engineering interview and project lifecycle: from SQL fundamentals and PySpark internals to real-world incident response and resume-ready portfolio projects.
+## 39-Topic Curriculum Summary
 
----
-
-## Screenshots
-
-| Section | Preview |
+| Phase | Topics |
 |---|---|
-| Dashboard | ![Dashboard](docs/screenshots/dashboard.png) |
-| SQL Practice | ![SQL Lab](docs/screenshots/sql-lab.png) |
-| Interview Prep | ![Interview Prep](docs/screenshots/interview-prep.png) |
-| Projects | ![Projects](docs/screenshots/projects.png) |
-| Roadmap | ![Roadmap](docs/screenshots/roadmap.png) |
-| AI Coach | ![AI Coach](docs/screenshots/ai-coach.png) |
+| Foundation | SQL, Python, Linux & Command Line, Git & Version Control, Data Modeling |
+| Pipeline | ETL vs ELT, Batch Processing, Incremental Loading, CDC, Data Quality |
+| Big Data | PySpark, Spark Optimization, Partitioning, File Formats, Delta Lake |
+| Cloud & Storage | ADLS / S3, Azure Data Factory, Databricks, AWS Glue, Medallion Architecture |
+| Streaming | Kafka, Structured Streaming, Event Hubs, Checkpointing & Watermarking |
+| Production | Orchestration, Monitoring & Logging, Retry & Failure Recovery, CI/CD for Data Engineering, Security & Governance, Unity Catalog / RBAC |
+| Career | Real-world Projects, Resume Builder, Interview Preparation, Mock Interviews, Production Scenarios |
+| AI | AI for Data Engineers, LLM-assisted Pipelines, Vector Databases, AI-powered Analytics |
 
-> Screenshots live in `docs/screenshots/`. See [docs/screenshots/README.md](docs/screenshots/README.md) for instructions on adding your own.
-
----
-
-## Core Features
-
-### Learning Topics
-Seven deep-dive modules with accordion sections, syntax examples, real-world code, interview Q&A, and hands-on practice exercises:
-
-- **SQL** — window functions, CTEs, joins, performance tuning
-- **Python** — data pipelines, pandas, testing patterns
-- **PySpark** — distributed processing, partitioning, optimization
-- **Azure Data Factory** — pipelines, triggers, linked services
-- **Azure Databricks** — clusters, Delta Lake, Unity Catalog
-- **AWS Glue** — ETL jobs, crawlers, data catalog
-- **AI for Data Engineers** — LLM pipelines, embeddings, vector stores
-
-### SQL Lab
-Full in-browser SQLite engine (sql.js / WebAssembly) with a realistic 8-table dataset. Write and run real queries, validate against expected output, and track completion per challenge.
-
-### Interview Prep
-Curated question bank with learned/revision tracking. Browse by level (Junior → Staff) or filter by topic. Mastery percentage tracked across all questions.
-
-### Portfolio Projects
-Six end-to-end project breakdowns with architecture diagrams, step-by-step implementation guides, code snippets, tools used, and pre-written resume bullet points.
-
-### Learning Roadmap
-Four curated tracks (Data Engineering Foundations, Cloud Specialist, Analytics Engineer, ML Platform Engineer) with phase-by-phase skill milestones.
-
-### AI Coach
-Personalized study path based on your progress, spaced-repetition revision queue, and a prompt library for AI-assisted practice sessions.
-
-### Labs (Advanced)
-Available via the collapsible Labs section in the sidebar:
-- **Incident Simulator** — diagnose production pipeline failures under time pressure
-- **Architecture Diagrams** — visual reference for common DE patterns
-- **Skill Graph** — competency radar across all topic domains
-- **Enterprise Scenarios** — role-based challenges at simulated companies
-- **Interview War Room** — rapid-fire timed Q&A mode
-- **Daily Standup** — team workflow practice
-- **Databricks Notebook** — interactive walkthrough in notebook style
-- **Analytics** — XP, readiness score, topic mastery heatmap
-
----
+See [docs/CURRICULUM.md](docs/CURRICULUM.md) for the detailed curriculum map.
 
 ## Tech Stack
 
 | Area | Technology |
 |---|---|
-| Framework | React 19 |
-| Build | Vite 8 (Rolldown bundler, Lightning CSS) |
-| Language | JavaScript / JSX + TypeScript (services layer) |
-| Styling | Vanilla CSS with custom design tokens — no Tailwind |
-| State | React hooks + Zustand v5 + localStorage |
-| SQL Engine | sql.js 1.14 (SQLite compiled to WebAssembly) |
-| Backend (optional) | Supabase (Auth + Postgres + Realtime) |
-| AI (optional) | OpenAI via Supabase Edge Function |
-| Deployment | Vercel |
+| Frontend | React 19 |
+| Build Tool | Vite 8 |
+| Styling | CSS design system with reusable tokens and primitives |
+| State | Zustand, React hooks, localStorage |
+| SQL Runtime | sql.js / SQLite WebAssembly |
+| Optional Backend | Supabase |
+| Editor | Monaco Editor |
+| Deployment | Vercel or any static host |
 
----
+## Screenshots
 
-## Quick Start
+Add screenshots to `docs/screenshots/` before publishing the portfolio page.
 
-### Prerequisites
-- Node.js 18+
-- npm 9+
+| Screen | Placeholder |
+|---|---|
+| Dashboard | `docs/screenshots/dashboard.png` |
+| Topics | `docs/screenshots/topics.png` |
+| SQL Lab | `docs/screenshots/sql-lab.png` |
+| Roadmap | `docs/screenshots/roadmap.png` |
+| Projects | `docs/screenshots/projects.png` |
+| Mobile | `docs/screenshots/mobile.png` |
 
-### Install and run
+## Setup
 
 ```bash
 git clone https://github.com/your-username/data-engineering-mastery.git
@@ -106,133 +74,77 @@ npm install
 npm run dev
 ```
 
-Opens at `http://localhost:5173`. No environment variables needed — the app works fully offline using localStorage.
-
-### Production build
-
-```bash
-npm run build    # outputs to dist/
-npm run preview  # serve the built output locally
-```
-
----
+The app runs at `http://localhost:5173` by default. If the port is busy, Vite will choose the next available port.
 
 ## Environment Variables
 
-The app runs without any environment variables. For optional cloud features, copy `.env.example`:
+The MVP works locally without cloud configuration. For optional Supabase support, create `.env.local`:
 
 ```bash
 cp .env.example .env.local
 ```
 
-| Variable | Required | Description |
-|---|---|---|
-| `VITE_SUPABASE_URL` | No | Supabase project URL |
-| `VITE_SUPABASE_ANON_KEY` | No | Supabase anon key |
-| `VITE_ENABLE_BACKEND` | No | Set `true` to use Supabase instead of localStorage |
-| `VITE_ENABLE_AI` | No | Set `true` to enable AI copilot |
-| `VITE_AI_PROVIDER` | No | `mock` (default) or `openai` |
-| `VITE_OPENAI_API_KEY` | No | OpenAI key (route through Edge Function in production) |
-
-See [docs/deployment.md](docs/deployment.md) for full Vercel + Supabase setup.
-
----
-
-## Project Structure
-
-```
-data-engineering-mastery/
-├── public/                        # Static assets (favicon, sql.js WASM)
-├── src/
-│   ├── App.jsx                    # Root layout + all state
-│   ├── main.jsx                   # Entry point
-│   ├── index.css                  # Global styles + design tokens
-│   │
-│   ├── components/
-│   │   ├── layout/                # Sidebar, TopHeader, RightRail
-│   │   ├── sections/              # All page sections (lazy-loaded)
-│   │   │   ├── Dashboard.jsx      # Home: XP, streak, continue card
-│   │   │   ├── Topics.jsx         # Topic grid + detail panel
-│   │   │   ├── TopicDetails.jsx   # Accordion deep-dive content
-│   │   │   ├── SQLLab.jsx         # In-browser SQL workspace
-│   │   │   ├── InterviewPrep.jsx  # Question bank + tracking
-│   │   │   ├── Projects.jsx       # Portfolio project cards
-│   │   │   ├── ProjectDetail.jsx  # Full project modal
-│   │   │   ├── RoadmapTracks.jsx  # Learning path viewer
-│   │   │   ├── AILearning.jsx     # AI coach + study path
-│   │   │   └── ...                # Labs: Analytics, SkillGraph, Incidents, etc.
-│   │   ├── ui/                    # Shared components: cards, accordions, toasts
-│   │   └── workspace/             # SQL workspace sub-components
-│   │
-│   ├── data/
-│   │   ├── modules/               # Topic content (one file per topic)
-│   │   ├── topics.js              # Topic list + module references
-│   │   ├── projectDetails.js      # Portfolio project definitions
-│   │   ├── interviewQuestions.js  # Interview question bank
-│   │   ├── roadmaps.js            # Learning track definitions
-│   │   ├── sqlDataset.js          # 8-table realistic SQL dataset
-│   │   └── incidents.js           # 6 production incident scenarios
-│   │
-│   ├── hooks/                     # useXP, useStreak, useSqlEngine, etc.
-│   ├── store/                     # Zustand: learningStore, simulationStore
-│   ├── services/supabase/         # Optional Supabase service layer
-│   ├── providers/                 # AppProvider, UserProvider (auth context)
-│   ├── utils/                     # SQL engine, search, toast, cn()
-│   └── config/                    # env.ts — feature flag helpers
-│
-├── docs/
-│   ├── screenshots/               # App screenshots for README
-│   ├── deployment.md              # Vercel + Supabase setup guide
-│   ├── sql-engine.md              # SQL execution architecture
-│   ├── auth-flow.md               # Supabase auth flow
-│   └── release-v1.md              # v1.0 release notes
-│
-└── supabase/                      # Supabase local dev config
+```env
+VITE_SUPABASE_URL=
+VITE_SUPABASE_ANON_KEY=
 ```
 
----
+## Build
 
-## How the SQL Engine Works
+```bash
+npm run build
+npm run preview
+```
 
-The SQL Lab uses [sql.js](https://sql.js.org/) — SQLite compiled to WebAssembly — to execute real SQL in the browser with zero server-side infrastructure. The WASM binary is copied from `node_modules` at build time and served as a static asset.
-
-An 8-table dataset (customers, products, orders, employees, transactions, events, shipments, inventory — 20–40 rows each) gives learners a realistic schema to practice joins, window functions, CTEs, and aggregations.
-
-Answer validation compares query result sets row-by-row against a reference solution.
-
----
+The production output is generated in `dist/`.
 
 ## Deployment
 
-See **[docs/deployment.md](docs/deployment.md)** for the full guide. Short version:
+### Vercel
 
-**Vercel (one command):**
-```bash
-npx vercel --prod
-```
+1. Push the repository to GitHub.
+2. Import the repository in Vercel.
+3. Use the default Vite settings:
+   - Build command: `npm run build`
+   - Output directory: `dist`
+4. Add Supabase environment variables only if cloud sync is enabled.
+5. Deploy.
 
-No build configuration needed — Vercel auto-detects Vite. The sql.js WASM files are copied during the build step automatically.
+### Static Hosting
 
-**GitHub Pages:**
+Any static host that can serve the `dist/` folder works:
+
 ```bash
 npm run build
-# deploy dist/ to gh-pages branch
 ```
 
----
+Upload the generated `dist/` directory to your hosting provider.
 
-## Roadmap
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for a deployment checklist.
 
-- [ ] Live demo deployment on Vercel with public URL
-- [ ] Add screenshots and demo GIF to README
-- [ ] Python and PySpark interactive runners (Pyodide)
-- [ ] Optional cloud-synced progress (Supabase integration)
-- [ ] Accessibility audit (axe-core)
-- [ ] Unit tests for SQL engine, search, and progress calculations
-- [ ] Mobile app wrapper (Capacitor)
+## Documentation
 
----
+- [MVP Scope](docs/MVP_SCOPE.md)
+- [Curriculum](docs/CURRICULUM.md)
+- [Deployment](docs/DEPLOYMENT.md)
+
+## Future Roadmap
+
+- Add production screenshots and short demo video.
+- Add test coverage for curriculum normalization, search, recommendations, and SQL validation.
+- Add optional authenticated progress sync as a deployment toggle.
+- Add accessibility audit notes and keyboard navigation QA.
+- Improve bundle splitting after portfolio MVP stabilizes.
+- Add more real-world datasets for SQL and pipeline practice.
+
+## Portfolio Highlights
+
+- Full 39-topic curriculum integrated into a single learning product.
+- Real SQL execution in the browser with no backend requirement.
+- Production-inspired data engineering modules: incidents, roadmaps, projects, interview prep, and analytics.
+- Reusable design-system primitives for scalable UI maintenance.
+- Deployment-ready Vite build with optional Supabase configuration.
 
 ## License
 
-MIT © 2025
+MIT

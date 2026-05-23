@@ -10,9 +10,8 @@ export class ErrorBoundary extends Component {
     return { hasError: true, error }
   }
 
-  componentDidCatch(error, info) {
-    // Replace with a real logger (e.g. Sentry) when available
-    console.error('[ErrorBoundary]', error, info.componentStack)
+  componentDidCatch() {
+    // Replace with a real logger (e.g. Sentry) when available.
   }
 
   render() {

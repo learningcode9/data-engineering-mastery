@@ -86,11 +86,9 @@ export async function saveNote(
   if (!isBackendEnabled() || !userId) return
 
   const payload: InsertSavedNote = { user_id: userId, topic_id: topicId, section_id: sectionId, content }
-  const { error } = await requireSupabase()
+  await requireSupabase()
     .from('saved_notes')
     .upsert(payload, { onConflict: 'user_id,topic_id,section_id' })
-
-  if (error) console.warn('[notes:save]', error.message)
 }
 
 // ─── Delete ───────────────────────────────────────────────────────────────────
@@ -107,12 +105,10 @@ export async function deleteNote(
 
   if (!isBackendEnabled() || !userId) return
 
-  const { error } = await requireSupabase()
+  await requireSupabase()
     .from('saved_notes')
     .delete()
     .eq('user_id', userId)
     .eq('topic_id', topicId)
     .eq('section_id', sectionId)
-
-  if (error) console.warn('[notes:delete]', error.message)
 }

@@ -220,8 +220,6 @@ const App = memo(function App() {
       notesService.saveNote(userId, id, 'main', text).catch(() => {});
     }, 800);
   }, [userId, setTopicNotes]);
-  const togglePlan     = useCallback(id => setDailyPlan(p => { const s = p ?? {}; return { ...s, [id]: !s[id] }; }), [setDailyPlan]);
-
   const togglePractice = useCallback((id, title) => {
     const isCurrentlyDone = !!(practiceProgress ?? {})[id];
     if (!isCurrentlyDone) {

@@ -44,11 +44,5 @@ export const isRealtimeEnabled = () => env.enableRealtime && isBackendEnabled()
 export const isAIEnabled = () => env.enableAI
 
 export function logEnvStatus(): void {
-  if (import.meta.env.DEV) {
-    console.group('[DEM] Environment')
-    console.log('Backend:', isBackendEnabled() ? '✅ Supabase' : '📦 localStorage')
-    console.log('Realtime:', isRealtimeEnabled() ? '✅ enabled' : '🔇 disabled')
-    console.log('AI:', isAIEnabled() ? `✅ ${env.aiProvider}` : '🔇 disabled')
-    console.groupEnd()
-  }
+  // Intentionally silent for portfolio/deployment builds.
 }

@@ -32,8 +32,7 @@ export async function awardXP(
 
   if (!isBackendEnabled()) return
 
-  const { error } = await requireSupabase().from('xp_history').insert(entry)
-  if (error) console.warn('[xp:award]', error.message)
+  await requireSupabase().from('xp_history').insert(entry)
 }
 
 export async function getUserXPSummary(userId: string): Promise<UserXPSummary | null> {
@@ -88,7 +87,6 @@ export async function grantAchievement(
   if (error) {
     // code 23505 = unique_violation — duplicate badge silently ignored per schema design
     if (error.code === '23505') return false
-    console.warn('[xp:grantAchievement]', error.message)
     return false
   }
   return true

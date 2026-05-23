@@ -147,7 +147,7 @@ creates a row in `public.profiles` when a new user signs up. No manual profile c
 ## Supported auth providers
 
 - Email + password
-- Google OAuth (requires Google Console setup — see `docs/deployment.md`)
+- Google OAuth (requires Google Console setup — see `docs/DEPLOYMENT.md`)
 
 ## Onboarding Plan
 

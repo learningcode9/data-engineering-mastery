@@ -28,10 +28,7 @@ export async function getIncidents(): Promise<Incident[]> {
     .eq('status', 'active')
     .order('created_at', { ascending: true })
 
-  if (error) {
-    console.warn('[incidents:getIncidents]', error.message)
-    return []
-  }
+  if (error) return []
   return data
 }
 
@@ -72,8 +69,7 @@ export async function saveIncidentAttempt(
   if (!isBackendEnabled() || !userId) return
 
   const payload: InsertIncidentAttempt = { user_id: userId, ...entry }
-  const { error } = await requireSupabase().from('incident_attempts').insert(payload)
-  if (error) console.warn('[incidents:saveAttempt]', error.message)
+  await requireSupabase().from('incident_attempts').insert(payload)
 }
 
 export async function getIncidentAttempts(userId: string | null): Promise<IncidentAttempt[]> {

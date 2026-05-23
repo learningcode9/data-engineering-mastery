@@ -179,7 +179,8 @@ const useLearningStore = create(
       version: 1,
       // Don't persist Supabase user ID — it comes from auth session
       partialize: s => {
-        const { _supabaseUserId, ...rest } = s;
+        const rest = { ...s };
+        delete rest._supabaseUserId;
         return rest;
       },
     }

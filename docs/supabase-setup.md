@@ -142,7 +142,7 @@ docs/
 ├── architecture.md              ← system architecture overview
 ├── database-schema.md           ← full schema reference
 ├── auth-flow.md                 ← auth state machine
-├── deployment.md                ← Vercel + Supabase deployment
+├── DEPLOYMENT.md                ← Vercel + Supabase deployment
 ├── realtime-plan.md             ← realtime subscription plan
 ├── AI-copilot-plan.md           ← AI integration plan
 └── simulation-engine.md         ← incident simulation engine design

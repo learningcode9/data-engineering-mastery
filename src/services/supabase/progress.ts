@@ -83,11 +83,9 @@ export async function upsertLearningProgress(
     status,
     last_opened_section: lastOpenedSection ?? null,
   }
-  const { error } = await requireSupabase()
+  await requireSupabase()
     .from('learning_progress')
     .upsert(payload, { onConflict: 'user_id,topic_id,module_id' })
-
-  if (error) console.warn('[progress:upsert]', error.message)
 }
 
 export async function getAllLearningProgress(userId: string | null): Promise<LearningProgress[]> {
@@ -127,9 +125,7 @@ export async function markTopicSectionComplete(
 
   // Unique constraint means duplicate inserts are silently ignored at DB level;
   // treat unique-violation as success.
-  if (error && !error.message.includes('unique') && !error.message.includes('duplicate')) {
-    console.warn('[progress:markComplete]', error.message)
-  }
+  void error
 }
 
 export async function getTopicCompletions(

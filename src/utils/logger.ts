@@ -1,4 +1,4 @@
-// Structured logger — console in dev, silent in prod (swap for Sentry/Datadog later)
+// Structured logger — currently silent until an external sink is configured.
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
@@ -10,36 +10,14 @@ interface LogEntry {
   timestamp: string
 }
 
-const isDev = import.meta.env.DEV
-
-const LEVEL_STYLES: Record<LogLevel, string> = {
-  debug: 'color: #888',
-  info:  'color: #4CAF50',
-  warn:  'color: #FF9800',
-  error: 'color: #F44336; font-weight: bold',
-}
-
 function log(level: LogLevel, module: string, message: string, data?: unknown): void {
-  if (!isDev && level === 'debug') return
-
-  const entry: LogEntry = {
+  void ({
     level,
     module,
     message,
     data,
     timestamp: new Date().toISOString(),
-  }
-
-  const prefix = `%c[${entry.timestamp.slice(11, 19)}] [${module}]`
-  const style  = LEVEL_STYLES[level]
-
-  if (level === 'error') {
-    console.error(prefix, style, message, data !== undefined ? data : '')
-  } else if (level === 'warn') {
-    console.warn(prefix, style, message, data !== undefined ? data : '')
-  } else if (isDev) {
-    console.log(prefix, style, message, data !== undefined ? data : '')
-  }
+  } satisfies LogEntry)
 }
 
 // Factory — create a logger scoped to a module

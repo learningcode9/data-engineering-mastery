@@ -39,8 +39,7 @@ export async function saveInterviewSession(
   if (!isBackendEnabled() || !userId) return
 
   const payload: InsertInterviewSession = { user_id: userId, category, difficulty, score }
-  const { error } = await requireSupabase().from('interview_sessions').insert(payload)
-  if (error) console.warn('[interview:save]', error.message)
+  await requireSupabase().from('interview_sessions').insert(payload)
 }
 
 export async function getInterviewSessions(
