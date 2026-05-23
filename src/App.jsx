@@ -418,6 +418,7 @@ const App = memo(function App() {
               allTopicsProgress={allTopicsProgress}
               completedTopics={completedTopics}
               learnedCount={Object.values(learnedSet ?? {}).filter(Boolean).length}
+              totalTopics={topics.length}
               onStepClick={handlePathStepClick}
             />
 
@@ -469,11 +470,13 @@ const App = memo(function App() {
               {/* Projects */}
               <Projects />
 
+              {/* Roadmap */}
+              <RoadmapTracks />
+
               {/* AI Coach */}
               <AILearning />
 
               {/* ── Engineering Mode — advanced lab sections ──── */}
-              {engineeringMode && <RoadmapTracks />}
               {engineeringMode && <ArchDiagrams />}
               {engineeringMode && <SkillGraph onNavigate={navigate} />}
               {engineeringMode && <IncidentSimulator />}

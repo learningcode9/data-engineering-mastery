@@ -715,7 +715,7 @@ const PATH_STEPS = [
 ];
 
 export const CareerPathTrack = memo(function CareerPathTrack({
-  topicStates, allTopicsProgress, completedTopics, learnedCount, onStepClick,
+  topicStates, allTopicsProgress, completedTopics, learnedCount, totalTopics, onStepClick,
 }) {
   const comp = completedTopics ?? {};
   const prog = allTopicsProgress ?? {};
@@ -791,7 +791,7 @@ export const CareerPathTrack = memo(function CareerPathTrack({
           <h2>Your Data Engineering Path</h2>
         </div>
         <span className="career-path-progress-label">
-          {completedCount}/{PATH_STEPS.filter(s => s.topicId).length} topics done
+          {completedCount}/{totalTopics ?? PATH_STEPS.filter(s => s.topicId).length} topics done
         </span>
       </div>
       <div className="career-path-steps" role="list" aria-label="Career path steps">
