@@ -2,7 +2,7 @@ import { memo } from 'react';
 
 const TABS = [
   { label: 'Dashboard', icon: '⌂', section: 'dashboard' },
-  { label: 'Topics',    icon: '▦', section: 'topics'    },
+  { label: 'Path',      icon: '▦', section: 'topics'    },
   { label: 'Interview', icon: '◌', section: 'interview-prep' },
   { label: 'Projects',  icon: '▣', section: 'projects'  },
   { label: 'AI Coach',  icon: '✦', section: 'ai-learning' },

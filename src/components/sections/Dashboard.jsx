@@ -3,7 +3,9 @@ import { SummaryCard } from '../ui/Card.jsx';
 import { ProgressBar } from '../ui/ProgressBar.jsx';
 import { summaryCards } from '../../data/appData.js';
 import { getRecommendedNext } from '../../data/skillGraph.js';
+import { beginnerJourney, getInterviewReadinessEstimate, getPhaseMentorship } from '../../data/careerGuidance.js';
 import { useLocalStorage } from '../../hooks/useLocalStorage.js';
+import { getStrengths, getWeakAreas } from '../../utils/learningState.js';
 
 function useCountUp(target, duration = 900) {
   const [display, setDisplay] = useState(0);
@@ -471,41 +473,37 @@ export const NextActionCard = memo(function NextActionCard({ nextAction, onNavig
 
 // ─── Start Here card — shown to first-time users ────────────────────────────
 
-export const StartHereCard = memo(function StartHereCard({ onStart }) {
-  const [dismissed, setDismissed] = useLocalStorage('dem-start-here-dismissed', false);
-  if (dismissed) return null;
-
-  const skills = ['SQL', 'Python', 'PySpark', 'Azure / AWS', 'AI Tools'];
+export const StartHereCard = memo(function StartHereCard({ onStart, onOpenGoals, completedCount = 0 }) {
+  const isStarted = completedCount > 0;
   return (
     <section className="start-here-card ds-card">
       <div className="start-here-body">
         <div className="start-here-top">
-          <span className="start-here-badge">Welcome</span>
-          <h2>Become a Data Engineer</h2>
-          <p>
-            Data Engineers build the pipelines that move, clean, and transform data so analysts
-            and data scientists can use it. Every major tech company hires them — and demand is
-            growing fast.
-          </p>
+          <span className="start-here-badge">{isStarted ? 'Career guide' : 'Start here'}</span>
+          <h2>{isStarted ? 'Your guided path to job readiness' : 'Become a Data Engineer'}</h2>
+          <p>{beginnerJourney.roleSummary}</p>
         </div>
 
-        <div className="start-here-what">
-          <p className="eyebrow">Skills you'll learn</p>
-          <div className="start-here-skills">
-            {skills.map((s, i) => (
-              <span key={s} className="start-here-skill">
-                <span className="start-here-skill-num">{i + 1}</span>
-                {s}
-              </span>
-            ))}
+        <div className="start-here-guide-grid">
+          <div className="start-here-guide-card">
+            <span>What companies use</span>
+            <p>{beginnerJourney.companyTools.slice(0, 5).join(', ')}</p>
+          </div>
+          <div className="start-here-guide-card">
+            <span>How interviews work</span>
+            <p>{beginnerJourney.interviewFocus.slice(0, 4).join(', ')}</p>
+          </div>
+          <div className="start-here-guide-card">
+            <span>Recommended first topic</span>
+            <p>Start with SQL. It is the foundation of interviews, dashboards, pipelines, and debugging.</p>
           </div>
         </div>
 
         <div className="start-here-time">
           <span className="start-here-time-icon" aria-hidden="true">◎</span>
           <p>
-            <strong>Estimated path: 3–6 months</strong> of consistent daily practice.
-            Follow the numbered steps — each skill builds on the last.
+            <strong>Estimated path: 4-6 months for most beginners.</strong>{' '}
+            {beginnerJourney.reassurance}
           </p>
         </div>
       </div>
@@ -514,16 +512,16 @@ export const StartHereCard = memo(function StartHereCard({ onStart }) {
         <button
           type="button"
           className="start-here-cta"
-          onClick={() => { setDismissed(true); onStart?.(); }}
+          onClick={onStart}
         >
-          Start with SQL — Step 1 →
+          Start Your Journey →
         </button>
         <button
           type="button"
           className="start-here-skip"
-          onClick={() => setDismissed(true)}
+          onClick={onOpenGoals}
         >
-          I already know the basics
+          Personalise path
         </button>
       </div>
     </section>
@@ -715,14 +713,29 @@ const PATH_STEPS = [
 ];
 
 export const CareerPathTrack = memo(function CareerPathTrack({
-  topicStates, allTopicsProgress, completedTopics, learnedCount, totalTopics, onStepClick,
+  topicStates, allTopicsProgress, completedTopics, learnedCount, totalTopics, phases, topics, onStepClick,
 }) {
   const comp = completedTopics ?? {};
   const prog = allTopicsProgress ?? {};
   const ts   = topicStates ?? {};
   const completedCount = Object.values(comp).filter(Boolean).length;
+  const pathSteps = (phases?.length ? phases : []).map((phase, idx) => ({
+    id: phase.id,
+    label: phase.title,
+    step: idx + 1,
+    section: 'topics',
+    topicIds: phase.topicIds ?? [],
+  }));
+  const steps = pathSteps.length ? pathSteps : PATH_STEPS;
 
   function getStatus(s) {
+    if (s.topicIds?.length) {
+      const states = s.topicIds.map(id => ts[id]?.state);
+      if (states.length && states.every(state => state === 'mastered' || state === 'completed')) return 'done';
+      if (states.some(state => state === 'in-progress')) return 'active';
+      if (states.some(state => state === 'available')) return 'available';
+      return 'todo';
+    }
     if (s.topicId) {
       const state = ts[s.topicId]?.state;
       if (state === 'mastered' || state === 'completed') return 'done';
@@ -746,18 +759,33 @@ export const CareerPathTrack = memo(function CareerPathTrack({
     return 'todo';
   }
 
-  const firstActiveIdx = PATH_STEPS.findIndex(s => getStatus(s) === 'active');
-  const firstTodoIdx   = PATH_STEPS.findIndex(s => getStatus(s) === 'todo');
-  const currentIdx     = firstActiveIdx >= 0 ? firstActiveIdx : firstTodoIdx;
+  function getTargetTopicId(step) {
+    if (step.topicId) return step.topicId;
+    if (!step.topicIds?.length) return null;
+    return step.topicIds.find(id => ['in-progress', 'available'].includes(ts[id]?.state))
+      ?? step.topicIds.find(id => !comp[id])
+      ?? step.topicIds[0];
+  }
 
-  const items = PATH_STEPS.flatMap((s, i) => {
+  const firstActiveIdx = steps.findIndex(s => getStatus(s) === 'active');
+  const firstTodoIdx   = steps.findIndex(s => ['available', 'todo'].includes(getStatus(s)));
+  const currentIdx     = firstActiveIdx >= 0 ? firstActiveIdx : firstTodoIdx;
+  const currentStep    = currentIdx >= 0 ? steps[currentIdx] : steps[steps.length - 1];
+  const currentPhase   = phases?.find(p => p.id === currentStep?.id);
+  const currentMentor  = currentPhase ? getPhaseMentorship(currentPhase.id) : null;
+
+  const items = steps.flatMap((s, i) => {
     const status = getStatus(s);
     const isCurrent = i === currentIdx;
-    const prevDone = i > 0 && getStatus(PATH_STEPS[i - 1]) === 'done';
+    const prevDone = i > 0 && getStatus(steps[i - 1]) === 'done';
     const connClass = `career-path-conn${prevDone ? ' career-path-conn--done' : ''}`;
     const elems = [];
     if (i > 0) elems.push(<div key={`conn-${i}`} className={connClass} aria-hidden="true" />);
-    const masteryPct = s.topicId ? (ts[s.topicId]?.masteryPct ?? 0) : 0;
+    const phaseMastery = s.topicIds?.length
+      ? Math.round(s.topicIds.reduce((sum, id) => sum + (ts[id]?.masteryPct ?? 0), 0) / s.topicIds.length)
+      : 0;
+    const masteryPct = s.topicId ? (ts[s.topicId]?.masteryPct ?? 0) : phaseMastery;
+    const targetTopicId = getTargetTopicId(s);
     elems.push(
       <button
         key={s.id}
@@ -767,7 +795,7 @@ export const CareerPathTrack = memo(function CareerPathTrack({
           `career-path-step--${status}`,
           isCurrent ? 'career-path-step--current' : '',
         ].filter(Boolean).join(' ')}
-        onClick={() => onStepClick?.(s.topicId, s.section)}
+        onClick={() => onStepClick?.(targetTopicId, s.section)}
         aria-label={`Step ${s.step}: ${s.label} — ${status}`}
         title={`${s.label}${masteryPct > 0 ? ` (${masteryPct}% mastered)` : ''}`}
       >
@@ -787,13 +815,25 @@ export const CareerPathTrack = memo(function CareerPathTrack({
     <section className="career-path-track ds-card">
       <div className="career-path-header">
         <div>
-          <p className="eyebrow">Start Here</p>
-          <h2>Your Data Engineering Path</h2>
+          <p className="eyebrow">Guided Roadmap</p>
+          <h2>Your Data Engineering Journey</h2>
         </div>
         <span className="career-path-progress-label">
-          {completedCount}/{totalTopics ?? PATH_STEPS.filter(s => s.topicId).length} topics done
+          {completedCount}/{totalTopics ?? topics?.length ?? PATH_STEPS.filter(s => s.topicId).length} topics done
         </span>
       </div>
+      {currentMentor && (
+        <div className="career-phase-mentor">
+          <span className="career-phase-label">Current phase</span>
+          <strong>{currentPhase.title}</strong>
+          <p>{currentMentor.why}</p>
+          <div className="career-phase-meta">
+            <span>{currentMentor.timeline}</span>
+            <span>{currentMentor.difficulty}</span>
+            <span>{currentMentor.jobs}</span>
+          </div>
+        </div>
+      )}
       <div className="career-path-steps" role="list" aria-label="Career path steps">
         {items}
       </div>
@@ -843,7 +883,7 @@ function readinessLabel(pct) {
 }
 
 export const JobReadinessChecklist = memo(function JobReadinessChecklist({
-  topicStates, completedTopics, learnedCount, overallReadiness,
+  topicStates, completedTopics, learnedCount, overallReadiness, topics,
 }) {
   const ts   = topicStates ?? {};
   const comp = completedTopics ?? {};
@@ -851,6 +891,9 @@ export const JobReadinessChecklist = memo(function JobReadinessChecklist({
   const readyCount = READINESS_ITEMS.filter(item =>
     readinessPct(item, ts, comp, completedCount, learnedCount) >= 80
   ).length;
+  const strengths = getStrengths(topics ?? [], ts);
+  const weakAreas = getWeakAreas(topics ?? [], ts);
+  const estimate = getInterviewReadinessEstimate(overallReadiness ?? 0);
 
   return (
     <section className="job-readiness ds-card">
@@ -884,6 +927,131 @@ export const JobReadinessChecklist = memo(function JobReadinessChecklist({
             </div>
           );
         })}
+      </div>
+      <div className="readiness-mentor-row">
+        <div className="readiness-mentor-card">
+          <span>Interview readiness estimate</span>
+          <p>{estimate}</p>
+        </div>
+        <div className="readiness-mentor-card">
+          <span>Strongest skills</span>
+          <p>{strengths.length ? strengths.map(t => t.title).join(', ') : 'No strong skill yet. SQL will become your first confidence anchor.'}</p>
+        </div>
+        <div className="readiness-mentor-card">
+          <span>Weak areas to focus</span>
+          <p>{weakAreas.length ? weakAreas.map(t => t.title).join(', ') : 'Move into interview practice and project storytelling.'}</p>
+        </div>
+      </div>
+    </section>
+  );
+});
+
+export const BecomeJobReadyPanel = memo(function BecomeJobReadyPanel({ onNavigate }) {
+  const stages = [
+    { title: '1. Learn foundations', body: 'SQL, Python, Linux, Git, and modeling make the rest easier.', section: 'topics' },
+    { title: '2. Build pipelines', body: 'Practice batch, incremental loads, CDC, quality checks, and cloud orchestration.', section: 'topics' },
+    { title: '3. Prove with projects', body: 'Use portfolio projects to show real-world architecture and trade-offs.', section: 'projects' },
+    { title: '4. Prepare interviews', body: 'Review SQL, Spark, system design, incidents, and your project stories.', section: 'interview-prep' },
+  ];
+  return (
+    <section className="become-ready-panel ds-card">
+      <div className="become-ready-header">
+        <div>
+          <p className="eyebrow">Career accelerator</p>
+          <h2>How to Become a Data Engineer</h2>
+          <p>Follow this sequence to turn learning into job-ready proof: skills, projects, resume stories, and mock interviews.</p>
+        </div>
+      </div>
+      <div className="become-ready-grid">
+        {stages.map(stage => (
+          <button key={stage.title} type="button" className="become-ready-step" onClick={() => onNavigate?.(stage.section)}>
+            <strong>{stage.title}</strong>
+            <span>{stage.body}</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+});
+
+// ─── Section Preview Grid — lightweight cards linking to dedicated pages ───────
+const SECTION_PREVIEWS = [
+  {
+    id: 'topics',
+    icon: '▦',
+    title: 'Learning Path',
+    body: 'Follow the structured 39-topic roadmap from SQL basics to AI engineering — phase by phase, lesson by lesson.',
+    cta: 'Open Learning Path',
+    color: '#3b82f6',
+  },
+  {
+    id: 'sql-lab',
+    icon: '▤',
+    title: 'SQL Lab',
+    body: 'Practice joins, CTEs, window functions, aggregations, and query optimization with an interactive SQL editor.',
+    cta: 'Open SQL Lab',
+    color: '#8b5cf6',
+  },
+  {
+    id: 'projects',
+    icon: '▣',
+    title: 'Real-World Projects',
+    body: 'Build portfolio-ready data engineering systems — sales lakehouse, CDC pipeline, streaming dashboard, and more.',
+    cta: 'View Projects',
+    color: '#10b981',
+  },
+  {
+    id: 'interview-prep',
+    icon: '◌',
+    title: 'Interview Prep',
+    body: 'Practice real DE interview scenarios — SQL, Spark, system design, behavioral questions, and mock sessions.',
+    cta: 'Start Interview Prep',
+    color: '#f59e0b',
+  },
+  {
+    id: 'roadmap',
+    icon: '◇',
+    title: 'Career Roadmaps',
+    body: 'Explore specialization paths for Azure DE, Databricks Engineer, AWS DE, Analytics Engineer, and Streaming.',
+    cta: 'Explore Roadmaps',
+    color: '#06b6d4',
+  },
+  {
+    id: 'ai-learning',
+    icon: '✦',
+    title: 'AI Coach',
+    body: 'Learn how to build LLM pipelines, use AI tools to accelerate your DE work, and prepare for AI-era interviews.',
+    cta: 'Open AI Coach',
+    color: '#a855f7',
+  },
+];
+
+export const SectionPreviewGrid = memo(function SectionPreviewGrid({ onNavigate }) {
+  return (
+    <section className="section-preview-section">
+      <div className="section-title-row" style={{ marginBottom: 16 }}>
+        <div>
+          <p className="eyebrow">Explore the platform</p>
+          <h2>What's Inside</h2>
+        </div>
+      </div>
+      <div className="section-preview-grid">
+        {SECTION_PREVIEWS.map(item => (
+          <button
+            key={item.id}
+            type="button"
+            className="section-preview-card ds-card ds-card--interactive"
+            style={{ '--preview-color': item.color }}
+            onClick={() => onNavigate?.(item.id)}
+          >
+            <span className="section-preview-icon" aria-hidden="true">{item.icon}</span>
+            <div className="section-preview-copy">
+              <strong>{item.title}</strong>
+              <p>{item.body}</p>
+            </div>
+            <span className="section-preview-cta">{item.cta} →</span>
+          </button>
+        ))}
       </div>
     </section>
   );

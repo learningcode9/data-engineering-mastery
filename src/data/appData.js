@@ -11,27 +11,27 @@ export const quickLinks = [
   'Interview prompts',
 ];
 
-// Core MVP navigation — shown in main sidebar
+// Core navigation pages — rendered as distinct views, not scroll targets
 export const coreNavItems = [
-  { label: 'Dashboard',      icon: '⌂' },
-  { label: 'Topics',         icon: '▦' },
-  { label: 'SQL Lab',        icon: '▤' },
-  { label: 'Interview Prep', icon: '◌' },
-  { label: 'Projects',       icon: '▣' },
-  { label: 'Roadmap',        icon: '◇' },
-  { label: 'AI Learning',    icon: '✦' },
+  { id: 'dashboard',      label: 'Dashboard',      icon: '⌂' },
+  { id: 'topics',         label: 'Learning Path',  icon: '▦' },
+  { id: 'sql-lab',        label: 'SQL Lab',        icon: '▤' },
+  { id: 'projects',       label: 'Projects',       icon: '▣' },
+  { id: 'interview-prep', label: 'Interview Prep', icon: '◌' },
+  { id: 'roadmap',        label: 'Roadmaps',       icon: '◇' },
+  { id: 'ai-learning',    label: 'AI Coach',       icon: '✦' },
 ];
 
-// Advanced features — shown under a collapsible Labs section
+// Engineering-mode labs — shown under collapsible Labs section
 export const labsNavItems = [
-  { label: 'Architecture',   icon: '◫' },
-  { label: 'Skill Graph',    icon: '◉' },
-  { label: 'Incidents',      icon: '⊗' },
-  { label: 'Enterprise',     icon: '◈' },
-  { label: 'War Room',       icon: '⊘' },
-  { label: 'Standup',        icon: '◷' },
-  { label: 'Databricks',     icon: '⚡' },
-  { label: 'Analytics',      icon: '▧' },
+  { id: 'architecture', label: 'Architecture', icon: '◫' },
+  { id: 'skill-graph',  label: 'Skill Graph',  icon: '◉' },
+  { id: 'incidents',    label: 'Incidents',    icon: '⊗' },
+  { id: 'enterprise',   label: 'Enterprise',   icon: '◈' },
+  { id: 'war-room',     label: 'War Room',     icon: '⊘' },
+  { id: 'standup',      label: 'Standup',      icon: '◷' },
+  { id: 'databricks',   label: 'Databricks',   icon: '⚡' },
+  { id: 'analytics',    label: 'Analytics',    icon: '▧' },
 ];
 
 export const navItems = [...coreNavItems, ...labsNavItems];

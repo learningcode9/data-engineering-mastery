@@ -322,7 +322,8 @@ p, span, strong, h1, h2, h3, h4, a { overflow-wrap: normal; word-break: normal; 
 
 /* ── Search wrapper (contains input + dropdown) ── */
 .search-wrap {
-  flex: 0 390px;
+  flex: 1 1 200px;
+  max-width: 360px;
   min-width: 0;
   position: relative;
 }
@@ -510,24 +511,25 @@ p, span, strong, h1, h2, h3, h4, a { overflow-wrap: normal; word-break: normal; 
 }
 
 .icon-button {
-  border: 1px solid var(--border);
-  width: 40px;
-  min-width: 40px;
-  height: 40px;
-  min-height: 40px;
-  color: var(--strong-green);
-  background: var(--surface-solid);
+  border: 1px solid transparent;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  min-height: 38px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--card-border) 40%, transparent);
   box-shadow: none;
-  border-radius: 12px;
+  border-radius: 10px;
   display: grid;
   place-items: center;
-  font-size: 17px;
-  transition: transform 0.18s, background-color 0.18s, border-color 0.18s, color 0.18s;
+  font-size: 16px;
+  transition: background 0.16s, border-color 0.16s, color 0.16s;
 }
 
 .icon-button:hover {
-  color: #fff;
-  background: #245a55;
+  background: color-mix(in srgb, var(--strong-green) 10%, var(--surface));
+  border-color: color-mix(in srgb, var(--strong-green) 20%, transparent);
+  color: var(--strong-green);
   transform: translateY(-1px);
 }
 
@@ -677,12 +679,11 @@ button {
 }
 
 button:hover {
-  background: linear-gradient(135deg, #1b4743, #2c685f);
   transform: translateY(-1px);
-  box-shadow: 0 16px 32px #245a5538;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
 }
 
-button:active { transform: translateY(0); }
+button:active { transform: translateY(0); box-shadow: none; }
 
 /* ── Section title row ── */
 .section-title-row, .roadmap-topline, .topic-title {
@@ -1777,13 +1778,14 @@ button.topic-card:hover {
   .top-header { flex-direction: column; align-items: stretch; }
   .header-title { align-items: flex-start; }
   .header-actions {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 40px 42px;
-    align-items: stretch;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
   }
 
   .menu-button { display: grid; }
-  .search-wrap { flex-basis: auto; flex: 1 1 auto; min-width: 0; }
+  .search-wrap { flex: 1 1 240px; min-width: 0; }
   .learning-row, .lower-grid, .topic-grid, .continue-card {
     grid-template-columns: 1fr;
   }
@@ -1804,7 +1806,7 @@ button.topic-card:hover {
   .top-header, .summary-card, .card, .section { border-radius: 20px; }
   .top-header h1 { font-size: 26px; }
   .header-copy { font-size: 14px; }
-  .header-actions { grid-template-columns: 1fr 40px 42px; }
+  .header-actions { flex-wrap: wrap; }
 
   .summary-grid, .roadmap-grid, .topic-grid { grid-template-columns: 1fr; }
 
@@ -7708,6 +7710,10 @@ button:active { transform: scale(0.97) !important; }
   box-shadow:   none;
 }
 
+@media (width > 900px) {
+  .menu-button { display: none; }
+}
+
 /* Practice task buttons */
 .practice-btn {
   font-size:    0.78rem;
@@ -12040,10 +12046,13 @@ button[aria-disabled="true"] {
 /* Top header: reduce visual density and keep the title from crowding itself. */
 .top-header {
   display: grid;
-  grid-template-columns: minmax(300px, 1fr) minmax(0, auto);
+  grid-template-columns: minmax(240px, 1fr) minmax(0, min(640px, 48vw));
   align-items: center;
-  gap: 24px;
-  padding: 22px 26px;
+  gap: 20px;
+  padding: 22px 32px;
+  box-sizing: border-box;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .header-title {
@@ -12073,12 +12082,20 @@ button[aria-disabled="true"] {
 }
 
 .header-actions {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto auto auto;
+  align-items: center;
+  gap: 12px;
   justify-content: end;
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
 }
 
 .search-wrap {
-  min-width: min(360px, 100%);
+  width: 100%;
+  max-width: none;
+  min-width: 0;
 }
 
 .search {
@@ -12087,7 +12104,7 @@ button[aria-disabled="true"] {
 
 .eng-mode-toggle {
   flex: 0 0 auto;
-  min-width: 94px;
+  min-width: 0;
   justify-content: center;
   padding-inline: 12px;
   overflow: visible;
@@ -12106,6 +12123,28 @@ button[aria-disabled="true"] {
 
   .header-actions {
     justify-content: start;
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
+  }
+}
+
+@media (width <= 960px) {
+  .top-header {
+    padding: 18px 20px;
+  }
+
+  .eng-mode-toggle {
+    width: 40px;
+    min-width: 40px;
+    padding-inline: 0;
+  }
+
+  .eng-mode-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
   }
 }
 
@@ -20140,22 +20179,26 @@ button:not(:disabled):active {
 .user-menu { position: relative; }
 
 .user-menu-btn {
-  background: linear-gradient(135deg, #2f756e, #96a65f);
+  background: linear-gradient(135deg, #2f756e, #5a9a7e);
   border: none;
-  border-radius: 14px;
-  width: 42px;
-  height: 42px;
-  display: grid;
-  place-items: center;
-  font-size: 13px;
-  font-weight: 850;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
   color: #fff;
   cursor: pointer;
-  box-shadow: 0 12px 24px #2f756e29;
-  transition: transform 100ms;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14);
+  transition: opacity 0.15s ease;
   flex-shrink: 0;
 }
-.user-menu-btn:hover { transform: scale(1.05); }
+.user-menu-btn:hover { opacity: 0.85; }
 
 .user-menu-dropdown {
   position: absolute;
@@ -21517,6 +21560,1005 @@ button:not(:disabled):active {
 
 .career-path-step--available .career-path-label { color: var(--text); }
 
+/* ── Career guidance refinement ─────────────────────────────────────────────── */
+.start-here-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.start-here-guide-card,
+.readiness-mentor-card,
+.topic-guidance-card {
+  background: color-mix(in srgb, var(--surface-soft) 88%, #fff);
+  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.start-here-guide-card span,
+.readiness-mentor-card span,
+.topic-guidance-card span,
+.rt-phase-mentor span {
+  display: block;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.065em;
+  text-transform: uppercase;
+  color: var(--strong-green);
+  margin-bottom: 5px;
+}
+
+.start-here-guide-card p,
+.readiness-mentor-card p,
+.topic-guidance-card p,
+.rt-phase-mentor p {
+  margin: 0;
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.career-phase-mentor {
+  background: color-mix(in srgb, var(--strong-green) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--strong-green) 18%, transparent);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+
+.career-phase-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.065em;
+  text-transform: uppercase;
+  color: var(--strong-green);
+  margin-bottom: 4px;
+}
+
+.career-phase-mentor strong {
+  display: block;
+  color: var(--heading);
+  font-size: 15px;
+  margin-bottom: 5px;
+}
+
+.career-phase-mentor p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.career-phase-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.career-phase-meta span {
+  border: 1px solid color-mix(in srgb, var(--strong-green) 20%, transparent);
+  background: var(--surface-solid);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 750;
+  padding: 4px 9px;
+}
+
+.become-ready-panel {
+  padding: 20px 24px;
+}
+
+.become-ready-header {
+  margin-bottom: 15px;
+}
+
+.become-ready-header h2 {
+  margin: 0 0 6px;
+  color: var(--heading);
+  font-size: 17px;
+}
+
+.become-ready-header p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.become-ready-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.become-ready-step {
+  appearance: none;
+  text-align: left;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 13px 14px;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.become-ready-step:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--strong-green) 35%, transparent);
+  box-shadow: 0 10px 24px rgba(28, 52, 47, 0.08);
+}
+
+.become-ready-step strong {
+  display: block;
+  color: var(--heading);
+  font-size: 13px;
+  margin-bottom: 5px;
+}
+
+.become-ready-step span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.readiness-mentor-row {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr 1fr;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.topic-guidance-snapshot {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.topic-guidance-card {
+  background: color-mix(in srgb, var(--strong-green) 4%, var(--surface-solid));
+}
+
+.rt-phase-mentor {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  background: color-mix(in srgb, var(--strong-green) 5%, transparent);
+  border: 1px solid color-mix(in srgb, var(--strong-green) 18%, transparent);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.onboarding-primer {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+
+.onboarding-primer div {
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 11px 12px;
+}
+
+.onboarding-primer span {
+  display: block;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--strong-green);
+  margin-bottom: 4px;
+}
+
+.onboarding-primer p {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+/* ── Learning path hierarchy: phases → modules → lessons ─────────────────── */
+/* ── Philosophy strip ──────────────────────────────────────────────────────── */
+.path-philosophy-strip {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: color-mix(in srgb, var(--strong-green) 5%, transparent);
+  border: 1px solid color-mix(in srgb, var(--strong-green) 18%, transparent);
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+}
+
+.path-philosophy-icon {
+  font-size: 16px;
+  color: var(--strong-green);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.path-philosophy-strip p {
+  font-size: 13.5px;
+  color: var(--text);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.path-philosophy-strip em {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--heading);
+}
+
+/* ── Overall progress header ───────────────────────────────────────────────── */
+.path-header-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.path-stat-phases {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--strong-green);
+}
+
+.path-overall-track {
+  width: 120px;
+  height: 5px;
+  background: var(--border);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.path-overall-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--strong-green), #5aab9a);
+  border-radius: 5px;
+  transition: width 0.6s ease;
+  min-width: 4px;
+}
+
+/* ── "Up next" recommendation card ────────────────────────────────────────── */
+.path-next-step {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--strong-green) 7%, var(--surface-solid)),
+    var(--surface-solid)
+  );
+  border: 1px solid color-mix(in srgb, var(--strong-green) 22%, transparent);
+  border-radius: 14px;
+  padding: 16px 20px;
+  margin: 4px 0 20px;
+}
+
+.path-next-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.path-next-step strong {
+  display: block;
+  color: var(--heading);
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.path-next-step span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.path-next-step .eyebrow {
+  margin-bottom: 4px;
+}
+
+.path-next-cta {
+  border: 0;
+  border-radius: 10px;
+  background: var(--strong-green);
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 10px 18px;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.path-next-cta:hover {
+  opacity: 0.88;
+}
+
+/* ── Learning path shell ───────────────────────────────────────────────────── */
+.learning-path-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: 8px;
+}
+
+/* Wrapper holds card + connector */
+.path-phase-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Roadmap connector between phases ──────────────────────────────────────── */
+.path-roadmap-connector {
+  display: flex;
+  justify-content: center;
+  padding: 0;
+  position: relative;
+  z-index: 0;
+}
+
+.path-connector-track {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.path-connector-line {
+  width: 2px;
+  height: 28px;
+  background: var(--border);
+  border-radius: 2px;
+}
+
+.path-roadmap-connector--done .path-connector-line {
+  background: color-mix(in srgb, var(--strong-green) 40%, transparent);
+}
+
+.path-connector-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  background: var(--surface-solid);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.path-roadmap-connector--done .path-connector-dot {
+  border-color: var(--strong-green);
+  background: color-mix(in srgb, var(--strong-green) 10%, transparent);
+  color: var(--strong-green);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.path-roadmap-connector--active .path-connector-dot {
+  border-color: var(--strong-green);
+  background: var(--strong-green);
+  color: #fff;
+}
+
+/* ── Phase card ────────────────────────────────────────────────────────────── */
+.path-phase-card {
+  background: var(--surface-solid);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  transition: border-color 0.22s ease, box-shadow 0.22s ease;
+  animation: phase-enter 0.3s ease both;
+}
+
+@keyframes phase-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.path-phase-card--current {
+  border-color: color-mix(in srgb, var(--strong-green) 36%, transparent);
+  box-shadow: 0 4px 24px color-mix(in srgb, var(--strong-green) 10%, transparent);
+}
+
+.path-phase-card--complete {
+  border-color: color-mix(in srgb, var(--strong-green) 22%, transparent);
+}
+
+/* Locked: readable, not broken — feels "upcoming" not disabled */
+.path-phase-card--locked {
+  opacity: 1;
+  border-style: dashed;
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--strong-green) 2%, var(--surface-solid));
+}
+
+/* ── Phase header button ───────────────────────────────────────────────────── */
+.path-phase-header {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(100px, 150px);
+  align-items: center;
+  gap: 14px;
+  padding: 18px 20px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.path-phase-header:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--strong-green) 3%, transparent);
+}
+
+.path-phase-header:disabled {
+  cursor: default;
+}
+
+/* Phase number bubble */
+.path-phase-index {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--strong-green) 10%, transparent);
+  border: 1.5px solid color-mix(in srgb, var(--strong-green) 28%, transparent);
+  color: var(--strong-green);
+  font-size: 14px;
+  font-weight: 800;
+  flex-shrink: 0;
+  transition: background 0.2s ease;
+}
+
+.path-phase-index--done {
+  background: var(--strong-green);
+  border-color: var(--strong-green);
+  color: #fff;
+}
+
+.path-phase-card--locked .path-phase-index {
+  background: var(--surface-soft);
+  border-color: var(--border);
+  border-style: dashed;
+  color: var(--muted);
+}
+
+/* Phase text copy */
+.path-phase-copy {
+  min-width: 0;
+}
+
+.path-phase-kicker {
+  display: block;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+
+.path-phase-card--current .path-phase-kicker {
+  color: var(--strong-green);
+}
+
+.path-phase-card--locked .path-phase-kicker {
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+.path-phase-copy strong {
+  display: block;
+  color: var(--heading);
+  font-size: 15.5px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  line-height: 1.3;
+}
+
+.path-phase-card--locked .path-phase-copy strong {
+  color: var(--text);
+  opacity: 0.8;
+}
+
+.path-phase-copy > span:last-child {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* Phase progress column */
+.path-phase-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+}
+
+.path-phase-progress-pct {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--strong-green);
+}
+
+.path-phase-progress-locked {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--surface-soft);
+  border: 1px dashed var(--border);
+  border-radius: 20px;
+  padding: 3px 10px;
+  letter-spacing: 0.05em;
+}
+
+.path-phase-track {
+  display: block;
+  width: 100%;
+  height: 6px;
+  background: var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.path-phase-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--strong-green), #5aab9a);
+  transition: width 0.6s ease;
+  min-width: 3px;
+}
+
+/* ── Locked phase preview ──────────────────────────────────────────────────── */
+.path-phase-locked-preview {
+  padding: 0 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.path-locked-unlock-msg {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.path-locked-unlock-msg strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.path-locked-skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.path-locked-skill-chip {
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+/* ── Phase body (expanded) ─────────────────────────────────────────────────── */
+.path-phase-body {
+  border-top: 1px solid var(--border);
+  padding: 20px 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  animation: phase-body-enter 0.25s ease both;
+}
+
+@keyframes phase-body-enter {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Phase outcomes hero ───────────────────────────────────────────────────── */
+.path-phase-outcomes {
+  background: color-mix(in srgb, var(--strong-green) 4%, var(--surface-soft));
+  border: 1px solid color-mix(in srgb, var(--strong-green) 16%, transparent);
+  border-radius: 14px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.path-phase-outcomes-header {
+  border-bottom: 1px solid color-mix(in srgb, var(--strong-green) 14%, transparent);
+  padding-bottom: 12px;
+}
+
+.path-outcomes-kicker {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--strong-green);
+}
+
+.path-outcomes-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.path-outcomes-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13.5px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.path-outcomes-check {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--strong-green) 14%, transparent);
+  color: var(--strong-green);
+  font-size: 9px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.path-phase-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.path-phase-meta-chip {
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.path-phase-meta-chip--time {
+  background: var(--surface-solid);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.path-phase-meta-chip--diff {
+  background: color-mix(in srgb, var(--strong-green) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--strong-green) 22%, transparent);
+  color: var(--strong-green);
+}
+
+.path-phase-meta-chip--interview {
+  background: color-mix(in srgb, #f59e0b 8%, transparent);
+  border: 1px solid color-mix(in srgb, #f59e0b 22%, transparent);
+  color: color-mix(in srgb, #f59e0b 80%, #7c5800);
+}
+
+/* ── Modules + lessons ─────────────────────────────────────────────────────── */
+.path-modules {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.path-module {
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 14px 12px;
+}
+
+.path-module-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.path-module-header h3 {
+  margin: 0;
+  color: var(--heading);
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.path-module-header span,
+.path-lesson-tools {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.path-lessons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ── Individual lesson rows ────────────────────────────────────────────────── */
+.path-lesson {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-solid);
+  padding: 11px 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+
+/* Subtle, readable hover — no dark fill */
+.path-lesson:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--strong-green) 35%, transparent);
+  background: color-mix(in srgb, var(--strong-green) 3%, var(--surface-solid));
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.path-lesson--active {
+  border-color: var(--strong-green);
+  background: color-mix(in srgb, var(--strong-green) 5%, var(--surface-solid));
+}
+
+.path-lesson:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+/* Status icon bubble */
+.path-lesson-status {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--strong-green) 10%, transparent);
+  color: var(--strong-green);
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
+  transition: background 0.2s ease;
+}
+
+.path-lesson--completed .path-lesson-status,
+.path-lesson--mastered .path-lesson-status {
+  background: var(--strong-green);
+  color: #fff;
+}
+
+.path-lesson--in-progress .path-lesson-status {
+  background: color-mix(in srgb, #3b82f6 12%, transparent);
+  color: #3b82f6;
+}
+
+/* Text block */
+.path-lesson-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.path-lesson-copy strong {
+  color: var(--heading);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.path-lesson-copy span {
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+
+/* Status pill */
+.path-lesson-pill {
+  border-radius: 20px;
+  padding: 3px 9px;
+  background: color-mix(in srgb, var(--strong-green) 10%, transparent);
+  color: var(--strong-green);
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.path-lesson--in-progress .path-lesson-pill {
+  background: color-mix(in srgb, #3b82f6 10%, transparent);
+  color: #3b82f6;
+}
+
+.path-lesson--completed .path-lesson-pill,
+.path-lesson--mastered .path-lesson-pill {
+  background: color-mix(in srgb, var(--strong-green) 14%, transparent);
+  color: var(--strong-green);
+}
+
+.path-lesson--locked .path-lesson-pill {
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+.path-lesson--locked .path-lesson-status {
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+
+/* ── Phase transition footer ───────────────────────────────────────────────── */
+.path-phase-transition {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  background: color-mix(in srgb, var(--strong-green) 3%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--strong-green) 22%, transparent);
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin-top: 4px;
+}
+
+.path-transition-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.path-transition-arrow {
+  font-size: 18px;
+  color: var(--strong-green);
+  opacity: 0.6;
+}
+
+.path-transition-kicker {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.path-phase-transition strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--heading);
+}
+
+.path-transition-skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  justify-content: flex-end;
+}
+
+/* ── Dark mode ─────────────────────────────────────────────────────────────── */
+.dark-mode .path-phase-card,
+.dark-mode .path-lesson {
+  background: var(--surface-soft);
+}
+
+/* ── Misc (preserved) ──────────────────────────────────────────────────────── */
+.path-guide-detail .common-mistake-item .mistake-icon {
+  color: var(--strong-green);
+}
+
+.dark-mode .start-here-guide-card,
+.dark-mode .readiness-mentor-card,
+.dark-mode .topic-guidance-card,
+.dark-mode .become-ready-step,
+.dark-mode .onboarding-primer div {
+  background: var(--surface-soft);
+}
+
+/* ── Responsive ────────────────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .start-here-guide-grid,
+  .become-ready-grid,
+  .readiness-mentor-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .start-here-guide-grid,
+  .become-ready-grid,
+  .readiness-mentor-row,
+  .topic-guidance-snapshot,
+  .rt-phase-mentor {
+    grid-template-columns: 1fr;
+  }
+
+  .path-phase-header {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .path-phase-progress {
+    display: none;
+  }
+
+  .path-next-step {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .path-next-cta {
+    width: 100%;
+    text-align: center;
+  }
+
+  .path-lesson {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .path-lesson-pill {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .path-phase-transition {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .path-transition-skills {
+    justify-content: flex-start;
+  }
+
+  .career-phase-meta span {
+    max-width: 100%;
+  }
+}
+
 /* ─── Phase Strip ──────────────────────────────────────────────────────────── */
 .phase-strip {
   display: flex;
@@ -21588,4 +22630,900 @@ button:not(:disabled):active {
   background: var(--phase-color, var(--strong-green));
   border-radius: 2px;
   transition: width 0.3s;
+}
+
+/* ─── Page-Based Architecture ──────────────────────────────────────────────── */
+.page {
+  padding: 0;
+  animation: page-enter 0.18s ease;
+}
+
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+
+.page--dashboard { }
+.page--learning-path { }
+.page--sql-lab,
+.page--projects,
+.page--interview-prep,
+.page--roadmap,
+.page--ai-coach {
+  min-height: 60vh;
+}
+
+.page-loading {
+  padding: 40px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ─── Section Preview Grid ─────────────────────────────────────────────────── */
+.section-preview-section {
+  margin-top: 24px;
+}
+
+.section-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.section-preview-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 20px;
+  text-align: left;
+  border-left: 3px solid var(--preview-color, var(--strong-green));
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+  cursor: pointer;
+}
+
+.section-preview-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+}
+
+.section-preview-icon {
+  font-size: 20px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--preview-color, var(--strong-green)) 12%, transparent);
+  border-radius: 8px;
+  color: var(--preview-color, var(--strong-green));
+  flex-shrink: 0;
+}
+
+.section-preview-copy {
+  flex: 1;
+}
+
+.section-preview-copy strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--heading);
+  margin-bottom: 4px;
+}
+
+.section-preview-copy p {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.section-preview-cta {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--preview-color, var(--strong-green));
+  margin-top: auto;
+}
+
+/* ── Lesson Page ─────────────────────────────────────────────────────────── */
+
+.page--lesson {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 0 24px 80px;
+}
+
+/* Breadcrumb */
+.lesson-breadcrumb {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 20px 0 28px;
+  font-size: 13px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 32px;
+}
+
+.lesson-breadcrumb-back {
+  background: none;
+  border: none;
+  padding: 4px 10px 4px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--strong-green);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-right: 1px solid var(--border);
+  margin-right: 6px;
+}
+
+.lesson-breadcrumb-back:hover {
+  color: var(--accent-green);
+}
+
+.lesson-breadcrumb-sep {
+  color: var(--muted);
+  opacity: 0.5;
+  font-size: 11px;
+}
+
+.lesson-breadcrumb-item {
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+.lesson-breadcrumb-current {
+  color: var(--heading);
+  font-weight: 600;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Lesson article */
+.lesson-page-article {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.lesson-page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lesson-page-title {
+  font-size: clamp(22px, 4vw, 32px);
+  font-weight: 700;
+  color: var(--heading);
+  line-height: 1.25;
+  margin: 0;
+}
+
+.lesson-page-body {
+  font-size: 16px;
+  color: var(--body-text, var(--text));
+  line-height: 1.7;
+  max-width: 640px;
+  margin: 0;
+}
+
+/* Tool chips */
+.lesson-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.lesson-tool-chip {
+  background: var(--surface-alt, var(--card-bg));
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 3px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Guide content */
+.guide-content {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 28px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.guide-headline {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--heading);
+  line-height: 1.55;
+  margin: 0;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.guide-bullets {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.guide-bullets li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 15px;
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.guide-bullets li::before {
+  content: '▸';
+  color: var(--strong-green);
+  font-size: 12px;
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.guide-next-callout {
+  background: color-mix(in srgb, var(--strong-green) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--strong-green) 25%, transparent);
+  border-radius: 8px;
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.guide-next-callout strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--strong-green);
+}
+
+.guide-next-callout p {
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.55;
+  margin: 0;
+}
+
+/* Fallback placeholder */
+.lesson-page-content-placeholder {
+  background: var(--card-bg);
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  padding: 32px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+/* Footer row */
+.lesson-page-footer {
+  display: flex;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  margin-top: 12px;
+}
+
+.lesson-back-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 18px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lesson-back-btn:hover {
+  background: var(--surface-alt, var(--card-bg));
+  border-color: var(--strong-green);
+  color: var(--strong-green);
+}
+
+@media (max-width: 600px) {
+  .page--lesson {
+    padding: 0 16px 60px;
+  }
+
+  .lesson-breadcrumb-item {
+    display: none;
+  }
+
+  .lesson-breadcrumb-sep:not(:last-of-type) {
+    display: none;
+  }
+
+  .guide-content {
+    padding: 20px;
+  }
+}
+
+/* ── Lesson Progress Indicator ───────────────────────────────────────────── */
+
+.lesson-progress-indicator {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 0 24px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 32px;
+}
+
+.lpi-text {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12.5px;
+}
+
+.lpi-phase {
+  color: var(--strong-green);
+  font-weight: 600;
+}
+
+.lpi-lesson {
+  color: var(--muted);
+}
+
+.lpi-track {
+  height: 4px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.lpi-fill {
+  height: 100%;
+  background: var(--strong-green);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+  min-width: 4px;
+}
+
+/* ── Lesson article sections ─────────────────────────────────────────────── */
+
+.lesson-page-article {
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+
+.lesson-page-header {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.lesson-page-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.lesson-meta-chip {
+  background: color-mix(in srgb, var(--strong-green) 10%, transparent);
+  color: var(--strong-green);
+  border: 1px solid color-mix(in srgb, var(--strong-green) 30%, transparent);
+  border-radius: 20px;
+  padding: 3px 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.lesson-meta-chip--diff {
+  background: var(--surface-alt, var(--card-bg));
+  color: var(--muted);
+  border-color: var(--border);
+}
+
+.lesson-page-title {
+  font-size: clamp(22px, 4vw, 32px);
+  font-weight: 700;
+  color: var(--heading);
+  line-height: 1.25;
+  margin: 0;
+}
+
+.lesson-page-headline {
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1.65;
+  margin: 0;
+  max-width: 680px;
+  border-left: 3px solid var(--strong-green);
+  padding-left: 16px;
+}
+
+.lesson-page-body {
+  font-size: 16px;
+  color: var(--text);
+  line-height: 1.7;
+  max-width: 640px;
+  margin: 0;
+}
+
+.lesson-section-heading {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin: 0 0 16px;
+}
+
+/* ── Learning objectives ─────────────────────────────────────────────────── */
+
+.lesson-objectives {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.lesson-objectives-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lesson-objectives-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: 15px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.lesson-obj-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--strong-green);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* ── Explanation ─────────────────────────────────────────────────────────── */
+
+.lesson-explanation p {
+  font-size: 16px;
+  color: var(--text);
+  line-height: 1.75;
+  margin: 0;
+  max-width: 700px;
+}
+
+/* ── Analogy box ─────────────────────────────────────────────────────────── */
+
+.lesson-analogy {
+  background: color-mix(in srgb, #8b5cf6 6%, transparent);
+  border: 1px solid color-mix(in srgb, #8b5cf6 20%, transparent);
+  border-radius: 12px;
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lesson-analogy-kicker {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #8b5cf6;
+}
+
+.lesson-analogy strong {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--heading);
+}
+
+.lesson-analogy p {
+  font-size: 14.5px;
+  color: var(--text);
+  line-height: 1.7;
+  margin: 0;
+}
+
+/* ── Key concepts grid ───────────────────────────────────────────────────── */
+
+.lesson-keypoints-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.lesson-keypoint-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lesson-keypoint-card strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--heading);
+}
+
+.lesson-keypoint-card p {
+  font-size: 13.5px;
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ── Why companies care ──────────────────────────────────────────────────── */
+
+.lesson-why-box {
+  background: color-mix(in srgb, var(--strong-green) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--strong-green) 20%, transparent);
+  border-radius: 10px;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lesson-why-kicker {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--strong-green);
+}
+
+.lesson-why-box p {
+  font-size: 14.5px;
+  color: var(--text);
+  line-height: 1.65;
+  margin: 0;
+}
+
+/* ── Interview note ──────────────────────────────────────────────────────── */
+
+.lesson-interview-note {
+  display: flex;
+  gap: 14px;
+  background: color-mix(in srgb, #f59e0b 6%, transparent);
+  border: 1px solid color-mix(in srgb, #f59e0b 25%, transparent);
+  border-radius: 10px;
+  padding: 18px 22px;
+}
+
+.lesson-interview-icon {
+  font-size: 18px;
+  color: #f59e0b;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.lesson-interview-note strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: #f59e0b;
+  margin-bottom: 4px;
+}
+
+.lesson-interview-note p {
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* ── Recap ───────────────────────────────────────────────────────────────── */
+
+.lesson-recap {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.lesson-recap-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lesson-recap-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14.5px;
+  color: var(--text);
+  line-height: 1.55;
+}
+
+.lesson-recap-list li > span:first-child {
+  color: var(--strong-green);
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* ── Quiz ────────────────────────────────────────────────────────────────── */
+
+.lesson-quiz {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.lesson-quiz-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--strong-green) 4%, transparent);
+}
+
+.lesson-quiz-icon {
+  font-size: 16px;
+  color: var(--strong-green);
+}
+
+.lesson-quiz-header strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--heading);
+  flex: 1;
+}
+
+.lesson-quiz-count {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.lesson-quiz-questions {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.quiz-question {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.quiz-q {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--heading);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.quiz-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.quiz-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--surface-alt, var(--bg));
+  border: 1.5px solid var(--border);
+  border-radius: 8px;
+  padding: 11px 14px;
+  font-size: 14px;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.quiz-option:hover:not(:disabled) {
+  border-color: var(--strong-green);
+  background: color-mix(in srgb, var(--strong-green) 5%, transparent);
+}
+
+.quiz-option--selected {
+  border-color: var(--strong-green);
+  background: color-mix(in srgb, var(--strong-green) 8%, transparent);
+}
+
+.quiz-option--correct {
+  border-color: #16a34a;
+  background: color-mix(in srgb, #16a34a 8%, transparent);
+  color: #15803d;
+}
+
+.quiz-option--wrong {
+  border-color: #dc2626;
+  background: color-mix(in srgb, #dc2626 6%, transparent);
+  color: #b91c1c;
+}
+
+.quiz-option-marker {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.quiz-reveal-btn {
+  align-self: flex-start;
+  background: var(--strong-green);
+  color: #fff;
+  border: none;
+  border-radius: 7px;
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.quiz-reveal-btn:hover {
+  background: var(--accent-green, var(--strong-green));
+  opacity: 0.9;
+}
+
+.quiz-explanation {
+  font-size: 13.5px;
+  line-height: 1.6;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-top: 4px;
+}
+
+.quiz-explanation--correct {
+  background: color-mix(in srgb, #16a34a 8%, transparent);
+  border: 1px solid color-mix(in srgb, #16a34a 25%, transparent);
+  color: #15803d;
+}
+
+.quiz-explanation--wrong {
+  background: color-mix(in srgb, #dc2626 6%, transparent);
+  border: 1px solid color-mix(in srgb, #dc2626 20%, transparent);
+  color: #b91c1c;
+}
+
+/* ── Next lesson CTA ─────────────────────────────────────────────────────── */
+
+.lesson-next-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--strong-green);
+  border-radius: 12px;
+  padding: 24px 28px;
+  margin-top: 8px;
+}
+
+.lesson-next-cta--phase-end {
+  border-top-color: #8b5cf6;
+}
+
+.lesson-next-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.lesson-next-body .eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--strong-green);
+  margin-bottom: 2px;
+}
+
+.lesson-next-cta--phase-end .lesson-next-body .eyebrow {
+  color: #8b5cf6;
+}
+
+.lesson-next-body strong {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--heading);
+}
+
+.lesson-next-body p {
+  font-size: 13.5px;
+  color: var(--muted);
+  line-height: 1.55;
+  margin: 0;
+}
+
+.lesson-next-btn {
+  background: var(--strong-green);
+  color: #fff;
+  border: none;
+  border-radius: 9px;
+  padding: 12px 22px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.lesson-next-btn:hover {
+  opacity: 0.9;
+}
+
+@media (max-width: 640px) {
+  .lesson-next-cta {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .lesson-next-btn {
+    width: 100%;
+    text-align: center;
+  }
+
+  .lesson-keypoints-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .lesson-quiz-questions {
+    padding: 16px;
+  }
 }

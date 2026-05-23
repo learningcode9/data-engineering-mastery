@@ -1,5 +1,6 @@
 import { memo, useState } from 'react';
 import { roadmapTracks } from '../../data/roadmaps.js';
+import { getPhaseByTopicIds, getPhaseMentorship } from '../../data/careerGuidance.js';
 
 function PhaseTimeline({ phases, trackProgress }) {
   const [expanded, setExpanded] = useState(null);
@@ -34,6 +35,29 @@ function PhaseTimeline({ phases, trackProgress }) {
 
             {isOpen && (
               <div className="rt-phase-body">
+                {(() => {
+                  const mentor = getPhaseMentorship(getPhaseByTopicIds(phase.topicIds));
+                  return (
+                    <div className="rt-phase-mentor">
+                      <div>
+                        <span>Why this matters</span>
+                        <p>{mentor.why}</p>
+                      </div>
+                      <div>
+                        <span>Jobs require it</span>
+                        <p>{mentor.jobs}</p>
+                      </div>
+                      <div>
+                        <span>Used in companies for</span>
+                        <p>{mentor.companiesUse}</p>
+                      </div>
+                      <div>
+                        <span>Confidence milestone</span>
+                        <p>{mentor.confidence}</p>
+                      </div>
+                    </div>
+                  );
+                })()}
                 <p className="rt-phase-desc">{phase.description}</p>
                 <div className="rt-phase-skills">
                   {phase.skills.map(s => (

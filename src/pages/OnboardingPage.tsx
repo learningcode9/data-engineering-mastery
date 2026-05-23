@@ -99,8 +99,19 @@ export function OnboardingPage({ onComplete, onSkip }: OnboardingPageProps) {
             {onboardingProfile ? 'Update your goals' : 'Personalise your path'}
           </h2>
           <p className="auth-card-subtitle">
-            Takes 30 seconds. We'll tailor your roadmap and daily tasks.
+            Takes 30 seconds. We'll tailor your roadmap, timeline, and recommended first step.
           </p>
+        </div>
+
+        <div className="onboarding-primer">
+          <div>
+            <span>What Data Engineers do</span>
+            <p>Build pipelines that move, clean, govern, and deliver data for analytics and AI teams.</p>
+          </div>
+          <div>
+            <span>What interviews test</span>
+            <p>SQL, Python, Spark, cloud pipelines, production debugging, and project storytelling.</p>
+          </div>
         </div>
 
         <div className="auth-form">

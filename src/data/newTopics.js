@@ -22,7 +22,7 @@ export const newTopics = [
     ],
     module: null,
     step: 3,
-    prerequisites: ['python'],
+    prerequisites: [],
     timeEstimate: '1–2 weeks',
     interviewImportance: 'medium',
     commonMistakes: [
@@ -60,7 +60,7 @@ export const newTopics = [
     ],
     module: null,
     step: 4,
-    prerequisites: ['python'],
+    prerequisites: [],
     timeEstimate: '1 week',
     interviewImportance: 'medium',
     commonMistakes: [
@@ -138,7 +138,7 @@ export const newTopics = [
     ],
     module: null,
     step: 6,
-    prerequisites: ['python'],
+    prerequisites: [],
     timeEstimate: '1 week',
     interviewImportance: 'high',
     commonMistakes: [

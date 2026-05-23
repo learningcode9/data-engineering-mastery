@@ -16,7 +16,7 @@ function buildCommands({ onNavigate, startIncident, openInvestigation, activeInc
   const PAGES = [
     // Core MVP sections
     { id: 'cmd-dash',       label: 'Dashboard',       icon: '⌂', group: 'Navigate', action: nav('dashboard')      },
-    { id: 'cmd-topics',     label: 'Learning Topics', icon: '▦', group: 'Navigate', action: nav('topics')         },
+    { id: 'cmd-topics',     label: 'Learning Path',   icon: '▦', group: 'Navigate', action: nav('topics')         },
     { id: 'cmd-sqllab',     label: 'SQL Lab',         icon: '▤', group: 'Navigate', action: nav('sql-lab')        },
     { id: 'cmd-interview',  label: 'Interview Prep',  icon: '◌', group: 'Navigate', action: nav('interview-prep') },
     { id: 'cmd-projects',   label: 'Projects',        icon: '▣', group: 'Navigate', action: nav('projects')       },

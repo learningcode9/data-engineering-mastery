@@ -5,6 +5,7 @@ import { DifficultyBadge } from '../ui/DifficultyBadge.jsx';
 import { PracticeCard } from '../ui/PracticeCard.jsx';
 import { SQLWorkspace } from '../workspace/SQLWorkspace.jsx';
 import { useLocalStorage } from '../../hooks/useLocalStorage.js';
+import { getMentorshipForTopic } from '../../data/careerGuidance.js';
 
 // ── Subtopic card ──────────────────────────────────────────────────────────────
 function SubtopicCard({ subtopic, practiceCompleted, onTogglePractice, sqlMode }) {
@@ -365,6 +366,39 @@ function InterviewImportanceBanner({ importance }) {
   );
 }
 
+function TopicGuidanceSnapshot({ topic }) {
+  const mentor = getMentorshipForTopic(topic);
+  const companyCare =
+    topic.careerContext?.whyItMatters ||
+    topic.whyItMatters ||
+    mentor.why;
+  const productionUse =
+    topic.careerContext?.realWorldUseCase ||
+    topic.realWorldUseCase ||
+    mentor.companiesUse;
+  const nextText = topic.nextStep
+    ? `${topic.nextStep.title}: ${topic.nextStep.reason}`
+    : 'Move into projects and interview practice once this topic feels comfortable.';
+
+  const cards = [
+    { label: 'Why companies care', value: companyCare },
+    { label: 'Where it is used', value: productionUse },
+    { label: 'Timeline', value: `${topic.timeEstimate ?? mentor.timeline} · ${topic.difficulty ?? mentor.difficulty}` },
+    { label: 'What to learn next', value: nextText },
+  ];
+
+  return (
+    <section className="topic-guidance-snapshot">
+      {cards.map(card => (
+        <article key={card.label} className="topic-guidance-card">
+          <span>{card.label}</span>
+          <p>{card.value}</p>
+        </article>
+      ))}
+    </section>
+  );
+}
+
 // ── Common mistakes section ────────────────────────────────────────────────────
 function CommonMistakes({ mistakes }) {
   if (!mistakes?.length) return null;
@@ -636,6 +670,7 @@ const TopicDetails = memo(function TopicDetails({
       {isLocked && <LockedBanner prerequisites={topic.prerequisites} />}
       <MasteryMeter masteryPct={masteryPct} topicState={topicState} />
       <InterviewImportanceBanner importance={topic.interviewImportance} />
+      <TopicGuidanceSnapshot topic={topic} />
       <OverviewSection overview={topic.overview} />
       <CareerContextPanel careerContext={topic.careerContext} step={topic.step} />
       <CommonMistakes mistakes={topic.commonMistakes} />

@@ -2,7 +2,6 @@ import { memo, useState, useRef, useEffect, useCallback } from 'react';
 import { RESULT_TYPES, groupResults } from '../../utils/searchUtils.js';
 import { navItems } from '../../data/appData.js';
 import { useLocalStorage } from '../../hooks/useLocalStorage.js';
-import { NotificationCenter } from '../ui/NotificationCenter.jsx';
 import { useUser } from '../../providers/UserProvider';
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
@@ -21,13 +20,13 @@ function highlight(text, query) {
 }
 
 function buildCommandItems({ onNavigate, onToggleDark, onToggleEngMode, isDark, engineeringMode, onClose }) {
-  const navSections = navItems.map(({ label, icon }) => ({
+  const navSections = navItems.map(({ id, label, icon }) => ({
     kind: 'nav',
     icon,
     label,
     sub: 'Jump to section',
-    id: label.toLowerCase().replace(/\s+/g, '-'),
-    action: () => { onNavigate(label.toLowerCase().replace(/\s+/g, '-')); onClose(); },
+    id,
+    action: () => { onNavigate(id); onClose(); },
   }));
 
   const actions = [
@@ -259,9 +258,9 @@ function UserMenu() {
 
 const TopHeader = memo(function TopHeader({
   isDark, onMenuClick, onSearchChange, onThemeToggle, searchTerm,
-  searchResults, onResultClick, xp, level, streak, onNavigate,
-  engineeringMode, onToggleEngineeringMode, unlockedAchCount,
-  onOpenCmdPalette, activityLog,
+  searchResults, onResultClick, onNavigate,
+  engineeringMode, onToggleEngineeringMode,
+  onOpenCmdPalette,
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [scrolled,     setScrolled]     = useState(false);
@@ -384,20 +383,6 @@ const TopHeader = memo(function TopHeader({
       </div>
 
       <div className="header-actions">
-        {(level > 1 || xp > 0 || streak > 0) && (
-          <div className="header-stats" aria-label="Learning stats">
-            {streak > 0 && (
-              <span className="header-streak" title={`${streak}-day streak`}>🔥 {streak}</span>
-            )}
-            <span className="header-level" title={`Level ${level} · ${xp} XP total`}>Lv {level}</span>
-            {unlockedAchCount > 0 && (
-              <span className="header-ach" title={`${unlockedAchCount} achievements`}>
-                ✦ {unlockedAchCount}
-              </span>
-            )}
-          </div>
-        )}
-
         <div className="search-wrap" ref={wrapRef} role="search">
           <div className={`search${showResults || showPalette ? ' search--open' : ''}`}>
             <span aria-hidden="true">⌕</span>
@@ -467,8 +452,6 @@ const TopHeader = memo(function TopHeader({
         >
           {isDark ? '☀' : '☾'}
         </button>
-
-        <NotificationCenter activityLog={activityLog} />
 
         <UserMenu />
 

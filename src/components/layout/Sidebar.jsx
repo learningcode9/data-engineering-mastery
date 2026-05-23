@@ -35,6 +35,7 @@ const Sidebar = memo(function Sidebar({ isOpen, activeSection, onClose, onNaviga
   const navProgress = {
     topics:           overallPct,
     'interview-prep': interviewPct,
+    dashboard:        undefined,
   };
 
   const recentAch = ACHIEVEMENTS
@@ -80,8 +81,7 @@ const Sidebar = memo(function Sidebar({ isOpen, activeSection, onClose, onNaviga
         {/* Core nav */}
         <nav aria-label="Sections">
           <ul className="nav-list" role="list">
-            {coreNavItems.map(({ label, icon }) => {
-              const id     = label.toLowerCase().replace(/\s+/g, '-');
+            {coreNavItems.map(({ id, label, icon }) => {
               const active = activeSection === id;
               const pct    = navProgress[id];
               return (
@@ -119,8 +119,7 @@ const Sidebar = memo(function Sidebar({ isOpen, activeSection, onClose, onNaviga
             </button>
             {showLabs && (
               <ul className="nav-list sidebar-labs-list" role="list">
-                {labsNavItems.map(({ label, icon }) => {
-                  const id     = label.toLowerCase().replace(/\s+/g, '-');
+                {labsNavItems.map(({ id, label, icon }) => {
                   const active = activeSection === id;
                   return (
                     <li key={label}>
