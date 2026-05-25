@@ -215,8 +215,7 @@ const Topics = memo(function Topics({
     if (!trackable.length) return 0;
     const total = trackable.reduce((sum, l) => {
       const state = topicStates?.[l.topicId]?.state;
-      if (state === 'mastered')  return sum + 100;
-      if (state === 'completed') return sum + Math.max(70, lessonPct(l));
+      if (state === 'mastered' || state === 'completed') return sum + 100;
       return sum + lessonPct(l);
     }, 0);
     return Math.round(total / trackable.length);
