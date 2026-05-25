@@ -691,6 +691,30 @@ const DatabricksNB = memo(function DatabricksNB() {
         </div>
       </div>
 
+      {/* Purpose card */}
+      <div className="lab-purpose-card">
+        <div className="lab-purpose-header">
+          <span className="lab-purpose-icon">🧱</span>
+          <div>
+            <div className="lab-purpose-title">Databricks Notebook Lab</div>
+            <div style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: 2 }}>
+              Estimated time: 45–90 min per module
+            </div>
+          </div>
+        </div>
+        <strong style={{ fontSize: '0.85rem', color: 'var(--heading)' }}>What you will practice:</strong>
+        <ul style={{ margin: '8px 0 12px', paddingLeft: 18, fontSize: '0.875rem', color: 'var(--text)' }}>
+          <li>Notebook execution and cell-by-cell PySpark workflow</li>
+          <li>Delta Lake operations — Bronze, Silver, Gold ingestion and MERGE</li>
+          <li>Spark DataFrame API — filtering, joins, aggregations, type casting</li>
+        </ul>
+        <div className="lab-skills-row">
+          {['PySpark', 'Delta Lake', 'SQL Analytics', 'Unity Catalog'].map(s => (
+            <span key={s} className="lab-skill-badge">{s}</span>
+          ))}
+        </div>
+      </div>
+
       <PipelineDAG activeNotebook={activeNotebook} />
 
       {clusterWarming && (

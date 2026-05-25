@@ -343,9 +343,16 @@ daily = df \\
 daily.show(4)`,
           expectedOutput: `+----------+---------+------+---------+---------+---------+\n|order_date|   status|orders|  revenue|avg_order|max_order|\n+----------+---------+------+---------+---------+---------+\n|2024-01-15|cancelled|    50|  4500.00|    90.00|   450.00|\n|2024-01-15|  pending|   120| 15600.00|   130.00|   980.00|\n|2024-01-15|  shipped|   280| 56000.00|   200.00|  2400.00|\n|2024-01-15|delivered|   150| 28500.00|   190.00|  1800.00|\n+----------+---------+------+---------+---------+---------+`,
           interview: {
-            question: 'What causes a shuffle in a groupBy aggregation?',
-            answer: 'groupBy triggers a hash-partition shuffle — all rows with the same key must land on the same executor partition. The number of shuffle partitions is spark.sql.shuffle.partitions (default 200).',
+            question: 'What causes a shuffle in a groupBy aggregation, and how do you tune it?',
+            answer: 'groupBy triggers a hash shuffle: all rows with the same key must land on the same partition. The default spark.sql.shuffle.partitions=200 creates 200 output partitions regardless of data size. For a 10 GB dataset: 200 partitions = 50 MB each (good). For a 1 TB dataset: 200 partitions = 5 GB each (too large, causes spill). Rule: target 100–200 MB per partition. For 1 TB: set shuffle.partitions to ~5000. Adaptive Query Execution (AQE) in Spark 3+ can tune this automatically — enable with spark.sql.adaptive.enabled=true.',
           },
+          commonMistakes: [
+            'Leaving spark.sql.shuffle.partitions at the default 200 for large datasets — this causes memory spill when each partition exceeds available executor memory.',
+            'Calling groupBy on a column with extreme skew (e.g., most rows have status="unknown") — one partition gets 90% of the data. Use salting or AQE skew join handling to redistribute.',
+            'Chaining multiple groupBy operations — each triggers a separate shuffle. Combine aggregations into a single groupBy.agg() call when possible.',
+          ],
+          productionContext: 'In Databricks, Adaptive Query Execution is on by default and automatically coalesces over-partitioned shuffle output. For jobs where you know the data volume, set spark.sql.shuffle.partitions explicitly in the notebook\'s first cell to avoid the overhead of AQE measuring partition sizes at runtime.',
+          performanceTip: 'For very common groupBy patterns (daily aggregations run hundreds of times), pre-sort/pre-bucket the input table by the group key using ZORDER or bucketing. A bucketed table eliminates the groupBy shuffle entirely — Spark recognizes the data is already partitioned by the key.',
           practice: 'Group an orders DataFrame by product_id and compute total quantity sold, total revenue, and average revenue per order. Sort by total revenue descending.',
           hint: 'Use .groupBy("product_id").agg(sum("qty").alias(...), sum("revenue").alias(...), avg("revenue").alias(...)).orderBy(col("total_revenue").desc()).',
           solution: `from pyspark.sql.functions import sum, avg, col
@@ -404,8 +411,15 @@ enriched.show(3)`,
           expectedOutput: `Orphaned orders: 2\n\n+--------+-----------+-----------+-----+---------+\n|order_id|customer_id|       name| city|     tier|\n+--------+-----------+-----------+-----+---------+\n|     101|          1|Alice Smith|  NYC|  premium|\n|     102|          2|  Bob Jones|   LA| standard|\n|     103|          1|Alice Smith|  NYC|  premium|\n+--------+-----------+-----------+-----+---------+`,
           interview: {
             question: 'What is a broadcast join and when should you use it?',
-            answer: 'A broadcast join copies the small DataFrame to every executor, eliminating the shuffle of the large table. Use it when one table fits in executor memory (< 10 MB by default, tunable via spark.sql.autoBroadcastJoinThreshold).',
+            answer: 'A broadcast join copies the small DataFrame to every executor, eliminating the shuffle of the large table. Use it when one table fits in executor memory (< 10 MB by default, configurable via spark.sql.autoBroadcastJoinThreshold). Spark auto-broadcasts tables below the threshold, but you can force it with broadcast() hint. In production pipelines, broadcasting a dimension table (customers ~5 MB) when joining with a 500 GB fact table (orders) reduces job time from 20 minutes to 2 minutes.',
           },
+          commonMistakes: [
+            'Using inner join when the fact table has orphaned rows — you silently drop orders with no matching customer. Always check with left_anti before switching to inner.',
+            'Joining on columns with different names without an explicit condition — Spark will error or produce a cartesian product; always specify the join condition explicitly.',
+            'Forgetting to deduplicate the small table before a broadcast join — if the dimension has duplicate keys, every matching fact row gets multiplied.',
+          ],
+          productionContext: 'In Databricks Silver notebooks, every fact-to-dimension join uses broadcast() for dimension tables under 10 MB. Tables like dim_product (10K rows) or dim_region (50 rows) are always broadcast. Without it, a 1B-row orders join shuffles 400 GB across the cluster — the biggest single cause of slow pipeline jobs.',
+          performanceTip: 'Check whether Spark auto-broadcast is working with .explain() — look for "BroadcastHashJoin" in the plan. If you see "SortMergeJoin" on a small table, increase spark.sql.autoBroadcastJoinThreshold to "50mb" or add the broadcast() hint explicitly.',
           practice: 'Join orders with products on product_id using a left join to keep all orders. Then use left_anti to find orders with no matching product.',
           hint: 'Left join: orders.join(products, "product_id", "left"). Anti join: orders.join(products.select("product_id"), "product_id", "left_anti").',
           solution: `from pyspark.sql.functions import broadcast
@@ -462,8 +476,15 @@ result.select("customer_id","order_date","amount","order_num","running_rev","pre
           expectedOutput: `+-----------+----------+------+---------+-----------+-----------+\n|customer_id|order_date|amount|order_num|running_rev|prev_amount|\n+-----------+----------+------+---------+-----------+-----------+\n|          1|2024-01-01| 150.0|        1|      150.0|       null|\n|          1|2024-01-05| 230.0|        2|      380.0|      150.0|\n|          1|2024-01-12| 310.0|        3|      690.0|      230.0|\n|          2|2024-01-02|  89.0|        1|       89.0|       null|\n|          2|2024-01-08| 420.0|        2|      509.0|       89.0|\n+-----------+----------+------+---------+-----------+-----------+`,
           interview: {
             question: 'How does RANK() differ from DENSE_RANK() and ROW_NUMBER()?',
-            answer: 'ROW_NUMBER: unique sequential number per row. RANK: ties get the same rank with a gap after (1,1,3). DENSE_RANK: ties get the same rank with no gap (1,1,2).',
+            answer: 'ROW_NUMBER: unique sequential number per row (no ties — arbitrary tiebreak). RANK: ties get the same rank with a gap after (1,1,3) — good for "3rd place" semantics. DENSE_RANK: ties get the same rank with no gap (1,1,2) — good for "top 3 tiers" without skipping a tier. In production, deduplication always uses ROW_NUMBER (you need exactly one row per key). Ranking reports use DENSE_RANK to avoid confusing gaps in tier labels.',
           },
+          commonMistakes: [
+            'Defining the window without orderBy — row_number and rank produce nondeterministic results without a sort order.',
+            'Using a windowless frame (Window.partitionBy(...) with no rowsBetween) for running totals — the default frame is RANGE UNBOUNDED PRECEDING, which includes all ties on the same ORDER BY value.',
+            'Computing the same window spec multiple times in different withColumn calls — define it once as a variable and reuse it.',
+          ],
+          productionContext: 'Window functions in PySpark are the backbone of Gold-layer transformation: ROW_NUMBER for deduplication in Silver, DENSE_RANK for customer tier assignment in Gold, LAG for MoM revenue deltas in reporting tables. All three appear in nearly every Databricks production notebook.',
+          performanceTip: 'Each distinct Window spec (different PARTITION BY or ORDER BY) triggers a separate shuffle. Combine all window calculations that share the same spec into one withColumn chain rather than defining multiple windows. For very large tables, use repartition(n, "partition_key") before the window to pre-distribute data and reduce shuffle size.',
           practice: 'Add a "region_rank" column that ranks customers by total spend within each region (highest = rank 1). Use dense_rank.',
           hint: 'Define Window.partitionBy("region").orderBy(col("total_spend").desc()). Apply dense_rank().over(window).',
           solution: `from pyspark.sql.window import Window
@@ -512,8 +533,15 @@ print(f"Today's orders: {today.count()}")
           expectedOutput: `Today's orders: 4200\n# Files scanned: order_date=2024-01-15/ only (365x less I/O)`,
           interview: {
             question: 'What is the difference between repartition() and coalesce()?',
-            answer: 'repartition() triggers a full shuffle and can increase or decrease partition count. coalesce() merges partitions without a shuffle — can only decrease. Use coalesce before writing to avoid many tiny output files.',
+            answer: 'repartition(n) triggers a full shuffle and produces evenly distributed partitions — use it before a join or aggregation on a skewed key. coalesce(n) merges partitions without shuffling — it can only decrease the count and may produce uneven partitions, but it\'s much faster. Rule of thumb: use repartition() before heavy transformations to balance work; use coalesce() just before writing to reduce output file count without paying shuffle cost.',
           },
+          commonMistakes: [
+            'Using repartition() just before write — this shuffles the entire dataset one extra time with no query benefit. Use coalesce() instead to reduce file count cheaply.',
+            'Writing without controlling partition count — a 200-partition default produces 200 small Parquet files per date partition, creating a small files problem that slows future reads.',
+            'Partitioning by a high-cardinality column like customer_id — this creates millions of tiny directories, one per customer, making metadata operations extremely slow.',
+          ],
+          productionContext: 'Small files are one of the top causes of slow pipelines in Azure Data Lake and ADLS. In production, after every partitioned write, teams run OPTIMIZE on Delta tables to compact small files into 128MB–1GB Parquet files. AutoOptimize in Databricks can do this automatically on write.',
+          performanceTip: 'Target 128 MB to 1 GB per output file. Formula: estimate total_bytes / 128MB = target partition count. Use coalesce(target) before write. For Delta tables, skip manual coalesce and run OPTIMIZE with ZORDER instead — it compacts and clusters in one operation.',
           practice: 'Write a DataFrame to S3 partitioned by year and month. Before writing, use coalesce to produce at most 4 files per partition to avoid many small files.',
           hint: 'You can use .coalesce(4) before .write, or set .option("maxRecordsPerFile", N). Use .partitionBy("year", "month") on the writer.',
           solution: `df.coalesce(4) \\
@@ -660,8 +688,15 @@ customers.alias("t") \\
           expectedOutput: `MERGE complete.\nRows matched (updated): 1240\nRows inserted (new):     312`,
           interview: {
             question: 'Why is MERGE preferred over delete + insert for upserts?',
-            answer: 'MERGE is atomic — if it fails, the table is unchanged. Delete + insert is two operations: failure between them leaves the table corrupted. MERGE is also idempotent — safe to re-run on failure.',
+            answer: 'MERGE is atomic — it either fully succeeds or the table remains unchanged. Delete + insert is two separate operations: if the job fails between them, the table has no data (deleted) but no new data (insert didn\'t run). MERGE is also idempotent — you can re-run the same MERGE safely on pipeline retry without creating duplicates. In a streaming context, MERGE with a deduplication CTE on the source gives exactly-once semantics even when the stream delivers duplicate messages.',
           },
+          commonMistakes: [
+            'Using whenMatchedUpdateAll() when the source has extra columns not in the target — this fails with a schema mismatch. Use whenMatchedUpdate(set={...}) with explicit column mapping.',
+            'Not filtering the source before MERGE — if your source contains duplicates on the merge key, MERGE throws "Multiple source rows matched the same target row." Deduplicate source first.',
+            'Running MERGE without OPTIMIZE afterward — each MERGE appends new data files; over time the table accumulates many small files and reads slow down.',
+          ],
+          productionContext: 'Delta MERGE is the standard incremental load pattern in Databricks pipelines. A typical Silver notebook: (1) read new records from Bronze since last watermark, (2) deduplicate source with ROW_NUMBER, (3) MERGE into Silver. This runs every 15 minutes for near-real-time Silver tables.',
+          performanceTip: 'MERGE performance depends on how well Spark can skip target files. Add a date filter to the MERGE condition: "t.order_date = s.order_date AND t.id = s.id" — this lets Delta file skipping eliminate most target files. Without the date filter, MERGE scans the entire target table for every run.',
           practice: 'Write a Delta MERGE that upserts product records: update name and price when product_id matches, insert when it does not exist.',
           hint: 'Use DeltaTable.forPath(). Chain .merge(..., "t.product_id = s.product_id").whenMatchedUpdate(set={...}).whenNotMatchedInsert(values={...}).execute().',
           solution: `from delta.tables import DeltaTable

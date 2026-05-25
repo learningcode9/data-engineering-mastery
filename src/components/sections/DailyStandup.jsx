@@ -255,6 +255,30 @@ export const DailyStandup = memo(function DailyStandup() {
         <p className="ds-subtitle">5 focused tasks generated fresh each day.</p>
       </div>
 
+      {/* Purpose card */}
+      <div className="lab-purpose-card">
+        <div className="lab-purpose-header">
+          <span className="lab-purpose-icon">🗓</span>
+          <div>
+            <div className="lab-purpose-title">Daily Standup Simulator</div>
+            <div style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: 2 }}>
+              Estimated time: 10–15 min daily
+            </div>
+          </div>
+        </div>
+        <strong style={{ fontSize: '0.85rem', color: 'var(--heading)' }}>What you will practice:</strong>
+        <ul style={{ margin: '8px 0 12px', paddingLeft: 18, fontSize: '0.875rem', color: 'var(--text)' }}>
+          <li>Communicating data engineering work to stakeholders clearly</li>
+          <li>Daily update format — what you did, what you will do, blockers</li>
+          <li>Consistent practice across review, incident, interview, and architect tasks</li>
+        </ul>
+        <div className="lab-skills-row">
+          {['Communication', 'Stakeholder Management', 'Technical Writing', 'Consistency'].map(s => (
+            <span key={s} className="lab-skill-badge">{s}</span>
+          ))}
+        </div>
+      </div>
+
       <div className="ds-date-row">
         <span className="ds-date">{formattedDate}</span>
         <span className="ds-yesterday-stat">

@@ -3,8 +3,16 @@ import { RESULT_TYPES, groupResults } from '../../utils/searchUtils.js';
 import { navItems } from '../../data/appData.js';
 import { useLocalStorage } from '../../hooks/useLocalStorage.js';
 import { useUser } from '../../providers/UserProvider';
+import { NotificationCenter } from '../ui/NotificationCenter.jsx';
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning, Data Engineer! 👋';
+  if (h < 17) return 'Good afternoon, Data Engineer! 👋';
+  return 'Good evening, Data Engineer! 👋';
+}
 
 function highlight(text, query) {
   if (!query || !text) return text;
@@ -211,7 +219,8 @@ function UserMenu() {
         aria-haspopup="true"
         title={displayName}
       >
-        {initials}
+        <span className="user-menu-initials">{initials}</span>
+        <span className="user-menu-caret" aria-hidden="true">▾</span>
       </button>
 
       {open && (
@@ -257,10 +266,11 @@ function UserMenu() {
 }
 
 const TopHeader = memo(function TopHeader({
+  activePage,
   isDark, onMenuClick, onSearchChange, onThemeToggle, searchTerm,
   searchResults, onResultClick, onNavigate,
   engineeringMode, onToggleEngineeringMode,
-  onOpenCmdPalette,
+  onOpenCmdPalette, activityLog,
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [scrolled,     setScrolled]     = useState(false);
@@ -370,16 +380,16 @@ const TopHeader = memo(function TopHeader({
     setFocusedIndex(-1);
   }
 
+  const greeting = getGreeting();
   const kbdHint = isMac ? '⌘K' : 'Ctrl+K';
+
+  if (activePage !== 'dashboard') return null;
 
   return (
     <header className={`top-header${scrolled ? ' top-header--scrolled' : ''}`}>
       <div className="header-title">
-        <p className="eyebrow">Learning Platform</p>
-        <h1>Data Engineering Mastery</h1>
-        <p className="header-copy">
-          Build real pipeline skills — SQL, Python, Spark, and cloud tools.
-        </p>
+        <h1 className="header-greeting">{greeting}</h1>
+        <p className="header-copy">Every day you learn is a step closer to your dream role.</p>
       </div>
 
       <div className="header-actions">
@@ -389,7 +399,7 @@ const TopHeader = memo(function TopHeader({
             <input
               ref={inputRef}
               type="search"
-              placeholder={`Search or ${kbdHint} for commands…`}
+              placeholder={`Search or ${kbdHint}`}
               value={searchTerm}
               onChange={handleInput}
               onKeyDown={handleKeyDown}
@@ -453,11 +463,13 @@ const TopHeader = memo(function TopHeader({
           {isDark ? '☀' : '☾'}
         </button>
 
+        <NotificationCenter activityLog={activityLog ?? []} />
+
         <UserMenu />
 
         <button
           type="button"
-          className="icon-button menu-button"
+          className="icon-button header-menu-btn"
           onClick={onMenuClick}
           aria-label="Open menu"
         >

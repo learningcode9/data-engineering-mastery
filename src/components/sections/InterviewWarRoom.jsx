@@ -573,6 +573,32 @@ export const InterviewWarRoom = memo(function InterviewWarRoom() {
         </div>
       </div>
 
+      {/* Purpose card — shown on home view only */}
+      {view === 'home' && (
+        <div className="lab-purpose-card">
+          <div className="lab-purpose-header">
+            <span className="lab-purpose-icon">⚔</span>
+            <div>
+              <div className="lab-purpose-title">Interview War Room</div>
+              <div style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: 2 }}>
+                Estimated time: 15–45 min per session
+              </div>
+            </div>
+          </div>
+          <strong style={{ fontSize: '0.85rem', color: 'var(--heading)' }}>What you will practice:</strong>
+          <ul style={{ margin: '8px 0 12px', paddingLeft: 18, fontSize: '0.875rem', color: 'var(--text)' }}>
+            <li>Communicating data work to stakeholders under time pressure</li>
+            <li>Timed mock interview questions with confidence self-rating</li>
+            <li>Identifying weak areas and building systematic review habits</li>
+          </ul>
+          <div className="lab-skills-row">
+            {['Communication', 'Stakeholder Management', 'Technical Writing', 'Interview Readiness'].map(s => (
+              <span key={s} className="lab-skill-badge">{s}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {view === 'home' && (
         <HomeView
           sessionHistory={sessionHistory}

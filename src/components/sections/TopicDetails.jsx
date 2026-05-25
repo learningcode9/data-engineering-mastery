@@ -4,6 +4,7 @@ import { CodeBlock } from '../ui/CodeBlock.jsx';
 import { DifficultyBadge } from '../ui/DifficultyBadge.jsx';
 import { PracticeCard } from '../ui/PracticeCard.jsx';
 import { SQLWorkspace } from '../workspace/SQLWorkspace.jsx';
+import { DocLinksPanel } from '../ui/DocLinksPanel.jsx';
 import { useLocalStorage } from '../../hooks/useLocalStorage.js';
 import { getMentorshipForTopic } from '../../data/careerGuidance.js';
 
@@ -43,6 +44,28 @@ function SubtopicCard({ subtopic, practiceCompleted, onTogglePractice, sqlMode }
               <strong>{subtopic.interview.question}</strong>
               <p>{subtopic.interview.answer}</p>
             </div>
+          </div>
+        )}
+        {subtopic.commonMistakes?.length > 0 && (
+          <div className="subtopic-wide">
+            <span>Common mistakes</span>
+            <ul className="subtopic-mistakes">
+              {subtopic.commonMistakes.map((m, i) => (
+                <li key={i}><span className="subtopic-mistake-icon">⚠</span>{m}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {subtopic.productionContext && (
+          <div className="subtopic-wide">
+            <span>Production context</span>
+            <p className="subtopic-production">{subtopic.productionContext}</p>
+          </div>
+        )}
+        {subtopic.performanceTip && (
+          <div className="subtopic-wide">
+            <span>Performance tip</span>
+            <p className="subtopic-perf"><span aria-hidden="true">⚡</span> {subtopic.performanceTip}</p>
           </div>
         )}
       </div>
@@ -713,6 +736,7 @@ const TopicDetails = memo(function TopicDetails({
 
       <NotesBox topicId={topic.id} notes={notes} onNotesChange={onNotesChange} />
       <ResumeRelevance text={topic.resumeRelevance} />
+      <DocLinksPanel docIds={topic.docs} />
       <NextStepCard
         nextStep={topic.nextStep}
         currentStep={topic.step}

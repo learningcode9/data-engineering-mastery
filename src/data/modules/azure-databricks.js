@@ -83,8 +83,15 @@ print("Driver memory:  ", spark.conf.get("spark.driver.memory", "not set"))`,
           expectedOutput: `Cluster name:    dev-exploration\nRuntime:         4 workers\nShuffle parts:   200\nDriver memory:   28g`,
           interview: {
             question: 'What is the difference between a job cluster and an all-purpose cluster?',
-            answer: 'A job cluster is created fresh for each job run and terminated immediately on completion — cheapest for production. An all-purpose cluster stays running for interactive development but costs more when idle. Never run production jobs on all-purpose clusters.',
+            answer: 'A job cluster is created fresh for each job run and terminated immediately on completion — cheapest for production, zero idle cost. An all-purpose cluster stays running for interactive development and can be shared by multiple notebooks, but accumulates cost whenever idle. A practical rule: all-purpose clusters for development and exploration; job clusters for every scheduled production workflow. Forgetting to set auto-terminate on all-purpose clusters is one of the most common Databricks cost overrun causes.',
           },
+          commonMistakes: [
+            'Running production jobs on all-purpose clusters — they stay alive between runs, costing 5–10× more than a job cluster that terminates immediately.',
+            'Setting cluster size too large and leaving it fixed — use autoscale (min 2, max 8 workers) so the cluster right-sizes for actual job load.',
+            'Not enabling auto-terminate on all-purpose clusters — a developer forgets to stop the cluster and it runs overnight, accumulating hours of idle cost.',
+          ],
+          productionContext: 'In enterprise Databricks environments, teams enforce cluster policies via the Cluster Policy feature — engineers can only create clusters within approved node types and size ranges. Production job clusters are defined in Databricks Workflows (or ADF Databricks Notebook Activity) and always use the cheapest compatible node type for the job\'s memory profile.',
+          performanceTip: 'Enable Photon runtime on compute-heavy jobs — Photon is Databricks\' vectorized C++ query engine that can speed up aggregations and joins by 2–5×. It\'s available on Standard and Premium tier clusters at a small DBU surcharge, but the speedup usually more than pays for it.',
           practice: 'Describe when you would choose a job cluster vs an all-purpose cluster. What is the cost risk of running production jobs on all-purpose clusters?',
           hint: 'All-purpose: development, exploration, interactive. Job clusters: production scheduled jobs. Risk: all-purpose clusters stay running even when idle, accumulating cost 24/7.',
           solution: `# Use all-purpose cluster when:
@@ -272,8 +279,15 @@ spark.sql("VACUUM delta.\`dbfs:/mnt/silver/orders\` RETAIN 168 HOURS")`,
           expectedOutput: `+-------+-------------------+---------+------------------------------------------+\n|version|timestamp          |operation|operationMetrics                          |\n+-------+-------------------+---------+------------------------------------------+\n|      4|2024-01-16 06:02:00|MERGE    |{numTargetRowsUpdated->1240,inserted->312}|\n|      3|2024-01-15 06:01:00|WRITE    |{numFiles->24,numOutputRows->42000}       |\n|      2|2024-01-14 06:00:00|OPTIMIZE |{numFilesAdded->1,numFilesRemoved->24}    |\n+-------+-------------------+---------+------------------------------------------+`,
           interview: {
             question: 'What are the four key features Delta Lake adds over plain Parquet?',
-            answer: '(1) ACID transactions — concurrent reads and writes are safe. (2) Schema enforcement — bad data rejected at write time. (3) Time travel — query any past version by number or timestamp. (4) DML operations — UPDATE, DELETE, MERGE supported.',
+            answer: '(1) ACID transactions — concurrent reads and writes are safe via optimistic concurrency control in the _delta_log. (2) Schema enforcement — writes that don\'t match the table schema fail fast, preventing silent data corruption. (3) Time travel — every write creates a new version in the transaction log; query any past version with VERSION AS OF or TIMESTAMP AS OF. (4) DML operations — UPDATE, DELETE, and MERGE are supported; plain Parquet cannot update rows without rewriting entire files. These four properties transform a data lake from a write-only archive into a reliable operational store.',
           },
+          commonMistakes: [
+            'Running VACUUM with RETAIN 0 HOURS in production — this deletes all historical versions immediately, breaking any in-flight reads and removing the ability to time-travel or rollback.',
+            'Forgetting to run OPTIMIZE after many small MERGE operations — each MERGE appends new data files; without OPTIMIZE, the table accumulates thousands of small files that slow reads significantly.',
+            'Using overwrite mode for incremental data — overwrites rewrite the entire table even when only 1% of rows changed; use MERGE for incremental updates.',
+          ],
+          productionContext: 'In production Databricks pipelines, OPTIMIZE runs nightly as a maintenance job after the last MERGE of the day. VACUUM runs weekly with RETAIN 168 HOURS (7 days) to balance storage cost against rollback capability. The transaction log is the source of truth for all change history — never manually delete files from the Delta table directory.',
+          performanceTip: 'ZORDER BY is the most impactful single optimization for Delta query performance. Choose the column you filter most often in queries (e.g., customer_id or order_date). ZORDER physically co-locates rows with similar key values in the same Parquet files, allowing Delta file skipping to eliminate 80–99% of files on filtered queries.',
           practice: 'Write a Delta table to dbfs:/mnt/silver/customers in overwrite mode, then show the last 3 history entries, then run OPTIMIZE with ZORDER BY customer_id.',
           hint: 'Write with .format("delta").mode("overwrite"). Use DeltaTable.forPath() for history. OPTIMIZE SQL: "OPTIMIZE delta.`path` ZORDER BY (customer_id)".',
           solution: `from delta.tables import DeltaTable
@@ -340,9 +354,16 @@ WHERE action_name = 'selectTable'
 ORDER BY event_time DESC LIMIT 20;`,
           expectedOutput: `prod_catalog\ndev_catalog\n\nsilver (schema)\ngold (schema)\n\nGrant applied to data-analysts-group on prod_catalog.silver.orders`,
           interview: {
-            question: 'What is the three-level namespace in Unity Catalog?',
-            answer: 'Catalog → Schema → Table. For example: prod_catalog.silver.orders. The catalog is the top-level container (like an environment). Schema organises tables within a catalog. This enables cross-workspace governance from a single control plane.',
+            question: 'What is the three-level namespace in Unity Catalog and how does it map to real-world environments?',
+            answer: 'Catalog → Schema → Table. Example: prod_catalog.silver.orders. The catalog is typically an environment (dev_catalog, test_catalog, prod_catalog) or a business domain (sales_catalog, finance_catalog). Schema is a grouping within the catalog — often a medallion layer (bronze, silver, gold) or a business subdomain. This three-level structure lets you grant access at any level: GRANT USAGE ON CATALOG prod_catalog (environment-wide), GRANT SELECT ON SCHEMA prod_catalog.gold (all gold tables), or GRANT SELECT ON TABLE prod_catalog.gold.revenue (one table). Unity Catalog enforces these grants consistently across all workspaces in the account.',
           },
+          commonMistakes: [
+            'Granting access at the table level for every table individually — use schema-level or catalog-level grants for groups, then restrict exceptions at table level.',
+            'Not enabling lineage tracking before starting pipeline development — Unity Catalog captures column-level lineage automatically once enabled, but historical lineage before enablement is lost.',
+            'Mixing Unity Catalog tables with legacy hive_metastore tables in the same pipeline — cross-metastore joins work but lineage and governance don\'t apply to legacy tables.',
+          ],
+          productionContext: 'In a mature Databricks deployment, the data governance team owns the Unity Catalog structure: one catalog per environment, schemas per domain/layer, and all grants managed via service principal groups rather than individual users. Engineers request access via a ticket process; the governance team grants it in Unity Catalog. This replaces the old per-workspace, per-mount-point access matrix.',
+          performanceTip: 'Unity Catalog\'s system tables (system.access.audit, system.access.table_lineage) are invaluable for understanding query patterns. Run weekly reports on the most-queried Gold tables and which teams read them — this drives OPTIMIZE and ZORDER decisions (optimize what gets queried most).',
           practice: 'Write SQL to grant SELECT on a table "gold.daily_revenue" in catalog "prod" to a group "executive_team". Also write a SHOW SCHEMAS query to list all schemas in the prod catalog.',
           hint: 'GRANT SELECT ON TABLE prod.gold.daily_revenue TO `executive_team`. SHOW SCHEMAS IN prod.',
           solution: `-- Grant access
@@ -409,8 +430,15 @@ gold.write.format("delta").mode("overwrite").save("dbfs:/mnt/gold/daily_revenue"
           expectedOutput: `Silver: 42,000 rows (3 duplicates dropped, 8 nulls removed)\nGold:   4 rows (one per status per day)\n\nGold preview:\n+----------+---------+--------------+------------+\n|order_date|   status|daily_revenue |order_count |\n+----------+---------+--------------+------------+\n|2024-01-15|  shipped|    56,000.00 |        280 |\n|2024-01-15|  pending|    15,600.00 |        120 |`,
           interview: {
             question: 'Why is Bronze data kept raw and unchanged?',
-            answer: 'Bronze is an immutable audit trail. If Silver processing has a bug, you reprocess from Bronze without needing to re-extract from the source system. It also helps with debugging — you can always see exactly what the source sent.',
+            answer: 'Bronze is an immutable audit trail of exactly what the source system sent. If the Silver notebook has a bug (wrong filter, incorrect cast), you reprocess from Bronze with the corrected logic without re-extracting from source — critical when the source is a transactional database that doesn\'t retain deleted records, or a message queue that only retains 7 days. Bronze also stores data before any business rules are applied, so compliance teams can audit what the raw source delivered vs what transformations changed it. In practice, Bronze tables are append-only Delta tables with minimal schema enforcement.',
           },
+          commonMistakes: [
+            'Applying business logic transformations in Bronze — any transform in Bronze means you cannot replay the pipeline from raw data if the logic changes.',
+            'Compressing or re-encoding raw files before Bronze landing — raw data should be stored as-received for maximum recoverability and audit fidelity.',
+            'Running VACUUM too aggressively on Bronze — Bronze is your last recovery line; retain at least 30 days of history.',
+          ],
+          productionContext: 'In Databricks Workflows, the Bronze → Silver → Gold pipeline is typically three separate notebook jobs chained as task dependencies. Bronze runs first (ingest from ADLS/Kafka), then Silver (clean/merge), then Gold (aggregate). If Silver fails, Bronze is complete and untouched — you fix the Silver notebook and re-run just that task without re-ingesting.',
+          performanceTip: 'Use Delta Auto Loader (cloudFiles format) for Bronze ingestion — it tracks which files have been processed using checkpoints, so re-running the Bronze notebook never re-ingests already-loaded files. This makes Bronze idempotent without any watermark table management.',
           practice: 'Describe what transformations happen at each medallion layer. Give one example of something you do in Silver that you would NOT do in Bronze.',
           hint: 'Bronze: raw, no changes. Silver: clean, cast types, deduplicate, validate. Gold: aggregate, join with dimensions, format for BI. Silver example: cast string amounts to double.',
           solution: `# Bronze layer: append-only, raw, no transformations
@@ -493,8 +521,15 @@ query.awaitTermination()`,
           expectedOutput: `Stream started. Processing messages...\n[Batch 1] Processed 42 records in 1.2s\n[Batch 2] Processed 18 records in 0.9s\nStream running — no termination.`,
           interview: {
             question: 'What is a checkpoint in Structured Streaming and why is it critical?',
-            answer: 'A checkpoint stores the stream\'s progress — which offsets have been processed — in durable storage (ADLS, DBFS). On restart after failure, Spark reads the checkpoint and resumes exactly where it left off, preventing duplicate processing and data loss.',
+            answer: 'A checkpoint stores the stream\'s progress — which offsets (Kafka topic/partition/offset or file paths) have been processed — in durable storage (ADLS, DBFS). On restart after failure, Spark reads the checkpoint and resumes exactly where it left off, preventing duplicate processing and data loss. Without a checkpoint: if the cluster crashes and restarts, the stream starts from the beginning (or latest, depending on startingOffsets), causing either data loss or reprocessing. Always set checkpointLocation to a unique path per stream; sharing a checkpoint between two streams corrupts both.',
           },
+          commonMistakes: [
+            'Reusing the same checkpointLocation for a different stream or after schema changes — checkpoint state is tied to the exact query structure; changing the schema or reusing the path causes failures.',
+            'Not setting checkpointLocation at all — Spark will warn but continue; on restart, the stream starts from offset 0 or latest, creating gaps or duplicates.',
+            'Using awaitTermination() in production notebooks — it blocks the notebook cell indefinitely. In production, run streams as Databricks Workflows in "Continuous" mode instead.',
+          ],
+          productionContext: 'In production, Databricks Structured Streaming jobs run as Workflows with "Continuous" job type — Databricks manages the always-on compute and auto-restarts the stream on cluster failure. The checkpoint (on ADLS) ensures the stream picks up exactly where it left off. Monitoring is via Databricks Structured Streaming UI: lag metrics, batch duration, input rate per trigger.',
+          performanceTip: 'Set trigger(processingTime="30 seconds") instead of the default continuous trigger for most streaming jobs. This batches 30 seconds of data per micro-batch, dramatically improving throughput vs the default (process each message individually). For near-real-time requirements, "10 seconds" is a common production setting that balances latency with efficiency.',
           practice: 'Describe how a Structured Streaming job differs from a batch Spark job. What must you always configure and why?',
           hint: 'Differences: batch reads a static source; streaming reads an unbounded source continuously. Must configure: checkpointLocation (so progress survives restarts).',
           solution: `# Batch Spark:
@@ -562,8 +597,15 @@ print(f"Status: {query.status['message']}")`,
           expectedOutput: `Query ID: abc123-def456\nStatus: Processing new data\n\nNew files processed as they arrive:\n[2024-01-15 06:00:01] orders_20240115_001.json → 4,200 rows\n[2024-01-15 06:00:45] orders_20240115_002.json → 3,890 rows`,
           interview: {
             question: 'What makes Autoloader better than listing files manually for incremental ingestion?',
-            answer: 'Autoloader uses cloud notification services (Azure Event Grid, AWS SNS) to detect new files without scanning the entire directory — scalable to millions of files. It tracks which files were processed in the checkpoint so restarts are safe and idempotent.',
+            answer: 'Listing files manually (spark.read where filename > last_processed) requires scanning all directory metadata on every run — slow and unreliable at millions of files. Autoloader uses cloud notification events (Azure Event Grid, AWS SNS/SQS) to detect new files without scanning: new files trigger an event, Autoloader queues them, processes them, and marks them done in the checkpoint. This scales to millions of files per day. It also handles schema evolution: new columns in source files are detected automatically and added to the Bronze Delta table with mergeSchema=true.',
           },
+          commonMistakes: [
+            'Forgetting cloudFiles.schemaLocation — Autoloader needs a stable path to persist inferred schema across restarts; without it, schema is re-inferred on every run (slow and inconsistent).',
+            'Using file listing mode when directory contains millions of files — file listing mode scans the entire directory on every micro-batch; notification mode (the default for ADLS/S3) is required at scale.',
+            'Pointing two Autoloader streams at the same path with different checkpoint locations — both streams will process all files; each checkpoint is independent so you\'ll get double processing.',
+          ],
+          productionContext: 'AutoLoader is the standard Bronze ingestion pattern in Databricks on Azure. Files land in ADLS (via ADF Copy Activity or upstream system), Event Grid fires a notification, AutoLoader picks it up within 30 seconds. The Bronze Delta table grows append-only. Downstream Silver jobs trigger on a schedule (every 15 minutes) and MERGE new Bronze rows into Silver.',
+          performanceTip: 'Use .option("cloudFiles.maxFilesPerTrigger", "1000") to control how many files are processed per micro-batch. Without this cap, a backfill of 100,000 files creates one enormous batch. Cap it, let Autoloader catch up over multiple batches, and your stream remains responsive to new real-time data during backfill.',
           practice: 'Write an Autoloader job that reads new CSV files from "abfss://raw@mystorage.dfs.core.windows.net/sales/", adds an ingest_time column, and writes to a Bronze Delta table.',
           hint: 'Use format("cloudFiles") with cloudFiles.format="csv". Add .withColumn("ingest_time", current_timestamp()). Write with format("delta") and checkpointLocation.',
           solution: `from pyspark.sql.functions import current_timestamp

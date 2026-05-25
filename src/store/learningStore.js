@@ -44,7 +44,9 @@ const useLearningStore = create(
       xp: safeRead('dem-xp-total', 0),
       streakCount: safeRead('dem-streak-count', 0),
       streakLastDate: safeRead('dem-streak-last', ''),
-      completedTopics: safeRead('dem-completed-topics', {}),
+      completedTopics: Object.fromEntries(
+        Object.entries(safeRead('dem-completed-topics', {})).filter(([, v]) => v === true)
+      ),
       completedProjects: safeRead('dem-completed-projects', {}),
       dailyTasks: safeRead('dem-daily-plan', {}),
       achievements: safeRead('dem-achievements', {}),
@@ -75,11 +77,14 @@ const useLearningStore = create(
       },
 
       setCompletedTopics(updater) {
-        set(s => ({
-          completedTopics: typeof updater === 'function'
+        set(s => {
+          const next = typeof updater === 'function'
             ? updater(s.completedTopics)
-            : updater,
-        }));
+            : updater;
+          // Keep legacy key in sync so AILearning / SkillGraph see completions
+          try { localStorage.setItem('dem-completed-topics', JSON.stringify(next)); } catch {}
+          return { completedTopics: next };
+        });
       },
 
       setDailyTasks(updater) {
@@ -176,7 +181,16 @@ const useLearningStore = create(
     }),
     {
       name: 'dem-learning-store-v1',
-      version: 1,
+      version: 2,
+      // v1 → v2: remove false values written by React StrictMode double-invoke bug
+      migrate(persisted, fromVersion) {
+        if (fromVersion < 2 && persisted?.completedTopics) {
+          persisted.completedTopics = Object.fromEntries(
+            Object.entries(persisted.completedTopics).filter(([, v]) => v === true)
+          );
+        }
+        return persisted;
+      },
       // Don't persist Supabase user ID — it comes from auth session
       partialize: s => {
         const rest = { ...s };

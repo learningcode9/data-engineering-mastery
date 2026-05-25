@@ -2,194 +2,201 @@ import { memo, useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { EmptyState } from '../ui/EmptyState.jsx';
 import { learningPathPhases } from '../../data/learningPath.js';
 
-// ── Phase outcomes — motivational "you will be able to" copy ─────────────────
-const PHASE_OUTCOMES = {
-  'lp-orientation': [
-    'Explain what a data engineer does and how pipelines work',
-    'Describe ETL vs ELT, batch vs streaming, and warehouse vs lake',
-    'Understand the modern data stack before touching any tool',
-    'Answer "What does a data engineer do?" confidently in any interview',
-  ],
-  'lp-sql': [
-    'Write SQL queries with SELECT, JOINs, GROUP BY, and window functions',
-    'Aggregate and validate data the way every production pipeline does',
-    'Pass SQL interview screens at entry-to-mid level',
-  ],
-  'lp-engineering-foundations': [
-    'Write Python scripts for data extraction and transformation',
-    'Use Git for version control, branching, and pull requests',
-    'Navigate Linux servers and schedule jobs with cron',
-    'Extract data from REST APIs with pagination and error handling',
-  ],
-  'lp-intermediate': [
-    'Build batch pipelines with watermarks and idempotent writes',
-    'Model data in star schema with SCD Type 2',
-    'Write PySpark jobs for distributed transformation',
-    'Tune Spark performance with partitioning and broadcast joins',
-  ],
-  'lp-cloud': [
-    'Build end-to-end pipelines in Azure Data Factory and Databricks',
-    'Orchestrate multi-step DAGs in Airflow with retries and alerts',
-    'Design a Medallion Architecture lakehouse (Bronze → Silver → Gold)',
-    'Deploy and monitor production-grade data pipelines',
-  ],
-  'lp-streaming': [
-    'Build real-time event pipelines with Apache Kafka',
-    'Capture every database change using CDC patterns',
-    'Write fault-tolerant Structured Streaming jobs in Spark',
-    'Design event-driven architectures with exactly-once semantics',
-  ],
-  'lp-career': [
-    'Build 3+ end-to-end portfolio projects you can demo in interviews',
-    'Tell compelling STAR stories about data systems you designed',
-    'Pass SQL, Spark, and system design rounds at DE-level',
-    'Have a polished DE resume and LinkedIn ready for applications',
-  ],
+// ─── Phase visual metadata ────────────────────────────────────────────────────
+const PHASE_META = {
+  'lp-orientation':             { label: 'Orientation',   color: '#8b5cf6', icon: '◎' },
+  'lp-sql':                     { label: 'SQL',           color: '#10b981', icon: '◈' },
+  'lp-engineering-foundations': { label: 'Engineering',   color: '#3b82f6', icon: '⟨⟩' },
+  'lp-intermediate':            { label: 'Intermediate',  color: '#f59e0b', icon: '⚡' },
+  'lp-cloud':                   { label: 'Azure & Cloud', color: '#0078d4', icon: '☁' },
+  'lp-streaming':               { label: 'Streaming',     color: '#e44c36', icon: '⟿' },
+  'lp-career':                  { label: 'Career',        color: '#64748b', icon: '▣' },
 };
 
-// ── Skills preview for locked phases ─────────────────────────────────────────
-const PHASE_SKILLS = {
-  'lp-orientation': ['Pipeline concepts', 'ETL vs ELT', 'Batch vs Streaming', 'Modern data stack'],
-  'lp-sql':         ['SELECT / WHERE', 'JOINs', 'GROUP BY', 'Window functions'],
-  'lp-engineering-foundations': ['Python', 'Git', 'Linux CLI', 'REST APIs'],
-  'lp-intermediate': ['Advanced SQL', 'Data Modeling', 'PySpark', 'Incremental loads'],
-  'lp-cloud':       ['Azure ADF', 'Databricks', 'Airflow', 'Medallion Architecture'],
-  'lp-streaming':   ['Apache Kafka', 'CDC', 'Structured Streaming', 'Event Hubs'],
-  'lp-career':      ['Portfolio projects', 'SQL interviews', 'System design', 'Resume'],
+// ─── Filter chips ─────────────────────────────────────────────────────────────
+const FILTER_CHIPS = [
+  { id: 'all',          label: 'All' },
+  { id: 'foundations',  label: 'Foundations' },
+  { id: 'intermediate', label: 'Intermediate' },
+  { id: 'azure',        label: 'Azure' },
+  { id: 'databricks',   label: 'Databricks' },
+  { id: 'fabric',       label: 'Fabric' },
+  { id: 'streaming',    label: 'Streaming' },
+  { id: 'advanced',     label: 'Advanced' },
+];
+
+function moduleMatchesFilter(mod, filterId) {
+  if (filterId === 'all') return true;
+  const p = mod.phaseId;
+  if (filterId === 'foundations')  return ['lp-orientation','lp-sql','lp-engineering-foundations'].includes(p);
+  if (filterId === 'intermediate') return p === 'lp-intermediate';
+  if (filterId === 'azure')        return p === 'lp-cloud';
+  if (filterId === 'databricks')   return mod.lessons.some(l => l.topicId === 'azure-databricks' || l.label === 'Databricks');
+  if (filterId === 'fabric')       return mod.lessons.some(l => l.topicId === 'microsoft-fabric' || l.label === 'Fabric');
+  if (filterId === 'streaming')    return p === 'lp-streaming';
+  if (filterId === 'advanced')     return ['lp-intermediate','lp-career'].includes(p);
+  return true;
+}
+
+// ─── CTA label + state helpers ────────────────────────────────────────────────
+const CTA_LABEL = {
+  locked:       'Locked',
+  completed:    'Review',
+  'in-progress':'Continue',
+  available:    'Start',
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function matchesTopic(topic, q) {
-  if (!q) return true;
-  const lc = q.toLowerCase();
+// ─── Module Card ──────────────────────────────────────────────────────────────
+function ModuleCard({ mod, isRecommended, onCTA, currentLessonId, onToggle, isExpanded, lessonStatus }) {
+  const phase  = PHASE_META[mod.phaseId] ?? { label: mod.phaseTitle, color: '#10b981', icon: '◎' };
+  const cta    = CTA_LABEL[mod.state] ?? 'Start';
+  const isLocked = mod.state === 'locked';
+
   return (
-    topic.title?.toLowerCase().includes(lc) ||
-    topic.body?.toLowerCase().includes(lc) ||
-    topic.category?.toLowerCase().includes(lc)
-  );
-}
+    <div
+      className={[
+        'lp-card',
+        `lp-card--${mod.state}`,
+        isRecommended && 'lp-card--recommended',
+      ].filter(Boolean).join(' ')}
+    >
+      {/* Recommended ribbon */}
+      {isRecommended && (
+        <div className="lp-card-ribbon">Up next</div>
+      )}
 
-function matchesLesson(lesson, topics, q) {
-  if (!q) return true;
-  const lc = q.toLowerCase();
-  if (lesson.title.toLowerCase().includes(lc)) return true;
-  if (lesson.body?.toLowerCase().includes(lc)) return true;
-  if (lesson.tools?.join(' ').toLowerCase().includes(lc)) return true;
-  if (lesson.topicId) {
-    const topic = topics.find(t => t.id === lesson.topicId);
-    if (topic && matchesTopic(topic, q)) return true;
-  }
-  return false;
-}
+      {/* Completed check badge */}
+      {mod.state === 'completed' && (
+        <span className="lp-card-done-badge" aria-hidden="true">✓</span>
+      )}
 
-// ── Sub-components ─────────────────────────────────────────────────────────────
-
-function PhaseOutcomesHero({ phase }) {
-  const outcomes = PHASE_OUTCOMES[phase.id] ?? [];
-  return (
-    <div className="path-phase-outcomes">
-      <div className="path-phase-outcomes-header">
-        <span className="path-outcomes-kicker">By the end of this phase you will be able to</span>
+      {/* Top badges row */}
+      <div className="lp-card-badges">
+        <span className="lp-card-phase-tag" style={{ '--pc': phase.color }}>
+          {phase.icon} {phase.label}
+        </span>
+        <span className="lp-card-diff-tag">{mod.difficulty ?? 'Intermediate'}</span>
       </div>
-      <ul className="path-outcomes-list">
-        {outcomes.map((o, i) => (
-          <li key={i}>
-            <span className="path-outcomes-check" aria-hidden="true">✓</span>
-            <span>{o}</span>
-          </li>
-        ))}
-      </ul>
-      <div className="path-phase-meta-row">
-        <span className="path-phase-meta-chip path-phase-meta-chip--time">
-          {phase.estimatedTime}
-        </span>
-        <span className="path-phase-meta-chip path-phase-meta-chip--diff">
-          {phase.difficulty}
-        </span>
-        <span className="path-phase-meta-chip path-phase-meta-chip--interview">
-          Interview: {phase.interviewImportance.split('.')[0]}
-        </span>
-      </div>
-    </div>
-  );
-}
 
-function PhaseLockedPreview({ phase, prevPhaseTitle }) {
-  const skills = PHASE_SKILLS[phase.id] ?? [];
-  return (
-    <div className="path-phase-locked-preview">
-      <p className="path-locked-unlock-msg">
-        Complete <strong>{prevPhaseTitle}</strong> to unlock this phase
-      </p>
-      {skills.length > 0 && (
-        <div className="path-locked-skills">
-          {skills.map(s => (
-            <span key={s} className="path-locked-skill-chip">{s}</span>
-          ))}
+      {/* Title */}
+      <h3 className="lp-card-title">
+        {isLocked && <span className="lp-card-lock-icon" aria-hidden="true">🔒</span>}
+        {mod.title}
+      </h3>
+
+      {/* Phase subtitle */}
+      <p className="lp-card-phase-name">{mod.phaseTitle}</p>
+
+      {/* Lesson count / locked msg */}
+      <div className="lp-card-meta">
+        {isLocked ? (
+          <span className="lp-card-locked-hint">Complete current phase to unlock</span>
+        ) : (
+          <>
+            <span className="lp-card-meta-lessons">
+              {mod.done} / {mod.total} lessons complete
+            </span>
+            {mod.total > 0 && mod.done < mod.total && mod.done > 0 && (
+              <span className="lp-card-meta-rem">
+                {mod.total - mod.done} remaining
+              </span>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Progress bar */}
+      {!isLocked && (
+        <div className="lp-card-progress">
+          <div className="lp-card-progress-track">
+            <div
+              className="lp-card-progress-fill"
+              style={{ width: `${mod.pct}%` }}
+            />
+          </div>
+          <span className="lp-card-progress-pct">{mod.pct}%</span>
         </div>
       )}
-    </div>
-  );
-}
 
-function PhaseTransitionFooter({ nextPhase }) {
-  if (!nextPhase) return null;
-  const nextSkills = PHASE_SKILLS[nextPhase.id] ?? [];
-  return (
-    <div className="path-phase-transition">
-      <div className="path-transition-label">
-        <span className="path-transition-arrow" aria-hidden="true">↓</span>
-        <div>
-          <span className="path-transition-kicker">Next phase unlocks when you finish this one</span>
-          <strong>{nextPhase.title}</strong>
-        </div>
-      </div>
-      {nextSkills.length > 0 && (
-        <div className="path-transition-skills">
-          {nextSkills.slice(0, 3).map(s => (
-            <span key={s} className="path-locked-skill-chip">{s}</span>
-          ))}
-          {nextSkills.length > 3 && <span className="path-locked-skill-chip">+{nextSkills.length - 3} more</span>}
-        </div>
+      {/* Expand toggle for lesson list */}
+      {!isLocked && (
+        <button
+          type="button"
+          className="lp-card-expand-btn"
+          onClick={() => onToggle(mod._key)}
+          aria-expanded={isExpanded}
+        >
+          {isExpanded ? `Hide lessons ↑` : `See all ${mod.total} lessons ↓`}
+        </button>
       )}
-    </div>
-  );
-}
 
-function RoadmapConnector({ isComplete, isCurrent }) {
-  return (
-    <div className={[
-      'path-roadmap-connector',
-      isComplete && 'path-roadmap-connector--done',
-      isCurrent  && 'path-roadmap-connector--active',
-    ].filter(Boolean).join(' ')}>
-      <div className="path-connector-track">
-        <div className="path-connector-line" />
-        <div className="path-connector-dot" aria-hidden="true">
-          {isComplete ? '✓' : '↓'}
-        </div>
+      {/* Expanded lesson list */}
+      {isExpanded && !isLocked && (
+        <ul className="lp-card-lessons">
+          {mod.lessons.map(lesson => {
+            const status  = lessonStatus(lesson);
+            const isActive = lesson.id === currentLessonId;
+            return (
+              <li
+                key={lesson.id}
+                className={[
+                  'lp-card-lesson',
+                  `lp-card-lesson--${status}`,
+                  isActive && 'lp-card-lesson--active',
+                ].filter(Boolean).join(' ')}
+                onClick={() => !isLocked && onCTA(mod, lesson)}
+              >
+                <span className="lp-card-lesson-dot" aria-hidden="true">
+                  {status === 'completed' || status === 'mastered' ? '✓' :
+                   status === 'in-progress' ? '▶' : '○'}
+                </span>
+                <span className="lp-card-lesson-title">{lesson.title}</span>
+                {lesson.label && <span className="lp-card-lesson-label">{lesson.label}</span>}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {/* CTA footer */}
+      <div className="lp-card-footer">
+        <button
+          type="button"
+          className={`lp-card-cta lp-card-cta--${mod.state}`}
+          onClick={() => !isLocked && onCTA(mod)}
+          disabled={isLocked}
+          aria-label={`${cta} ${mod.title}`}
+        >
+          {cta}
+          {!isLocked && <span className="lp-cta-arrow" aria-hidden="true"> →</span>}
+        </button>
       </div>
     </div>
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
+// ─── Main component ───────────────────────────────────────────────────────────
 const Topics = memo(function Topics({
   topics,
   topicStates,
+  completedTopics,
   onLessonOpen,
   onNavigate,
   searchTerm,
   currentLessonId,
 }) {
   const sectionRef = useRef(null);
+  const completed  = completedTopics ?? {};
+  const [filterChip, setFilterChip]   = useState('all');
+  const [expandedKey, setExpandedKey] = useState(null);
 
+  // ── Lesson helpers (unchanged from original) ────────────────────────────────
   const lessonStatus = useCallback(lesson => {
-    if (lesson.type === 'guide') return 'available';
+    if (lesson.type === 'guide') return completed[lesson.id] ? 'completed' : 'available';
     if (lesson.topicId) return topicStates?.[lesson.topicId]?.state ?? 'available';
     if (lesson.section) return 'available';
     return 'available';
-  }, [topicStates]);
+  }, [topicStates, completed]);
 
   const lessonPct = useCallback(lesson => {
     if (lesson.topicId) return topicStates?.[lesson.topicId]?.masteryPct ?? 0;
@@ -197,331 +204,245 @@ const Topics = memo(function Topics({
   }, [topicStates]);
 
   const computePhaseProgress = useCallback(phase => {
-    const trackable = phase.modules.flatMap(m => m.lessons).filter(l => l.topicId);
+    const allLessons   = phase.modules.flatMap(m => m.lessons);
+    const guideLessons = allLessons.filter(l => l.type === 'guide');
+    const topicLessons = allLessons.filter(l => l.topicId);
+    if (topicLessons.length === 0 && guideLessons.length > 0) {
+      const doneCount = guideLessons.filter(l => !!completed[l.id]).length;
+      return Math.round((doneCount / guideLessons.length) * 100);
+    }
+    const trackable = topicLessons;
     if (!trackable.length) return 0;
     const total = trackable.reduce((sum, l) => {
       const state = topicStates?.[l.topicId]?.state;
-      if (state === 'mastered') return sum + 100;
+      if (state === 'mastered')  return sum + 100;
       if (state === 'completed') return sum + Math.max(70, lessonPct(l));
       return sum + lessonPct(l);
     }, 0);
     return Math.round(total / trackable.length);
-  }, [lessonPct, topicStates]);
+  }, [lessonPct, topicStates, completed]);
 
+  // ── Phases + module flattening ──────────────────────────────────────────────
   const pathPhases = useMemo(() => {
     const q = searchTerm?.trim().toLowerCase() ?? '';
-    return learningPathPhases
-      .map(phase => ({
-        ...phase,
-        progress: computePhaseProgress(phase),
-        modules: phase.modules
-          .map(module => ({
-            ...module,
-            lessons: module.lessons.filter(l => matchesLesson(l, topics, q)),
-          }))
-          .filter(m => m.lessons.length > 0),
-      }))
-      .filter(phase => {
-        if (!q) return true;
-        return phase.modules.length > 0 || phase.title.toLowerCase().includes(q);
-      });
-  }, [topics, searchTerm, computePhaseProgress]);
+    return learningPathPhases.map(phase => ({
+      ...phase,
+      progress: computePhaseProgress(phase),
+    })).filter(phase => !q || phase.title.toLowerCase().includes(q));
+  }, [searchTerm, computePhaseProgress]);
 
   const currentPhaseIndex = useMemo(() => {
     const idx = pathPhases.findIndex(p => p.progress < 100);
     return idx >= 0 ? idx : Math.max(0, pathPhases.length - 1);
   }, [pathPhases]);
 
-  const [openPhaseId, setOpenPhaseId] = useState(undefined);
-  const autoOpenPhaseId = pathPhases[currentPhaseIndex]?.id ?? null;
-  const visibleOpenPhaseId = openPhaseId === undefined ? autoOpenPhaseId : openPhaseId;
+  // Build flat list of enriched module objects
+  const allModules = useMemo(() => {
+    const q = searchTerm?.trim().toLowerCase() ?? '';
+    return pathPhases.flatMap((phase, phaseIndex) => {
+      const isLocked = !searchTerm && phaseIndex > currentPhaseIndex;
+      return phase.modules
+        .map(module => {
+          const filteredLessons = q
+            ? module.lessons.filter(l =>
+                l.title?.toLowerCase().includes(q) ||
+                l.body?.toLowerCase().includes(q) ||
+                l.label?.toLowerCase().includes(q)
+              )
+            : module.lessons;
+          if (q && filteredLessons.length === 0) return null;
+
+          const done   = isLocked ? 0 : filteredLessons.filter(l => {
+            const s = lessonStatus(l);
+            return s === 'completed' || s === 'mastered';
+          }).length;
+          const inProg = isLocked ? 0 : filteredLessons.filter(l =>
+            lessonStatus(l) === 'in-progress'
+          ).length;
+          const total  = filteredLessons.length;
+          const pct    = total > 0 ? Math.round((done / total) * 100) : 0;
+
+          let state = 'available';
+          if (isLocked)                          state = 'locked';
+          else if (done === total && total > 0)  state = 'completed';
+          else if (done > 0 || inProg > 0)       state = 'in-progress';
+
+          return {
+            ...module,
+            lessons:    filteredLessons,
+            _key:       `${phase.id}::${module.id}`,
+            phaseId:    phase.id,
+            phaseTitle: phase.shortTitle ?? phase.title,
+            difficulty: phase.difficulty,
+            isLocked,
+            isCurrent:  phaseIndex === currentPhaseIndex,
+            state,
+            done,
+            total,
+            pct,
+            phase,
+          };
+        })
+        .filter(Boolean);
+    });
+  }, [pathPhases, currentPhaseIndex, lessonStatus, searchTerm]);
+
+  const visibleModules = useMemo(() =>
+    allModules.filter(m => moduleMatchesFilter(m, filterChip)),
+    [allModules, filterChip]
+  );
+
+  // Overall stats
+  const totalModules     = allModules.length;
+  const completedModules = allModules.filter(m => m.state === 'completed').length;
+  const overallPct       = totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0;
+
+  // Recommended = first non-completed, non-locked module in the current phase
+  const recommendedKey = useMemo(() => {
+    const mod = allModules.find(m => !m.isLocked && m.state !== 'completed');
+    return mod?._key ?? null;
+  }, [allModules]);
+
+  // Open first available lesson in a module
+  function handleModuleCTA(mod, specificLesson = null) {
+    if (mod.isLocked) return;
+    const target = specificLesson ?? (
+      mod.lessons.find(l => {
+        const s = lessonStatus(l);
+        return s !== 'completed' && s !== 'mastered';
+      }) ?? mod.lessons[0]
+    );
+    if (!target) return;
+
+    if (target.section) {
+      onNavigate?.(target.section);
+      return;
+    }
+
+    // Build lesson context
+    const allInPhase = mod.phase.modules.flatMap(m => m.lessons);
+    const idx  = allInPhase.findIndex(l => l.id === target.id);
+    const next = allInPhase[idx + 1] ?? null;
+
+    onLessonOpen?.({
+      lessonId:        target.id,
+      lessonTitle:     target.title,
+      topicId:         target.topicId ?? null,
+      type:            target.type ?? 'lesson',
+      guide:           target.guide ?? null,
+      body:            target.body ?? null,
+      tools:           target.tools ?? [],
+      label:           target.label ?? null,
+      difficulty:      target.difficulty ?? null,
+      section:         target.section ?? null,
+      phaseId:         mod.phase.id,
+      phaseTitle:      mod.phase.title,
+      phaseShortTitle: mod.phase.shortTitle,
+      moduleId:        mod.id,
+      moduleTitle:     mod.title,
+      nextLesson: next ? { id: next.id, title: next.title, reason: `Continue ${mod.phaseTitle}` } : null,
+    });
+  }
 
   useEffect(() => {
     if (!searchTerm || !sectionRef.current) return;
     sectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [searchTerm]);
 
-  const firstRecommendedLesson = useMemo(() => {
-    const current = pathPhases[currentPhaseIndex];
-    if (!current) return null;
-    return current.modules
-      .flatMap(m => m.lessons.map(l => ({
-        ...l,
-        phaseId: current.id,
-        phaseTitle: current.title,
-        phaseShortTitle: current.shortTitle,
-        moduleTitle: m.title,
-        moduleId: m.id,
-      })))
-      .find(l => ['available', 'in-progress'].includes(lessonStatus(l)))
-      ?? current.modules[0]?.lessons[0];
-  }, [pathPhases, currentPhaseIndex, lessonStatus]);
-
-  function buildLessonCtx(lesson, phase, module) {
-    // Compute next lesson within this phase for continuity CTA
-    const allLessons = phase.modules.flatMap(m => m.lessons);
-    const thisIdx = allLessons.findIndex(l => l.id === lesson.id);
-    const nextInPhase = allLessons[thisIdx + 1] ?? null;
-    const computedNext = nextInPhase
-      ? { id: nextInPhase.id, title: nextInPhase.title, reason: `Continue ${phase.shortTitle ?? phase.title}` }
-      : null;
-
-    return {
-      lessonId:        lesson.id,
-      lessonTitle:     lesson.title,
-      topicId:         lesson.topicId ?? null,
-      type:            lesson.type ?? 'lesson',
-      guide:           lesson.guide ?? null,
-      body:            lesson.body ?? null,
-      tools:           lesson.tools ?? [],
-      label:           lesson.label ?? null,
-      difficulty:      lesson.difficulty ?? null,
-      section:         lesson.section ?? null,
-      phaseId:         phase.id,
-      phaseTitle:      phase.title,
-      phaseShortTitle: phase.shortTitle,
-      moduleId:        module.id,
-      moduleTitle:     module.title,
-      nextLesson:      lesson.nextLesson ?? computedNext,
-    };
-  }
-
-  function handleLessonClick(lesson, phase, module) {
-    if (lesson.section) {
-      onNavigate?.(lesson.section);
-      return;
-    }
-    onLessonOpen?.(buildLessonCtx(lesson, phase, module));
-  }
-
-  function renderLesson(lesson, phase, module, phaseLocked) {
-    const status   = phaseLocked ? 'locked' : lessonStatus(lesson);
-    const pct      = lessonPct(lesson);
-    const isActive = lesson.id === currentLessonId;
-
-    const statusLabel = {
-      mastered:      'Mastered',
-      completed:     'Complete',
-      'in-progress': `${pct}%`,
-      available:     'Start',
-      locked:        'Soon',
-    }[status] ?? 'Start';
-
-    const statusIcon = {
-      mastered:      '✓',
-      completed:     '✓',
-      'in-progress': '▶',
-      available:     '◎',
-      locked:        '◇',
-    }[status] ?? '◎';
-
-    return (
-      <button
-        key={lesson.id}
-        type="button"
-        className={[
-          'path-lesson',
-          `path-lesson--${status}`,
-          isActive && 'path-lesson--active',
-        ].filter(Boolean).join(' ')}
-        onClick={() => !phaseLocked && status !== 'locked' && handleLessonClick(lesson, phase, module)}
-        disabled={phaseLocked || status === 'locked'}
-        aria-current={isActive ? 'page' : undefined}
-      >
-        <span className={`path-lesson-status path-lesson-status--${status}`} aria-hidden="true">
-          {statusIcon}
-        </span>
-        <span className="path-lesson-copy">
-          <strong>{lesson.title}</strong>
-          <span>{lesson.label ?? lesson.difficulty ?? 'Lesson'}</span>
-          {lesson.tools?.length > 0 && (
-            <span className="path-lesson-tools">{lesson.tools.join(' · ')}</span>
-          )}
-        </span>
-        <span className={`path-lesson-pill path-lesson-pill--${status}`}>{statusLabel}</span>
-      </button>
-    );
-  }
-
-  const completedCount = pathPhases.filter(p => p.progress >= 100).length;
-  const totalPhases    = pathPhases.length;
+  const recommendedMod = allModules.find(m => m._key === recommendedKey);
 
   return (
     <section className="section" id="topics" ref={sectionRef}>
 
-      {/* ── Section header ──────────────────────────────────────────────── */}
-      <div className="section-title-row">
-        <div>
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="lp-header">
+        <div className="lp-header-left">
           <p className="eyebrow">Guided Bootcamp</p>
-          <h2>Learning Path</h2>
-          <p className="section-subtitle">
+          <h2 className="lp-header-title">Learning Path</h2>
+          <p className="lp-header-sub">
             Concepts before tools — each phase builds on the last.
           </p>
         </div>
-        <div className="path-header-stats">
-          <span className="path-stat-phases">{completedCount}/{totalPhases} phases</span>
-          <div className="path-overall-track">
-            <div
-              className="path-overall-fill"
-              style={{ width: `${totalPhases > 0 ? Math.round((completedCount / totalPhases) * 100) : 0}%` }}
-            />
+        <div className="lp-header-right">
+          <div className="lp-overall-ring">
+            <svg viewBox="0 0 36 36" className="lp-ring-svg" aria-hidden="true">
+              <circle cx="18" cy="18" r="15.5" fill="none" strokeWidth="2.5" className="lp-ring-track" />
+              <circle
+                cx="18" cy="18" r="15.5"
+                fill="none" strokeWidth="2.5"
+                className="lp-ring-fill"
+                strokeDasharray={`${overallPct} ${100 - overallPct}`}
+                strokeDashoffset="25"
+              />
+            </svg>
+            <span className="lp-ring-pct">{overallPct}%</span>
+          </div>
+          <div className="lp-overall-labels">
+            <span className="lp-overall-count">{completedModules}/{totalModules}</span>
+            <span className="lp-overall-sub">modules done</span>
           </div>
         </div>
       </div>
 
-      {/* ── Philosophy strip ────────────────────────────────────────────── */}
-      {!searchTerm && (
-        <div className="path-philosophy-strip">
-          <span className="path-philosophy-icon" aria-hidden="true">◎</span>
-          <p>We teach concepts before tools so you understand <em>why</em> systems exist before learning to build them. Complete each phase at your own pace — there is no deadline.</p>
-        </div>
-      )}
-
-      {/* ── "Up next" recommendation ────────────────────────────────────── */}
-      {firstRecommendedLesson && !searchTerm && (
-        <div className="path-next-step">
-          <div className="path-next-step-body">
-            <p className="eyebrow">Up next for you</p>
-            <strong>{firstRecommendedLesson.title}</strong>
-            <span>
-              {firstRecommendedLesson.moduleTitle}
-              {firstRecommendedLesson.label ? ` · ${firstRecommendedLesson.label}` : ''}
+      {/* ── Up Next Banner ──────────────────────────────────────────────────── */}
+      {recommendedMod && !searchTerm && (
+        <div className="lp-next-banner">
+          <div className="lp-next-banner-left">
+            <span className="lp-next-kicker">Continue where you left off</span>
+            <strong className="lp-next-title">{recommendedMod.title}</strong>
+            <span className="lp-next-meta">
+              {recommendedMod.phaseTitle}
+              {' · '}
+              {recommendedMod.total - recommendedMod.done} lesson{recommendedMod.total - recommendedMod.done !== 1 ? 's' : ''} remaining
             </span>
           </div>
           <button
             type="button"
-            className="path-next-cta"
-            onClick={() => {
-              const phase  = pathPhases[currentPhaseIndex];
-              const module = phase?.modules.find(m =>
-                m.lessons.some(l => l.id === (firstRecommendedLesson.lessonId ?? firstRecommendedLesson.id))
-              );
-              handleLessonClick(
-                firstRecommendedLesson,
-                phase ?? pathPhases[0],
-                module ?? phase?.modules[0],
-              );
-            }}
+            className="lp-next-cta"
+            onClick={() => handleModuleCTA(recommendedMod)}
           >
-            Open lesson →
+            {recommendedMod.state === 'available' ? 'Start' : 'Continue'} →
           </button>
         </div>
       )}
 
-      {/* ── Phase list ──────────────────────────────────────────────────── */}
-      {pathPhases.length === 0 ? (
+      {/* ── Filter pills ────────────────────────────────────────────────────── */}
+      <div className="lp-filter-bar" role="group" aria-label="Filter by category">
+        {FILTER_CHIPS.map(chip => (
+          <button
+            key={chip.id}
+            type="button"
+            className={`lp-chip${filterChip === chip.id ? ' lp-chip--active' : ''}`}
+            onClick={() => { setFilterChip(chip.id); setExpandedKey(null); }}
+            aria-pressed={filterChip === chip.id}
+          >
+            {chip.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Module grid ─────────────────────────────────────────────────────── */}
+      {visibleModules.length === 0 ? (
         <EmptyState
           icon="▦"
-          title={`No lessons match "${searchTerm}"`}
-          body="Try searching for SQL, Spark, Python, Delta Lake, or Kafka."
+          title={searchTerm ? `No lessons match "${searchTerm}"` : 'No modules match this filter'}
+          body="Try All to see every module."
           variant="compact"
         />
       ) : (
-        <div className="learning-path-shell">
-          {pathPhases.map((phase, phaseIndex) => {
-            const isOpen     = searchTerm ? true : visibleOpenPhaseId === phase.id;
-            const isComplete = phase.progress >= 100;
-            const isCurrent  = phaseIndex === currentPhaseIndex;
-            const isLocked   = !searchTerm && phaseIndex > currentPhaseIndex;
-            const nextPhase  = pathPhases[phaseIndex + 1] ?? null;
-            const prevPhase  = pathPhases[phaseIndex - 1] ?? null;
-
-            return (
-              <div key={phase.id} className="path-phase-wrapper">
-                <article
-                  className={[
-                    'path-phase-card',
-                    isOpen     && 'path-phase-card--open',
-                    isCurrent  && 'path-phase-card--current',
-                    isComplete && 'path-phase-card--complete',
-                    isLocked   && 'path-phase-card--locked',
-                  ].filter(Boolean).join(' ')}
-                >
-                  {/* Phase header */}
-                  <button
-                    type="button"
-                    className="path-phase-header"
-                    onClick={() => !isLocked && setOpenPhaseId(isOpen ? null : phase.id)}
-                    aria-expanded={isOpen}
-                    disabled={isLocked}
-                  >
-                    <span className={`path-phase-index${isComplete ? ' path-phase-index--done' : ''}`} aria-hidden="true">
-                      {isComplete ? '✓' : phaseIndex + 1}
-                    </span>
-
-                    <span className="path-phase-copy">
-                      <span className="path-phase-kicker">
-                        {isLocked   ? 'Upcoming'
-                         : isCurrent ? 'Current phase'
-                         : isComplete ? 'Completed'
-                         : 'Phase'}
-                      </span>
-                      <strong>{phase.title}</strong>
-                      <span>{phase.why}</span>
-                    </span>
-
-                    <span className="path-phase-progress">
-                      {isLocked ? (
-                        <span className="path-phase-progress-locked">Locked</span>
-                      ) : (
-                        <>
-                          <span className="path-phase-progress-pct">{phase.progress}%</span>
-                          <span className="path-phase-track">
-                            <span style={{ width: `${phase.progress}%` }} />
-                          </span>
-                        </>
-                      )}
-                    </span>
-                  </button>
-
-                  {/* Locked preview — upcoming content teaser */}
-                  {isLocked && !searchTerm && (
-                    <PhaseLockedPreview
-                      phase={phase}
-                      prevPhaseTitle={prevPhase?.shortTitle ?? prevPhase?.title ?? 'the previous phase'}
-                    />
-                  )}
-
-                  {/* Phase body (open + unlocked) */}
-                  {isOpen && !isLocked && (
-                    <div className="path-phase-body">
-                      <PhaseOutcomesHero phase={phase} />
-
-                      <div className="path-modules">
-                        {phase.modules.map(module => (
-                          <section key={module.id} className="path-module">
-                            <div className="path-module-header">
-                              <h3>{module.title}</h3>
-                              <span>{module.lessons.length} lesson{module.lessons.length !== 1 ? 's' : ''}</span>
-                            </div>
-                            <div className="path-lessons">
-                              {module.lessons.map(lesson => renderLesson(lesson, phase, module, false))}
-                            </div>
-                          </section>
-                        ))}
-                      </div>
-
-                      {/* Transition footer pointing to next phase */}
-                      {!searchTerm && (
-                        <PhaseTransitionFooter
-                          currentPhase={phase}
-                          nextPhase={nextPhase}
-                        />
-                      )}
-                    </div>
-                  )}
-                </article>
-
-                {/* Roadmap connector between phases */}
-                {phaseIndex < pathPhases.length - 1 && !searchTerm && (
-                  <RoadmapConnector
-                    isComplete={isComplete}
-                    isCurrent={isCurrent}
-                  />
-                )}
-              </div>
-            );
-          })}
+        <div className="lp-grid">
+          {visibleModules.map(mod => (
+            <ModuleCard
+              key={mod._key}
+              mod={mod}
+              isRecommended={mod._key === recommendedKey}
+              onCTA={handleModuleCTA}
+              currentLessonId={currentLessonId}
+              onToggle={key => setExpandedKey(p => p === key ? null : key)}
+              isExpanded={expandedKey === mod._key}
+              lessonStatus={lessonStatus}
+            />
+          ))}
         </div>
       )}
     </section>

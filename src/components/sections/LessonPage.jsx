@@ -70,23 +70,31 @@ function LessonProgressIndicator({ lessonIndex, totalLessons, phaseIndex, totalP
 }
 
 // ── Quiz component ─────────────────────────────────────────────────────────────
-function QuizBlock({ questions }) {
-  const [selected, setSelected]   = useState({});
-  const [revealed, setRevealed]   = useState({});
+function QuizBlock({ questions, lessonId }) {
+  // keyed by lessonId externally so state always starts blank for each lesson
+  const [selected,  setSelected]  = useState(() => ({}));
+  const [submitted, setSubmitted] = useState(() => false);
 
   if (!questions?.length) return null;
 
+  const allAnswered = questions.every((_, qi) => selected[qi] !== undefined);
+  const score = submitted
+    ? questions.filter((q, qi) => selected[qi] === q.answer).length
+    : 0;
+
   function handleAnswer(qi, oi) {
-    if (revealed[qi]) return;
+    // Never mutate state when already submitted
+    if (submitted) return;
     setSelected(s => ({ ...s, [qi]: oi }));
   }
 
-  function handleReveal(qi) {
-    setRevealed(r => ({ ...r, [qi]: true }));
+  function handleSubmit() {
+    if (submitted || !allAnswered) return;
+    setSubmitted(true);
   }
 
   return (
-    <div className="lesson-quiz">
+    <div className={`lesson-quiz${submitted ? ' quiz-submitted' : ''}`}>
       <div className="lesson-quiz-header">
         <span className="lesson-quiz-icon" aria-hidden="true">◎</span>
         <strong>Check Your Understanding</strong>
@@ -94,25 +102,24 @@ function QuizBlock({ questions }) {
       </div>
       <div className="lesson-quiz-questions">
         {questions.map((q, qi) => {
-          const isRevealed = revealed[qi];
-          const sel        = selected[qi];
-          const correct    = q.answer;
+          const sel     = selected[qi];
+          const correct = q.answer;
           return (
-            <div key={qi} className={`quiz-question${isRevealed ? ' quiz-question--revealed' : ''}`}>
+            <div key={qi} className={`quiz-question${submitted ? ' quiz-question--revealed' : ''}`}>
               <p className="quiz-q">{q.q}</p>
               <div className="quiz-options">
                 {q.options.map((opt, oi) => {
                   let cls = 'quiz-option';
-                  if (isRevealed && oi === correct)  cls += ' quiz-option--correct';
-                  if (isRevealed && oi === sel && sel !== correct) cls += ' quiz-option--wrong';
-                  if (!isRevealed && sel === oi)     cls += ' quiz-option--selected';
+                  if (submitted && oi === correct)                    cls += ' quiz-option--correct';
+                  if (submitted && oi === sel && sel !== correct)     cls += ' quiz-option--wrong';
+                  if (!submitted && sel === oi)                       cls += ' quiz-option--selected';
                   return (
                     <button
                       key={oi}
                       type="button"
                       className={cls}
                       onClick={() => handleAnswer(qi, oi)}
-                      disabled={isRevealed}
+                      disabled={submitted}
                     >
                       <span className="quiz-option-marker">{String.fromCharCode(65 + oi)}</span>
                       <span>{opt}</span>
@@ -120,16 +127,7 @@ function QuizBlock({ questions }) {
                   );
                 })}
               </div>
-              {!isRevealed && sel !== undefined && (
-                <button
-                  type="button"
-                  className="quiz-reveal-btn"
-                  onClick={() => handleReveal(qi)}
-                >
-                  Check answer
-                </button>
-              )}
-              {isRevealed && (
+              {submitted && (
                 <div className={`quiz-explanation${sel === correct ? ' quiz-explanation--correct' : ' quiz-explanation--wrong'}`}>
                   <span aria-hidden="true">{sel === correct ? '✓ Correct — ' : '✕ Not quite — '}</span>
                   {q.explanation}
@@ -138,6 +136,27 @@ function QuizBlock({ questions }) {
             </div>
           );
         })}
+      </div>
+
+      {/* Submit row */}
+      <div className="quiz-submit-row">
+        {submitted ? (
+          <div className="quiz-score">
+            {score === questions.length
+              ? `Perfect score — ${score}/${questions.length} correct!`
+              : `You got ${score}/${questions.length} correct`}
+          </div>
+        ) : (
+          <button
+            type="button"
+            className={`quiz-submit-btn${!allAnswered ? ' quiz-submit-btn--disabled' : ''}`}
+            onClick={handleSubmit}
+            disabled={!allAnswered}
+            title={!allAnswered ? 'Answer all questions to submit' : 'Submit quiz'}
+          >
+            {allAnswered ? 'Submit Quiz' : 'Answer all questions to submit'}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -179,9 +198,11 @@ function NextLessonCTA({ nextLesson, onNavigate, onBack }) {
 }
 
 // ── Rich guide lesson content ──────────────────────────────────────────────────
-function GuideLessonContent({ ctx, onBack, onNavigate }) {
-  const { guide, lessonTitle, label, difficulty } = ctx;
+function GuideLessonContent({ ctx, onBack, onNavigate, onToggleComplete, completedTopics }) {
+  const { guide, lessonTitle, label, difficulty, lessonId } = ctx;
   if (!guide) return null;
+
+  const isCompleted = !!(completedTopics ?? {})[lessonId];
 
   return (
     <article className="lesson-page-article">
@@ -261,6 +282,55 @@ function GuideLessonContent({ ctx, onBack, onNavigate }) {
         </div>
       )}
 
+      {/* Common mistakes */}
+      {guide.commonMistakes?.length > 0 && (
+        <section className="lesson-mistakes">
+          <h2 className="lesson-section-heading">Common mistakes</h2>
+          <div className="lesson-mistakes-list">
+            {guide.commonMistakes.map((m, i) => (
+              <div key={i} className="lesson-mistake-card">
+                <div className="lesson-mistake-header">
+                  <span className="lesson-mistake-icon" aria-hidden="true">⚠</span>
+                  <strong className="lesson-mistake-title">{m.mistake}</strong>
+                </div>
+                {m.why && <p className="lesson-mistake-why">{m.why}</p>}
+                {m.fix && <p className="lesson-mistake-fix"><strong>Fix:</strong> {m.fix}</p>}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Performance tips */}
+      {guide.performanceTips?.length > 0 && (
+        <section className="lesson-perf">
+          <h2 className="lesson-section-heading">Performance considerations</h2>
+          <ul className="lesson-perf-list">
+            {guide.performanceTips.map((t, i) => (
+              <li key={i}>
+                <span aria-hidden="true">⚡</span>
+                <span>{t}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* Best practices */}
+      {guide.bestPractices?.length > 0 && (
+        <section className="lesson-bestpractices">
+          <h2 className="lesson-section-heading">Best practices</h2>
+          <ul className="lesson-bestpractices-list">
+            {guide.bestPractices.map((b, i) => (
+              <li key={i}>
+                <span aria-hidden="true">◆</span>
+                <span>{b}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {/* Recap */}
       {guide.recap?.length > 0 && (
         <section className="lesson-recap">
@@ -276,8 +346,25 @@ function GuideLessonContent({ ctx, onBack, onNavigate }) {
         </section>
       )}
 
-      {/* Quiz */}
-      {guide.quiz?.length > 0 && <QuizBlock questions={guide.quiz} />}
+      {/* Quiz — keyed by lessonId so state always resets on lesson change */}
+      {guide.quiz?.length > 0 && <QuizBlock key={lessonId} lessonId={lessonId} questions={guide.quiz} />}
+
+      {/* Mark Complete */}
+      <div className="lesson-complete-row">
+        {isCompleted ? (
+          <div className="lesson-complete-done" role="status">
+            <span aria-hidden="true">✓</span> Lesson Completed
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="lesson-complete-btn"
+            onClick={() => onToggleComplete?.(lessonId)}
+          >
+            Mark Lesson Complete ✓
+          </button>
+        )}
+      </div>
 
       {/* Next lesson CTA */}
       <NextLessonCTA nextLesson={ctx.nextLesson} onNavigate={onNavigate} onBack={onBack} />
@@ -376,6 +463,8 @@ const LessonPage = memo(function LessonPage({
           ctx={lessonContext}
           onBack={onBack}
           onNavigate={handleNavigateLesson}
+          onToggleComplete={onToggleComplete}
+          completedTopics={completedTopics}
         />
       ) : topic ? (
         <>

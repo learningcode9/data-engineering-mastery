@@ -245,6 +245,30 @@ export const SkillGraph = memo(function SkillGraph({ onNavigate }) {
         </p>
       </div>
 
+      {/* Purpose card */}
+      <div className="lab-purpose-card">
+        <div className="lab-purpose-header">
+          <span className="lab-purpose-icon">🗺</span>
+          <div>
+            <div className="lab-purpose-title">Skill Dependency Map</div>
+            <div style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: 2 }}>
+              Estimated time: 5–10 min review
+            </div>
+          </div>
+        </div>
+        <strong style={{ fontSize: '0.85rem', color: 'var(--heading)' }}>What you will practice:</strong>
+        <ul style={{ margin: '8px 0 12px', paddingLeft: 18, fontSize: '0.875rem', color: 'var(--text)' }}>
+          <li>Visualising your learning progress across the full skill tree</li>
+          <li>Identifying prerequisite gaps before advancing to new topics</li>
+          <li>Tracking mastery and readiness across Foundation, Core, and Platform tiers</li>
+        </ul>
+        <div className="lab-skills-row">
+          {['Self-assessment', 'Learning Strategy', 'Progress Tracking'].map(s => (
+            <span key={s} className="lab-skill-badge">{s}</span>
+          ))}
+        </div>
+      </div>
+
       <div className="sg-stats-strip">
         <div className="sg-stat-item">
           <span className="sg-stat-value sg-stat-value--green">{stats.mastered}</span>

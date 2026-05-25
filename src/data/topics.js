@@ -5,6 +5,7 @@ import { adfModule }        from './modules/azure-data-factory.js';
 import { databricksModule } from './modules/azure-databricks.js';
 import { awsGlueModule }    from './modules/aws-glue.js';
 import { aiModule }         from './modules/ai-for-data-engineers.js';
+import { fabricModule }     from './modules/fabric.js';
 import { newTopics }        from './newTopics.js';
 import { phases }           from './phases.js';
 
@@ -50,6 +51,7 @@ const coreTopics = [
       title: 'Python',
       reason: 'SQL lets you query data — Python lets you automate pipelines, read APIs, and orchestrate the work that runs SQL.',
     },
+    docs: ['postgresql-docs', 'ms-synapse'],
   },
   {
     id: 'python',
@@ -92,6 +94,7 @@ const coreTopics = [
       title: 'PySpark',
       reason: 'Python handles gigabytes; PySpark handles terabytes — when your data outgrows a single machine, Spark is the tool every senior DE reaches for.',
     },
+    docs: ['python-docs', 'pandas-docs'],
   },
   {
     id: 'pyspark',
@@ -134,6 +137,7 @@ const coreTopics = [
       title: 'Azure Data Factory',
       reason: 'Once you can write Spark code, the next step is orchestrating it on a schedule — ADF is how Azure DEs trigger and chain their Spark jobs.',
     },
+    docs: ['apache-spark', 'delta-lake'],
   },
   {
     id: 'azure-data-factory',
@@ -176,6 +180,7 @@ const coreTopics = [
       title: 'Azure Databricks',
       reason: 'ADF orchestrates pipelines — Databricks is where the heavy transformation logic runs, combining Spark, Delta Lake, and notebooks in one managed platform.',
     },
+    docs: ['ms-adf', 'ms-synapse'],
   },
   {
     id: 'azure-databricks',
@@ -218,6 +223,7 @@ const coreTopics = [
       title: 'AWS Glue',
       reason: 'Databricks is the Azure world — AWS Glue is the equivalent on AWS. Most DE job descriptions list both, so knowing both makes you cloud-agnostic and more hireable.',
     },
+    docs: ['ms-databricks', 'databricks-docs', 'databricks-unity-catalog', 'delta-lake'],
   },
   {
     id: 'aws-glue',
@@ -260,6 +266,7 @@ const coreTopics = [
       title: 'AI for Data Engineers',
       reason: 'With cloud and pipeline skills solid, the final frontier is AI — building LLM pipelines, vector stores, and using AI tools to 10x your own productivity as a DE.',
     },
+    docs: ['aws-glue', 'aws-s3', 'aws-redshift'],
   },
   {
     id: 'ai-for-data-engineers',
@@ -297,7 +304,52 @@ const coreTopics = [
       interviewTip: 'Know how to build a RAG pipeline (chunking, embedding, vector store, retrieval), understand LLM token limits and cost implications, and be able to explain when a traditional ML model is better than an LLM.',
       projectLink: 'Any project benefits from AI tooling — use AI to generate test data, write boilerplate, explain error messages, and review your code.',
     },
+    nextStep: {
+      id: 'microsoft-fabric',
+      title: 'Microsoft Fabric',
+      reason: 'Fabric is the next-generation Azure analytics platform that unifies data engineering, warehousing, and BI — increasingly asked in Azure DE interviews.',
+    },
+    docs: ['python-docs', 'dbt-docs'],
+  },
+  {
+    id: 'microsoft-fabric',
+    title: 'Microsoft Fabric',
+    label: 'Platform',
+    category: 'Azure',
+    difficulty: 'Intermediate',
+    progress: '0%',
+    body: 'Build end-to-end analytics pipelines on Microsoft\'s unified data platform.',
+    overview: [
+      { title: 'What is this?', body: 'Microsoft Fabric is an all-in-one SaaS analytics platform that combines data engineering, warehousing, real-time analytics, and Power BI in one workspace.' },
+      { title: 'Why do we use it?', body: 'A data engineer uses Fabric to build Bronze → Silver → Gold Medallion pipelines using Spark Notebooks and Lakehouses, all stored on OneLake, with zero external storage configuration.' },
+      { title: 'Simple example', body: 'A Fabric Pipeline runs every night: a Copy Activity lands raw CSV in Lakehouse Bronze, a Notebook cleans it to Silver, another Notebook aggregates to Gold, and a Direct Lake Semantic Model makes it available in Power BI immediately.' },
+      { title: 'Practice task', body: 'List the 5 main Fabric item types and what each one is used for.' },
+    ],
+    questions: [
+      { question: 'What is OneLake?', answer: 'A single tenant-wide logical data lake that stores all Fabric items — no separate storage accounts needed.' },
+      { question: 'What is Direct Lake mode?', answer: 'A Power BI mode that reads Delta files directly from OneLake without importing — always fresh, near-instant queries.' },
+      { question: 'What is the difference between a Lakehouse and a Warehouse in Fabric?', answer: 'Lakehouse stores Delta tables accessed via Spark and read-only SQL Analytics Endpoint. Warehouse is a full T-SQL read/write analytics store.' },
+    ],
+    module: fabricModule,
+    step: 20,
+    prerequisites: ['azure-databricks'],
+    timeEstimate: '3–4 weeks',
+    interviewImportance: 'growing',
+    commonMistakes: [
+      'Confusing Lakehouse with Warehouse — a Lakehouse SQL Analytics Endpoint is read-only; writes must go through Spark or a Pipeline.',
+      'Not using Shortcuts — copying data when a Shortcut would virtualise it adds unnecessary cost and sync complexity.',
+      'Using all-purpose clusters for batch jobs — Fabric Starter Pools are cheaper for production notebook runs.',
+      'Forgetting to enable Git integration — all Fabric items should be version-controlled from day one.',
+    ],
+    resumeRelevance: 'Mention OneLake Shortcuts, Medallion architecture with Fabric Lakehouses, Direct Lake semantic models, and Deployment Pipeline CI/CD — these signal hands-on Fabric experience.',
+    careerContext: {
+      whyItMatters: 'Microsoft Fabric is rapidly replacing separate Azure Synapse + ADF + Power BI architectures at enterprises. Azure DE job descriptions increasingly list Fabric experience, and it shows up in interviews at companies standardising on the Microsoft stack.',
+      realWorldUseCase: 'A DE at a retail company migrates from ADF + Synapse + Power BI to a single Fabric workspace: Pipelines replace ADF, Lakehouses replace Synapse data lake, and Direct Lake replaces Power BI import refreshes — reducing operational overhead by 60%.',
+      interviewTip: 'Understand OneLake vs ADLS Gen2, when to use a Lakehouse vs Warehouse, and how Direct Lake mode differs from Import/DirectQuery. Medallion architecture in Fabric is the most commonly tested scenario.',
+      projectLink: 'Sales Lakehouse Pipeline and Medallion Architecture Project — both map directly to Fabric Lakehouse + Notebook patterns.',
+    },
     nextStep: null,
+    docs: ['ms-fabric-overview', 'ms-fabric-onelake', 'ms-fabric-lakehouse', 'ms-fabric-warehouse', 'ms-fabric-data-factory', 'ms-fabric-spark', 'ms-fabric-rti', 'ms-fabric-deployment'],
   },
 ];
 

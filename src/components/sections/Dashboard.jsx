@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { phases } from '../../data/phases.js';
 import { SummaryCard } from '../ui/Card.jsx';
 import { ProgressBar } from '../ui/ProgressBar.jsx';
 import { summaryCards } from '../../data/appData.js';
@@ -1050,6 +1051,398 @@ export const SectionPreviewGrid = memo(function SectionPreviewGrid({ onNavigate 
               <p>{item.body}</p>
             </div>
             <span className="section-preview-cta">{item.cta} →</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+});
+
+// ─── New Dashboard: Hero Current Focus ────────────────────────────────────────
+
+export const DashboardHero = memo(function DashboardHero({ sqlProgress, onResume, onNavigate }) {
+  const { percent, nextSection, nextSectionIndex, total } = sqlProgress;
+  const allDone = nextSection === null;
+  const sectionTitle = allDone ? 'All sections complete!' : nextSection?.title ?? '';
+  const sectionNum = allDone ? total : (nextSectionIndex ?? 0) + 1;
+  const remaining = allDone ? 0 : total - (nextSectionIndex ?? 0);
+  const minsLeft = remaining * 18;
+  const timeLabel = minsLeft >= 60
+    ? `~${Math.round(minsLeft / 60)}h left in this section`
+    : `~${minsLeft} min left in this section`;
+
+  const coreSections = 10;
+  const doneSections = Math.min(nextSectionIndex ?? 0, coreSections);
+  const milestonePct = Math.round((doneSections / coreSections) * 100);
+
+  return (
+    <section className="dash-hero">
+      <div className="dash-hero-focus">
+        <p className="eyebrow" style={{ marginBottom: 16 }}>Current Focus</p>
+        <div className="dash-hero-body">
+          <div className="dash-hero-icon-wrap" aria-hidden="true">📊</div>
+          <div className="dash-hero-content">
+            <h2 className="dash-hero-title">SQL Mastery</h2>
+            <p className="dash-hero-meta">SQL Basics · Section {sectionNum}/{total}</p>
+            {!allDone && <p className="dash-hero-current-label">{sectionTitle}</p>}
+            <div className="dash-hero-bar-row">
+              <div className="dash-hero-track">
+                <div className="dash-hero-fill" style={{ width: `${percent}%` }} />
+              </div>
+              <span className="dash-hero-pct">{percent}%</span>
+            </div>
+            <p className="dash-hero-time">
+              <span aria-hidden="true">⏱</span> {allDone ? 'All complete!' : timeLabel}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="dash-hero-milestone-card">
+        <p className="dash-hero-milestone-eyebrow">Next Milestone</p>
+        <h3 className="dash-hero-milestone-title">Complete 10 SQL<br />sections</h3>
+        <div className="dash-hero-milestone-bar-row">
+          <div className="dash-hero-milestone-track">
+            <div className="dash-hero-milestone-fill" style={{ width: `${milestonePct}%` }} />
+          </div>
+          <span className="dash-hero-milestone-count">{doneSections} / {coreSections}</span>
+        </div>
+      </div>
+    </section>
+  );
+});
+
+// ─── Progress Overview card ───────────────────────────────────────────────────
+
+const CORE_PHASES = phases.filter(p =>
+  ['foundation', 'pipeline', 'big-data', 'cloud', 'streaming', 'production', 'career'].includes(p.id)
+);
+
+export const ProgressOverviewCard = memo(function ProgressOverviewCard({
+  completedCount, totalTopics, inProgressCount, learnedCount,
+  practiceProgress, topicStates,
+}) {
+  const ts = topicStates ?? {};
+
+  // Determine current core phase (1-indexed)
+  const currentPhaseIdx = useMemo(() => {
+    const firstIncomplete = CORE_PHASES.findIndex(phase =>
+      !phase.topicIds.every(id => ts[id]?.state === 'mastered' || ts[id]?.state === 'completed')
+    );
+    return firstIncomplete >= 0 ? firstIncomplete + 1 : CORE_PHASES.length;
+  }, [ts]);
+
+  const overallPct = totalTopics > 0 ? Math.round((completedCount / totalTopics) * 100) : 0;
+
+  const stats = [
+    { label: 'Phase',        value: `${currentPhaseIdx}/${CORE_PHASES.length}`, sub: 'In Progress' },
+    { label: 'Topics',       value: `${completedCount}/${totalTopics}`,          sub: 'Completed'   },
+    { label: 'Projects',     value: `0/7`,                                        sub: 'Completed'   },
+    { label: 'Interview Qs', value: `${learnedCount}/40`,                         sub: 'Practiced'   },
+  ];
+
+  return (
+    <section className="card dash-progress-card">
+      <p className="eyebrow">Your Progress</p>
+      <div className="dash-progress-stats">
+        {stats.map(s => (
+          <div key={s.label} className="dash-progress-stat">
+            <span className="dash-stat-value">{s.value}</span>
+            <span className="dash-stat-label">{s.label}</span>
+            <span className="dash-stat-sub">{s.sub}</span>
+          </div>
+        ))}
+      </div>
+      <div className="dash-progress-overall-row">
+        <div className="dash-overall-track">
+          <div className="dash-overall-fill" style={{ width: `${overallPct}%` }} />
+        </div>
+        <span className="dash-overall-label">Overall Progress</span>
+        <span className="dash-overall-pct">{overallPct}%</span>
+      </div>
+    </section>
+  );
+});
+
+// ─── Today's Focus (simple checklist) ────────────────────────────────────────
+
+export const TodaysFocusSimple = memo(function TodaysFocusSimple({ enrichedTopics, onNavigate }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [state, setState] = useLocalStorage('dem-focus-simple', {});
+  const todayState = (state ?? {})[today] ?? {};
+
+  const inProg = enrichedTopics?.filter(t => t.inProgress)?.[0];
+  const todo   = enrichedTopics?.filter(t => !t.completed && !t.inProgress)?.[0];
+  const current = inProg ?? todo;
+
+  const items = [
+    {
+      id: `sql-${today}`,
+      label: current ? `Continue ${current.title}` : 'Continue SQL Basics',
+      sub: 'Section 1/10',
+    },
+    {
+      id: `practice-${today}`,
+      label: 'Complete a practice task',
+      sub: 'From SQL Lab',
+    },
+    {
+      id: `review-${today}`,
+      label: 'Review one concept',
+      sub: 'From Learning Path',
+    },
+  ];
+
+  const doneCount = items.filter(i => !!todayState[i.id]).length;
+
+  const toggleItem = useCallback(id => {
+    setState(prev => {
+      const s = prev ?? {};
+      return { ...s, [today]: { ...(s[today] ?? {}), [id]: !s[today]?.[id] } };
+    });
+  }, [setState, today]);
+
+  return (
+    <section className="card dash-focus-card">
+      <div className="dash-focus-header">
+        <p className="eyebrow" style={{ margin: 0 }}>Today's Focus</p>
+        <span className="dash-focus-badge">{doneCount}/{items.length}</span>
+      </div>
+      <ul className="dash-focus-list" role="list">
+        {items.map(item => {
+          const done = !!todayState[item.id];
+          return (
+            <li key={item.id} className={`dash-focus-item${done ? ' dash-focus-item--done' : ''}`}>
+              <button
+                type="button"
+                className={`dash-focus-check${done ? ' dash-focus-check--done' : ''}`}
+                onClick={() => toggleItem(item.id)}
+                aria-label={done ? `Unmark: ${item.label}` : `Mark done: ${item.label}`}
+              />
+              <div className="dash-focus-text">
+                <span className="dash-focus-label">{item.label}</span>
+                <span className="dash-focus-sub">{item.sub}</span>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      <button type="button" className="dash-focus-all-btn" onClick={() => onNavigate?.('topics')}>
+        View All Tasks →
+      </button>
+    </section>
+  );
+});
+
+// ─── Upcoming Milestone (sidebar) ─────────────────────────────────────────────
+
+export const UpcomingMilestoneCard = memo(function UpcomingMilestoneCard({ sqlProgress, onNavigate }) {
+  const { nextSectionIndex, total } = sqlProgress;
+  const coreSections = 10;
+  const done = Math.min(nextSectionIndex ?? 0, coreSections);
+  const pct = Math.round((done / coreSections) * 100);
+
+  return (
+    <section className="card dash-milestone-sidebar">
+      <p className="eyebrow">Upcoming Milestone</p>
+      <div className="dash-milestone-icon" aria-hidden="true">🏆</div>
+      <strong className="dash-milestone-name">Finish SQL Basics</strong>
+      <p className="dash-milestone-sub">Complete all {coreSections} sections</p>
+      <div className="dash-milestone-sidebar-bar">
+        <div className="dash-milestone-sidebar-fill" style={{ width: `${pct}%` }} />
+      </div>
+      <span className="dash-milestone-sidebar-count">{done} / {coreSections} sections</span>
+      <button type="button" className="dash-milestone-cta" onClick={() => onNavigate?.('topics')}>
+        View Learning Path →
+      </button>
+    </section>
+  );
+});
+
+// ─── Motivation Quote (sidebar) ───────────────────────────────────────────────
+
+const QUOTES = [
+  { text: 'The best way to predict the future is to build it.', author: 'Data Engineer Mindset' },
+  { text: 'Every query you write is a step toward mastery.', author: 'Data Engineering Mastery' },
+  { text: "Pipelines don't build themselves. But you do.", author: 'Data Engineer Mindset' },
+  { text: 'Small daily progress compounds into mastery.', author: 'Learning Philosophy' },
+  { text: 'Consistency beats intensity every single day.', author: 'Data Engineer Mindset' },
+  { text: 'The data engineer who reads documentation wins.', author: 'Engineering Wisdom' },
+  { text: 'Every schema change you survive makes you stronger.', author: 'Data Engineer Mindset' },
+];
+
+export const MotivationCard = memo(function MotivationCard() {
+  const idx = new Date().getDay() % QUOTES.length;
+  const quote = QUOTES[idx];
+  return (
+    <section className="card dash-quote-card">
+      <span className="dash-quote-mark" aria-hidden="true">"</span>
+      <p className="dash-quote-text">{quote.text}</p>
+      <p className="dash-quote-author">— {quote.author}</p>
+    </section>
+  );
+});
+
+// ─── Learning Consistency (sidebar) ──────────────────────────────────────────
+
+const WEEK_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+export const LearningConsistencyCard = memo(function LearningConsistencyCard({ activityLog }) {
+  const today = new Date();
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() - (6 - i));
+    return d.toISOString().slice(0, 10);
+  });
+
+  const actByDay = useMemo(() => {
+    const map = {};
+    (activityLog ?? []).forEach(e => {
+      const day = e.date?.slice(0, 10);
+      if (day) map[day] = (map[day] || 0) + 1;
+    });
+    return map;
+  }, [activityLog]);
+
+  const activeCount = days.filter(d => actByDay[d] > 0).length;
+
+  return (
+    <section className="card dash-consistency-card">
+      <div className="dash-consistency-header">
+        <p className="eyebrow" style={{ margin: 0 }}>Learning Consistency</p>
+        <span className="dash-consistency-period">This Week</span>
+      </div>
+      <p className="dash-consistency-count">{activeCount} / 7 days active</p>
+      <div className="dash-consistency-dots">
+        {days.map((day, i) => {
+          const active = (actByDay[day] ?? 0) > 0;
+          return (
+            <div key={day} className="dash-consistency-day">
+              <div className={`dash-consistency-dot${active ? ' dash-consistency-dot--active' : ''}`}>
+                {active && <span className="dash-consistency-check" aria-hidden="true">✓</span>}
+              </div>
+              <span className="dash-consistency-label" aria-hidden="true">{WEEK_LABELS[i]}</span>
+            </div>
+          );
+        })}
+      </div>
+      <p className="dash-consistency-msg">Small daily progress compounds into mastery.</p>
+    </section>
+  );
+});
+
+// ─── Career Readiness Card (compact) ─────────────────────────────────────────
+
+const CAREER_SKILLS = [
+  { id: 'sql',           label: 'SQL',          topicIds: ['sql']                                        },
+  { id: 'python',        label: 'Python',        topicIds: ['python']                                    },
+  { id: 'data-modeling', label: 'Data Modeling', topicIds: ['pyspark']                                   },
+  { id: 'cloud',         label: 'Cloud',         topicIds: ['azure-data-factory', 'azure-databricks', 'aws-glue'] },
+  { id: 'streaming',     label: 'Streaming',     topicIds: []                                            },
+];
+
+export const CareerReadinessCard = memo(function CareerReadinessCard({
+  topicStates, completedTopics, learnedCount, overallReadiness,
+}) {
+  const ts = topicStates ?? {};
+
+  const skills = CAREER_SKILLS.map(skill => {
+    if (!skill.topicIds.length) return { ...skill, pct: 0 };
+    const vals = skill.topicIds.map(id => ts[id]?.masteryPct ?? 0);
+    return { ...skill, pct: Math.max(...vals) };
+  });
+
+  const strongest = skills.reduce((best, s) => s.pct > best.pct ? s : best, skills[0]);
+  const focusAreas = skills.filter(s => s.id !== strongest.id && s.pct < 10).slice(0, 4);
+
+  const readinessPct = overallReadiness ?? 0;
+  const radius = 44;
+  const circ = 2 * Math.PI * radius;
+  const strokeDash = (readinessPct / 100) * circ;
+
+  return (
+    <section className="card dash-career-card">
+      <p className="eyebrow">Career Readiness</p>
+      <div className="dash-career-inner">
+        <div className="dash-career-donut-wrap">
+          <svg viewBox="0 0 100 100" className="dash-donut-svg" aria-hidden="true">
+            <circle cx="50" cy="50" r={radius} fill="none" stroke="var(--border)" strokeWidth="9" />
+            <circle
+              cx="50" cy="50" r={radius}
+              fill="none"
+              stroke="#2f756e"
+              strokeWidth="9"
+              strokeDasharray={`${strokeDash} ${circ}`}
+              strokeLinecap="round"
+              transform="rotate(-90 50 50)"
+            />
+          </svg>
+          <div className="dash-donut-center">
+            <span className="dash-donut-pct">{readinessPct}%</span>
+            <span className="dash-donut-sub">Job Ready</span>
+          </div>
+        </div>
+
+        <div className="dash-career-skills">
+          <p className="dash-career-skills-title">Skills Breakdown</p>
+          {skills.map(s => (
+            <div key={s.id} className="dash-career-skill-row">
+              <span className="dash-career-skill-label">{s.label}</span>
+              <div className="dash-career-skill-track">
+                <div className="dash-career-skill-fill" style={{ width: `${Math.max(s.pct, s.pct > 0 ? 8 : 0)}%` }} />
+              </div>
+              <span className="dash-career-skill-pct">{s.pct}%</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="dash-career-summary">
+          <div className="dash-career-summary-block">
+            <p className="dash-career-summary-label">Strongest Skill</p>
+            <span className="dash-career-tag">
+              {strongest.pct > 0 ? strongest.label : 'SQL Basics'}
+            </span>
+          </div>
+          <div className="dash-career-summary-block">
+            <p className="dash-career-summary-label">Focus Areas</p>
+            <div className="dash-career-tags-row">
+              {(focusAreas.length > 0 ? focusAreas : skills.filter(s => s.id !== 'sql').slice(0, 4)).map(a => (
+                <span key={a.id} className="dash-career-tag dash-career-tag--muted">{a.label}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+});
+
+// ─── Quick Links (sidebar) ────────────────────────────────────────────────────
+
+const QUICK_LINKS_DATA = [
+  { icon: '▶', label: 'Continue Learning', section: 'topics'         },
+  { icon: '▤', label: 'Practice SQL',       section: 'sql-lab'       },
+  { icon: '▣', label: 'View Projects',       section: 'projects'      },
+  { icon: '◌', label: 'Interview Prep',      section: 'interview-prep' },
+  { icon: '✦', label: 'Ask AI Coach',        section: 'ai-learning'   },
+  { icon: '◇', label: 'Explore Roadmaps',    section: 'roadmap'       },
+];
+
+export const QuickLinksCard = memo(function QuickLinksCard({ onNavigate }) {
+  return (
+    <section className="card dash-quicklinks-card">
+      <p className="eyebrow">Quick Links</p>
+      <div className="dash-quicklinks-list">
+        {QUICK_LINKS_DATA.map(link => (
+          <button
+            key={link.label}
+            type="button"
+            className="dash-quicklink-item"
+            onClick={() => onNavigate?.(link.section)}
+          >
+            <span className="dash-quicklink-icon" aria-hidden="true">{link.icon}</span>
+            <span className="dash-quicklink-label">{link.label}</span>
+            <span className="dash-quicklink-arrow" aria-hidden="true">→</span>
           </button>
         ))}
       </div>

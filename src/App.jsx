@@ -6,6 +6,9 @@ import {
   SummaryGrid, ContinueCard, SmartBanner, OnboardingCTA,
   JobReadinessChecklist, StartHereCard, DailyGoalCard,
   WeeklyProgress, NextActionCard, SectionPreviewGrid,
+  DashboardHero, ProgressOverviewCard, TodaysFocusSimple,
+  UpcomingMilestoneCard, MotivationCard, LearningConsistencyCard,
+  CareerReadinessCard, QuickLinksCard,
 } from './components/sections/Dashboard.jsx';
 import Topics from './components/sections/Topics.jsx';
 import LessonPage from './components/sections/LessonPage.jsx';
@@ -37,6 +40,21 @@ import { syncPracticeTask, useHydrateFromSupabase } from './hooks/useSyncProgres
 import * as notesService from './services/supabase/notes';
 import { useOnboarding } from './hooks/useOnboarding';
 import { getRecommendation, DEFAULT_RECOMMENDATION } from './services/recommendations/recommendationEngine';
+
+// ── Guide completions — module-level singleton ─────────────────────────────────
+// Stored outside React state so there are zero stale-closure / StrictMode issues.
+// A tick counter inside App forces re-renders when completions change.
+const _gc = (() => {
+  try { return JSON.parse(localStorage.getItem('dem-guide-completions') ?? '{}') ?? {}; }
+  catch { return {}; }
+})();
+function _gcMark(id) {
+  if (_gc[id]) return false;
+  Object.assign(_gc, { [id]: true });
+  try { localStorage.setItem('dem-guide-completions', JSON.stringify(_gc)); } catch {}
+  return true;
+}
+function _gcGet() { return _gc; }
 
 // ── Lazy-loaded page sections ──────────────────────────────────────────────────
 const SQLLab            = lazy(() => import('./components/sections/SQLLab.jsx'));
@@ -96,6 +114,10 @@ const App = memo(function App() {
   const setCompletedTopics = useLearningStore(s => s.setCompletedTopics);
   useHydrateFromSupabase(userId, setCompletedTopics);
 
+  // Tick counter — incremented each time a guide lesson is completed.
+  // allCompletedTopics depends on this so it always reads the freshest _gcGet().
+  const [guideTick, setGuideTick] = useState(0);
+
   const [topicNotes,       setTopicNotes]       = useLocalStorage('dem-topic-notes', {});
   const [practiceProgress, setPracticeProgress] = useLocalStorage('dem-practice-progress', {});
   const dailyPlan    = useLearningStore(s => s.dailyTasks);
@@ -112,6 +134,13 @@ const App = memo(function App() {
     if (!selectedTopicId) return;
     setLastOpenTopicId(selectedTopicId);
   }, [selectedTopicId, setLastOpenTopicId]);
+
+  // ─── Merged completion map ─────────────────────────────────────────────────────
+  const allCompletedTopics = useMemo(
+    () => ({ ...(completedTopics ?? {}), ..._gcGet() }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [completedTopics, guideTick]
+  );
 
   // ─── Derived data ──────────────────────────────────────────────────────────────
   const completedCount = useMemo(
@@ -203,18 +232,31 @@ const App = memo(function App() {
   }, [setActivityLog]);
 
   const toggleComplete = useCallback(id => {
-    setCompletedTopics(p => {
-      const safe = p ?? {};
-      if (!safe[id]) {
-        addXP(XP_PER_TOPIC);
-        recordActivity();
-        const title = topics.find(t => t.id === id)?.title ?? id;
-        addToActivityLog(`Finished topic: ${title}`, 'topic', XP_PER_TOPIC);
-        toast(`Topic complete! +${XP_PER_TOPIC} XP`, 'success');
-      }
-      return { ...safe, [id]: !safe[id] };
-    });
-  }, [setCompletedTopics, addXP, recordActivity, addToActivityLog]);
+    const isTopic = !!topics.find(t => t.id === id);
+
+    if (isTopic) {
+      // Regular topic: two-way toggle via Zustand
+      setCompletedTopics(p => {
+        const safe = p ?? {};
+        if (!safe[id]) {
+          addXP(XP_PER_TOPIC);
+          recordActivity();
+          const title = topics.find(t => t.id === id)?.title ?? id;
+          addToActivityLog(`Finished topic: ${title}`, 'topic', XP_PER_TOPIC);
+          toast(`Topic complete! +${XP_PER_TOPIC} XP`, 'success');
+        }
+        return { ...safe, [id]: !safe[id] };
+      });
+    } else {
+      // Guide lesson: mark via module-level singleton, then tick to force re-render.
+      if (!_gcMark(id)) return; // already done
+      setGuideTick(t => t + 1);
+      addXP(XP_PER_TOPIC);
+      recordActivity();
+      addToActivityLog(`Finished lesson: ${id}`, 'lesson', XP_PER_TOPIC);
+      toast(`Lesson complete! +${XP_PER_TOPIC} XP`, 'success');
+    }
+  }, [setCompletedTopics, setGuideTick, addXP, recordActivity, addToActivityLog, topics]);
 
   const notesSyncTimers = useRef({});
   const updateNotes = useCallback((id, text) => {
@@ -283,8 +325,23 @@ const App = memo(function App() {
     return () => clearInterval(id);
   }, [tickIncidents]);
 
+  // ─── Global ⌘K / Ctrl+K → command palette (works on all pages) ───────────────
+  useEffect(() => {
+    function onKey(e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        const tag = document.activeElement?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+        e.preventDefault();
+        setCmdPaletteOpen(true);
+      }
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
   // ─── Shared header props ───────────────────────────────────────────────────────
   const headerProps = {
+    activePage,
     isDark, onMenuClick: () => setSidebarOpen(true),
     onSearchChange: setSearchTerm, onThemeToggle: () => setIsDark(d => !d),
     searchTerm, searchResults, onResultClick: handleSearchResultClick,
@@ -315,7 +372,7 @@ const App = memo(function App() {
       {investigatingId && <InvestigationWorkspace />}
       <CommandPalette isOpen={cmdPaletteOpen} onClose={() => setCmdPaletteOpen(false)} onNavigate={navigate} />
 
-      <main className="main-content">
+      <main className={`main-content${activePage !== 'dashboard' ? ' main-content--no-header' : ''}`}>
         <TopHeader {...headerProps} />
         <SimulationHUD
           onOpenIncidents={() => navigate('incidents')}
@@ -327,41 +384,49 @@ const App = memo(function App() {
           <div className="page page--dashboard">
             <SmartBanner allTopicsProgress={allTopicsProgress} streak={streak} onNavigate={navigate} personalizedRec={personalizedRec} />
             {!onboardingCompleted && <OnboardingCTA onOpen={openOnboardingPage} />}
-            <SummaryGrid completedCount={completedCount} totalTopics={topics.length} inProgressCount={inProgressCount} />
 
-            <div className="dashboard-grid">
-              <div className="primary-column">
-                <StartHereCard
-                  completedCount={completedCount}
-                  onStart={() => { setSelectedTopicId('sql'); navigate('topics'); }}
-                  onOpenGoals={openOnboardingPage}
+            <div className="dash-layout">
+              {/* ── Main column ── */}
+              <div className="dash-main">
+                <DashboardHero
+                  sqlProgress={sqlProgress}
+                  onResume={handleResume}
+                  onNavigate={navigate}
                 />
 
-                <NextActionCard
-                  nextAction={nextAction}
-                  onNavigate={id => { setSelectedTopicId(id); navigate('topics'); }}
-                />
-
-                <div className="learning-row">
-                  <ContinueCard sqlProgress={sqlProgress} onResume={handleResume} />
-                  <DailyGoalCard enrichedTopics={enrichedTopics} />
-                </div>
-
-                <div className="learning-row">
-                  <WeeklyProgress activityLog={activityLog} />
-                  <JobReadinessChecklist
-                    topicStates={topicStates}
-                    completedTopics={completedTopics}
+                <div className="dash-row-2">
+                  <ProgressOverviewCard
+                    completedCount={completedCount}
+                    totalTopics={topics.length}
+                    inProgressCount={inProgressCount}
                     learnedCount={learnedCount}
-                    overallReadiness={overallReadiness}
-                    topics={topics}
+                    practiceProgress={practiceProgress}
+                    topicStates={topicStates}
+                  />
+                  <TodaysFocusSimple
+                    enrichedTopics={enrichedTopics}
+                    onNavigate={navigate}
                   />
                 </div>
 
-                {/* Preview cards linking to dedicated pages */}
+                <CareerReadinessCard
+                  topicStates={topicStates}
+                  completedTopics={completedTopics}
+                  learnedCount={learnedCount}
+                  overallReadiness={overallReadiness}
+                  topics={topics}
+                />
+
                 <SectionPreviewGrid onNavigate={navigate} />
               </div>
-              <RightRail onNavigate={navigate} />
+
+              {/* ── Right sidebar ── */}
+              <aside className="dash-sidebar">
+                <MotivationCard />
+                <UpcomingMilestoneCard sqlProgress={sqlProgress} onNavigate={navigate} />
+                <LearningConsistencyCard activityLog={activityLog} />
+                <QuickLinksCard onNavigate={navigate} />
+              </aside>
             </div>
           </div>
         )}
@@ -372,6 +437,7 @@ const App = memo(function App() {
             <Topics
               topics={enrichedTopics}
               topicStates={topicStates}
+              completedTopics={allCompletedTopics}
               onLessonOpen={handleLessonOpen}
               onNavigate={navigate}
               searchTerm={searchTerm}
@@ -386,9 +452,10 @@ const App = memo(function App() {
         {/* ── LESSON PAGE ────────────────────────────────────────────────── */}
         {activePage === 'lesson' && lessonContext && (
           <LessonPage
+            key={lessonContext.lessonId}
             lessonContext={lessonContext}
             topics={enrichedTopics}
-            completedTopics={completedTopics ?? {}}
+            completedTopics={allCompletedTopics}
             notes={topicNotes}
             onNotesChange={updateNotes}
             onToggleComplete={toggleComplete}
@@ -431,7 +498,7 @@ const App = memo(function App() {
           <div className="page page--roadmap">
             <Suspense fallback={<PageFallback />}>
               <RoadmapTracks />
-              {engineeringMode && <ArchDiagrams />}
+              <ArchDiagrams />
             </Suspense>
           </div>
         )}
@@ -440,34 +507,34 @@ const App = memo(function App() {
         {activePage === 'ai-learning' && (
           <div className="page page--ai-coach">
             <Suspense fallback={<PageFallback />}>
-              <AILearning />
+              <AILearning onNavigate={navigate} />
             </Suspense>
           </div>
         )}
 
-        {/* ── ENGINEERING MODE LAB PAGES ─────────────────────────────────── */}
-        {engineeringMode && activePage === 'architecture' && (
+        {/* ── LAB PAGES (accessible in both modes) ───────────────────────── */}
+        {activePage === 'architecture' && (
           <div className="page"><Suspense fallback={<PageFallback />}><ArchDiagrams /></Suspense></div>
         )}
-        {engineeringMode && activePage === 'skill-graph' && (
+        {activePage === 'skill-graph' && (
           <div className="page"><Suspense fallback={<PageFallback />}><SkillGraph onNavigate={navigate} /></Suspense></div>
         )}
-        {engineeringMode && activePage === 'incidents' && (
+        {activePage === 'incidents' && (
           <div className="page"><Suspense fallback={<PageFallback />}><IncidentSimulator /></Suspense></div>
         )}
-        {engineeringMode && activePage === 'enterprise' && (
+        {activePage === 'enterprise' && (
           <div className="page"><Suspense fallback={<PageFallback />}><EnterpriseSimulator /></Suspense></div>
         )}
-        {engineeringMode && activePage === 'war-room' && (
+        {activePage === 'war-room' && (
           <div className="page"><Suspense fallback={<PageFallback />}><InterviewWarRoom /></Suspense></div>
         )}
-        {engineeringMode && activePage === 'standup' && (
+        {activePage === 'standup' && (
           <div className="page"><Suspense fallback={<PageFallback />}><DailyStandup /></Suspense></div>
         )}
-        {engineeringMode && activePage === 'databricks' && (
+        {activePage === 'databricks' && (
           <div className="page"><Suspense fallback={<PageFallback />}><DatabricksNB /></Suspense></div>
         )}
-        {engineeringMode && activePage === 'analytics' && (
+        {activePage === 'analytics' && (
           <div className="page">
             <Suspense fallback={<PageFallback />}>
               <Analytics
@@ -478,7 +545,7 @@ const App = memo(function App() {
             </Suspense>
           </div>
         )}
-        {engineeringMode && activePage === 'scenarios' && (
+        {activePage === 'scenarios' && (
           <div className="page"><Suspense fallback={<PageFallback />}><Scenarios /></Suspense></div>
         )}
       </main>

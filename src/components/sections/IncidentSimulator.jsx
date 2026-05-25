@@ -419,6 +419,30 @@ export const IncidentSimulator = memo(function IncidentSimulator() {
         </div>
       </div>
 
+      {/* Purpose card */}
+      <div className="lab-purpose-card">
+        <div className="lab-purpose-header">
+          <span className="lab-purpose-icon">🚨</span>
+          <div>
+            <div className="lab-purpose-title">Production Incident Lab</div>
+            <div style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: 2 }}>
+              Estimated time: 30–45 min per scenario
+            </div>
+          </div>
+        </div>
+        <strong style={{ fontSize: '0.85rem', color: 'var(--heading)' }}>What you will practice:</strong>
+        <ul style={{ margin: '8px 0 12px', paddingLeft: 18, fontSize: '0.875rem', color: 'var(--text)' }}>
+          <li>Diagnosing pipeline failures using real logs and metrics</li>
+          <li>Debugging data quality issues with investigation checklists</li>
+          <li>Writing root cause analysis (RCA) and postmortem reports</li>
+        </ul>
+        <div className="lab-skills-row">
+          {['Incident Response', 'Root Cause Analysis', 'Pipeline Debugging', 'Monitoring'].map(s => (
+            <span key={s} className="lab-skill-badge">{s}</span>
+          ))}
+        </div>
+      </div>
+
       {/* Stats bar */}
       <div className="inc-stats-bar">
         <div className="inc-stat-chip inc-stat-resolved">
