@@ -2,7 +2,7 @@ import { memo, useState, useEffect } from 'react';
 import { CodeBlock } from '../ui/CodeBlock.jsx';
 import useLearningStore from '../../store/learningStore.js';
 
-const TABS = ['Overview', 'Architecture', 'Implementation', 'Dataset', 'Interview Q', 'Resume'];
+const TABS = ['Overview', 'Architecture', 'Steps', 'Interview', 'Resume', 'Senior Notes'];
 
 function DifficultyBadge({ level }) {
   const map = {
@@ -23,11 +23,26 @@ function OverviewTab({ project }) {
     <div className="proj-tab-content">
       <div className="proj-overview-grid">
         <div className="proj-overview-main">
-          <h3>Project Overview</h3>
-          <p className="proj-overview-text">{project.overview}</p>
           <h3>Business Problem</h3>
           <p className="proj-overview-text">{project.businessProblem}</p>
+
+          {project.ingestionStrategy && (
+            <>
+              <h3>Ingestion Strategy</h3>
+              <p className="proj-overview-text">{project.ingestionStrategy}</p>
+            </>
+          )}
+
+          {project.challenges?.length > 0 && (
+            <>
+              <h3>Key Engineering Challenges</h3>
+              <ul className="proj-challenges-list proj-challenges-list--main">
+                {project.challenges.map((c, i) => <li key={i}>{c}</li>)}
+              </ul>
+            </>
+          )}
         </div>
+
         <div className="proj-overview-meta">
           <div className="proj-meta-card">
             <span className="proj-meta-label">Difficulty</span>
@@ -45,12 +60,16 @@ function OverviewTab({ project }) {
               ))}
             </div>
           </div>
-          <div className="proj-meta-card">
-            <span className="proj-meta-label">Challenges</span>
-            <ul className="proj-challenges-list">
-              {project.challenges.map((c, i) => <li key={i}>{c}</li>)}
-            </ul>
-          </div>
+          {project.tags?.length > 0 && (
+            <div className="proj-meta-card">
+              <span className="proj-meta-label">Tags</span>
+              <div className="proj-tools-list">
+                {project.tags.map(t => (
+                  <span key={t} className="proj-tag proj-tag--meta">{t}</span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -62,6 +81,7 @@ function ArchitectureTab({ project }) {
   return (
     <div className="proj-tab-content">
       <p className="proj-arch-desc">{arch.description}</p>
+
       {arch.layers && (
         <>
           <h3>Architecture Layers</h3>
@@ -76,6 +96,7 @@ function ArchitectureTab({ project }) {
           </div>
         </>
       )}
+
       {arch.components && (
         <>
           <h3>Components</h3>
@@ -86,6 +107,7 @@ function ArchitectureTab({ project }) {
           </div>
         </>
       )}
+
       {project.productionConsiderations?.length > 0 && (
         <>
           <h3>Production Considerations</h3>
@@ -94,11 +116,59 @@ function ArchitectureTab({ project }) {
           </ul>
         </>
       )}
+
+      {project.cicdStrategy && (
+        <>
+          <h3>CI/CD Strategy</h3>
+          <p className="proj-overview-text">{project.cicdStrategy}</p>
+        </>
+      )}
+
+      <div className="proj-arch-two-col">
+        {project.costOptimization?.length > 0 && (
+          <div>
+            <h3>Cost Optimisation</h3>
+            <ul className="proj-prod-list">
+              {project.costOptimization.map((c, i) => <li key={i}>{c}</li>)}
+            </ul>
+          </div>
+        )}
+        {project.securityConsiderations?.length > 0 && (
+          <div>
+            <h3>Security Considerations</h3>
+            <ul className="proj-prod-list">
+              {project.securityConsiderations.map((c, i) => <li key={i}>{c}</li>)}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {project.sampleData && (
+        <>
+          <h3>Schema</h3>
+          <p className="proj-dataset-desc">{project.sampleData.description}</p>
+          <div className="proj-dataset-tables">
+            {project.sampleData.tables.map(t => (
+              <div key={t.name} className="proj-table-card">
+                <div className="proj-table-header">
+                  <span className="proj-table-name">{t.name}</span>
+                  <span className="proj-table-count">{t.columns.length} cols</span>
+                </div>
+                <div className="proj-table-cols">
+                  {t.columns.map(c => (
+                    <span key={c} className="proj-col-chip">{c}</span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
-function ImplementationTab({ project }) {
+function StepsTab({ project }) {
   const [activeStep, setActiveStep] = useState(0);
   const step = project.steps[activeStep];
 
@@ -144,76 +214,60 @@ function ImplementationTab({ project }) {
   );
 }
 
-function DatasetTab({ project }) {
-  const { sampleData } = project;
-  return (
-    <div className="proj-tab-content">
-      <p className="proj-dataset-desc">{sampleData.description}</p>
-      <div className="proj-dataset-tables">
-        {sampleData.tables.map(t => (
-          <div key={t.name} className="proj-table-card">
-            <div className="proj-table-header">
-              <span className="proj-table-name">{t.name}</span>
-              <span className="proj-table-count">{t.columns.length} columns</span>
-            </div>
-            <div className="proj-table-cols">
-              {t.columns.map(c => (
-                <span key={c} className="proj-col-chip">{c}</span>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-      {sampleData.sampleRows?.length > 0 && (
-        <>
-          <h3>Sample Rows</h3>
-          <div className="proj-sample-table">
-            <div className="proj-sample-header">
-              {Object.keys(sampleData.sampleRows[0]).map(k => (
-                <span key={k} className="proj-sample-th">{k}</span>
-              ))}
-            </div>
-            {sampleData.sampleRows.map((row, i) => (
-              <div key={i} className="proj-sample-row">
-                {Object.values(row).map((v, j) => (
-                  <span key={j} className="proj-sample-td">{String(v)}</span>
-                ))}
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
 function InterviewTab({ project }) {
-  const [revealed, setRevealed] = useState({});
+  const [openIdx, setOpenIdx] = useState(null);
+  const toggle = i => setOpenIdx(prev => prev === i ? null : i);
+
+  // Use rich talking points if available, fall back to plain questions
+  const items = project.interviewTalkingPoints ?? project.interviewQuestions.map(q => ({ question: q }));
+
   return (
     <div className="proj-tab-content">
-      <p className="proj-interview-intro">Practice these project-specific interview questions. Click to reveal discussion points.</p>
+      <p className="proj-interview-intro">
+        Click each question to see a model answer and the follow-up questions interviewers typically ask next.
+      </p>
       <div className="proj-iq-list">
-        {project.interviewQuestions.map((q, i) => (
-          <div
-            key={i}
-            className={`proj-iq-item${revealed[i] ? ' proj-iq-item--open' : ''}`}
-            role="button"
-            tabIndex={0}
-            onClick={() => setRevealed(r => ({ ...r, [i]: !r[i] }))}
-            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setRevealed(r => ({ ...r, [i]: !r[i] })); }}
-          >
-            <div className="proj-iq-question">
-              <span className="proj-iq-num">Q{i + 1}</span>
-              <span>{q}</span>
-              <span className="proj-iq-toggle">{revealed[i] ? '▲' : '▼'}</span>
-            </div>
-            {revealed[i] && (
-              <div className="proj-iq-hint">
-                <p>💡 Discuss: your specific implementation decision, the trade-off you made, and what you learned. Reference actual code or architecture choices from this project.</p>
+        {items.map((item, i) => {
+          const q    = typeof item === 'string' ? item : item.question;
+          const ans  = typeof item === 'object' ? item.answer : null;
+          const fups = typeof item === 'object' ? item.followUps : null;
+          const isOpen = openIdx === i;
+          return (
+            <div
+              key={i}
+              className={`proj-iq-item${isOpen ? ' proj-iq-item--open' : ''}`}
+              role="button"
+              tabIndex={0}
+              onClick={() => toggle(i)}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') toggle(i); }}
+            >
+              <div className="proj-iq-question">
+                <span className="proj-iq-num">Q{i + 1}</span>
+                <span>{q}</span>
+                <span className="proj-iq-toggle">{isOpen ? '▲' : '▼'}</span>
               </div>
-            )}
-          </div>
-        ))}
+              {isOpen && (
+                <div className="proj-iq-answer">
+                  {ans ? (
+                    <>
+                      <p className="proj-iq-answer-text">{ans}</p>
+                      {fups?.length > 0 && (
+                        <div className="proj-iq-followups">
+                          <span className="proj-iq-followups-label">Likely follow-ups:</span>
+                          <ul>
+                            {fups.map((f, fi) => <li key={fi}>{f}</li>)}
+                          </ul>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <p>💡 Discuss: your specific implementation decision, the trade-off you made, and what you learned. Reference actual code or architecture choices from this project.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -258,16 +312,62 @@ function ResumeTab({ project }) {
   );
 }
 
+function SeniorNotesTab({ project }) {
+  const notes = project.seniorNotes;
+  if (!notes) {
+    return (
+      <div className="proj-tab-content">
+        <p className="proj-overview-text">Senior engineering notes not yet available for this project.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="proj-tab-content">
+      <div className="proj-senior-grid">
+        {notes.juniorsMiss?.length > 0 && (
+          <div className="proj-senior-card proj-senior-card--miss">
+            <div className="proj-senior-card-header">
+              <span className="proj-senior-icon">⚠</span>
+              <h3>What Juniors Often Miss</h3>
+            </div>
+            <ul>
+              {notes.juniorsMiss.map((n, i) => <li key={i}>{n}</li>)}
+            </ul>
+          </div>
+        )}
+        {notes.productionRealities?.length > 0 && (
+          <div className="proj-senior-card proj-senior-card--prod">
+            <div className="proj-senior-card-header">
+              <span className="proj-senior-icon">⚙</span>
+              <h3>What Breaks in Production</h3>
+            </div>
+            <ul>
+              {notes.productionRealities.map((n, i) => <li key={i}>{n}</li>)}
+            </ul>
+          </div>
+        )}
+      </div>
+      {notes.interviewersFocus && (
+        <div className="proj-senior-focus">
+          <div className="proj-senior-card-header">
+            <span className="proj-senior-icon">◎</span>
+            <h3>What Interviewers Actually Care About</h3>
+          </div>
+          <p>{notes.interviewersFocus}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export const ProjectDetail = memo(function ProjectDetail({ project, onClose }) {
   const [activeTab, setActiveTab] = useState(0);
   const completedProjects = useLearningStore(s => s.completedProjects);
-  const completeProject = useLearningStore(s => s.completeProject);
-  const isComplete = !!completedProjects[project.id];
+  const completeProject   = useLearningStore(s => s.completeProject);
+  const isComplete        = !!completedProjects[project.id];
 
   useEffect(() => {
-    function onKeyDown(e) {
-      if (e.key === 'Escape') onClose();
-    }
+    function onKeyDown(e) { if (e.key === 'Escape') onClose(); }
     window.addEventListener('keydown', onKeyDown);
     document.body.style.overflow = 'hidden';
     return () => {
@@ -275,6 +375,8 @@ export const ProjectDetail = memo(function ProjectDetail({ project, onClose }) {
       document.body.style.overflow = '';
     };
   }, [onClose]);
+
+  const hasSeniorNotes = !!project.seniorNotes;
 
   return (
     <div className="proj-overlay" role="dialog" aria-modal="true" aria-label={project.title}>
@@ -294,12 +396,7 @@ export const ProjectDetail = memo(function ProjectDetail({ project, onClose }) {
               </div>
             </div>
           </div>
-          <button
-            type="button"
-            className="proj-close-btn"
-            onClick={onClose}
-            aria-label="Close project detail"
-          >
+          <button type="button" className="proj-close-btn" onClick={onClose} aria-label="Close project detail">
             ✕
           </button>
         </div>
@@ -320,27 +417,30 @@ export const ProjectDetail = memo(function ProjectDetail({ project, onClose }) {
         </div>
 
         <div className="proj-tabs" role="tablist">
-          {TABS.map((tab, i) => (
-            <button
-              key={tab}
-              type="button"
-              role="tab"
-              aria-selected={i === activeTab}
-              className={`proj-tab${i === activeTab ? ' proj-tab--active' : ''}`}
-              onClick={() => setActiveTab(i)}
-            >
-              {tab}
-            </button>
-          ))}
+          {TABS.map((tab, i) => {
+            if (tab === 'Senior Notes' && !hasSeniorNotes) return null;
+            return (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={i === activeTab}
+                className={`proj-tab${i === activeTab ? ' proj-tab--active' : ''}`}
+                onClick={() => setActiveTab(i)}
+              >
+                {tab}
+              </button>
+            );
+          })}
         </div>
 
         <div className="proj-modal-body">
           {activeTab === 0 && <OverviewTab project={project} />}
           {activeTab === 1 && <ArchitectureTab project={project} />}
-          {activeTab === 2 && <ImplementationTab project={project} />}
-          {activeTab === 3 && <DatasetTab project={project} />}
-          {activeTab === 4 && <InterviewTab project={project} />}
-          {activeTab === 5 && <ResumeTab project={project} />}
+          {activeTab === 2 && <StepsTab project={project} />}
+          {activeTab === 3 && <InterviewTab project={project} />}
+          {activeTab === 4 && <ResumeTab project={project} />}
+          {activeTab === 5 && <SeniorNotesTab project={project} />}
         </div>
       </div>
     </div>

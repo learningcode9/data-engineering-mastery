@@ -4032,6 +4032,38 @@ button:not(:disabled):active { transform: scale(0.97); }
   border-radius: 8px; padding: 10px 14px; line-height: 1.5;
 }
 
+/* Interview tab — rich answer/followup expansion */
+.proj-iq-answer { padding: 0 14px 14px 14px; display: flex; flex-direction: column; gap: 10px; }
+.proj-iq-answer-text { font-size: 13px; color: var(--text); line-height: 1.6; margin: 0; background: var(--bg); border-radius: 8px; padding: 10px 12px; }
+.proj-iq-followups { background: #f0fdf450; border: 1px solid #2f756e30; border-radius: 8px; padding: 10px 12px; }
+.proj-iq-followups-label { font-size: 11px; font-weight: 700; color: #2f756e; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 6px; }
+.proj-iq-followups ul { margin: 0; padding-left: 18px; }
+.proj-iq-followups li { font-size: 12px; color: var(--muted); line-height: 1.5; margin-bottom: 3px; }
+
+/* Architecture tab — two-column cost/security grid */
+.proj-arch-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 4px; }
+@media (width <= 760px) { .proj-arch-two-col { grid-template-columns: 1fr; } }
+
+/* Tag variant for meta sidebar */
+.proj-tag--meta { background: var(--bg); color: var(--muted); border: 1px solid var(--border); }
+
+/* Senior Notes tab */
+.proj-senior-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+@media (width <= 760px) { .proj-senior-grid { grid-template-columns: 1fr; } }
+.proj-senior-card { border-radius: 10px; padding: 16px; border: 1px solid; }
+.proj-senior-card--miss { background: #fff7ed; border-color: #f59e0b40; }
+.proj-senior-card--prod { background: #fef2f2; border-color: #ef444440; }
+.dark-mode .proj-senior-card--miss { background: #431407; border-color: #f59e0b30; }
+.dark-mode .proj-senior-card--prod { background: #450a0a; border-color: #ef444430; }
+.proj-senior-card-header { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.proj-senior-card-header h3 { font-size: 13px; font-weight: 700; margin: 0; color: var(--text); }
+.proj-senior-icon { font-size: 16px; flex-shrink: 0; }
+.proj-senior-card ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; }
+.proj-senior-card li { font-size: 12px; color: var(--text); line-height: 1.5; }
+.proj-senior-focus { border: 1px solid #2f756e30; border-radius: 10px; padding: 16px; background: #f0fdf450; }
+.dark-mode .proj-senior-focus { background: #052e1640; border-color: #2f756e40; }
+.proj-senior-focus p { font-size: 13px; color: var(--text); line-height: 1.6; margin: 10px 0 0; }
+
 @media (width <= 900px) {
   .proj-overview-grid { grid-template-columns: 1fr; }
   .proj-impl-layout { grid-template-columns: 1fr; }
