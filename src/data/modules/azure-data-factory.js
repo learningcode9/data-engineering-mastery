@@ -30,9 +30,16 @@ export const adfModule = {
   Trigger: Schedule — daily at 02:00 UTC`,
           expectedOutput: `Pipeline completes in ~4 minutes. 42,000 rows loaded. Slack notified.`,
           interview: {
-            question: 'What is the difference between a Pipeline and an Activity in ADF?',
-            answer: 'A pipeline is the container. An activity is a single step inside it. One pipeline can have many activities connected by success/failure/completion dependency conditions.',
+            question: 'How does ADF fit into a modern Azure data platform, and what are its limitations?',
+            answer: 'ADF is the orchestration and ingestion layer — it moves data, not transforms it. It connects 90+ sources to Azure storage with no-code Copy Activities, handles scheduling, retries, and alerting. Use ADF when: ingesting from many heterogeneous sources, orchestrating Databricks notebooks or Synapse pipelines, or building visual low-code ETL that non-engineers can maintain. ADF limitations: transformation logic inside ADF (Data Flows) is limited — complex PySpark logic should run in Databricks. ADF pipelines can become unwieldy at 100+ pipelines without a metadata-driven approach. For Python-native orchestration with more flexibility, Apache Airflow (Azure MWAA or self-hosted) is a stronger fit.',
           },
+          commonMistakes: [
+            'Building transformation logic inside ADF Data Flows for complex operations — Data Flows are good for simple column operations; complex business logic belongs in Databricks notebooks called via Notebook Activity.',
+            'Not parameterizing pipelines from day one — hardcoded pipeline for each table or date is an antipattern. Every new pipeline should have load_date and table_name parameters minimum.',
+            'Storing secrets in Linked Services directly — always reference Azure Key Vault. ADF pipelines are stored in Git; hardcoded secrets would be committed.',
+          ],
+          productionContext: 'In enterprise Azure data platforms, ADF typically handles ingestion (source → Bronze ADLS) and orchestration (trigger Databricks notebooks for Silver/Gold). The transformation logic lives in Databricks. ADF becomes the "traffic controller" that sequences activities, handles retries, and sends alerts — while keeping compute in specialized engines.',
+          performanceTip: 'Use the Integration Runtime (Azure IR) in the same region as your source and sink to minimize data transfer latency and egress costs. For on-premises sources, use a Self-Hosted Integration Runtime on a VM near the source. The IR region choice can mean the difference between 5 MB/s and 50 MB/s Copy Activity throughput.',
           practice: 'Name the four core objects in Azure Data Factory and describe what each one does in one sentence.',
           hint: 'Think about: what holds activities together (Pipeline), what does one step (Activity), what describes data location (Dataset), and what holds credentials (Linked Service).',
           solution: `# Pipeline: logical container that groups activities into a workflow.
@@ -197,8 +204,15 @@ Step 2 — ForEach: "LoadEachTable"
           expectedOutput: `Pipeline loads N tables in parallel. Adding a new table to etl.config automatically includes it next run — no pipeline changes needed.`,
           interview: {
             question: 'What is the advantage of a metadata-driven pipeline using Lookup + ForEach?',
-            answer: 'The pipeline is self-configuring. A config table controls which tables load, their source paths, and their targets. Adding a new source requires only a DB row insert — no pipeline editing, no redeployment.',
+            answer: 'The pipeline is self-configuring. A config table controls which tables load, their source paths, and their targets. Adding a new source requires only a DB row insert — no pipeline editing, no redeployment. This pattern also enables centralized monitoring (all loads logged in one run log table), easy disabling of individual tables without touching the pipeline (set is_active = 0), and self-documenting pipeline behavior.',
           },
+          commonMistakes: [
+            'Setting ForEach Batch Count too high — 20 parallel Copy Activities all hitting the same SQL Server source can overwhelm it. Start with 3–5 and tune based on source capacity.',
+            'Not handling per-item failures inside ForEach — if one Copy fails, ForEach continues with the rest by default. Add error handling inside the ForEach to log failures per item and send notifications.',
+            'Using ForEach for sequential dependencies — if Table B must load after Table A, use a sequential pipeline chain, not a parallel ForEach.',
+          ],
+          productionContext: 'Metadata-driven pipelines are standard at enterprises with 20+ source tables. The config table becomes a self-service catalog: data owners can add new sources by inserting a row, and the pipeline picks them up on the next scheduled run. Combine with a control table that logs each load\'s success/failure for a complete audit trail.',
+          performanceTip: 'In ForEach, set Batch Count = 5–10 for database sources and 10–20 for storage sources (Blob/ADLS). Database sources have connection pool limits; hitting 50 concurrent connections to a SQL Server causes throttling. Storage sources can handle much higher parallelism.',
           practice: 'Explain how you would use Lookup and ForEach to build a pipeline that loads 20 CSV files from different paths into 20 SQL staging tables. Where would you store the table-to-path mapping?',
           hint: 'Store the mapping in a SQL config table: (table_name, source_path). Lookup reads it. ForEach iterates. Copy uses @item().source_path and @item().table_name.',
           solution: `# 1. Config table (created once):
@@ -427,9 +441,16 @@ Activity 3 — StoredProc "UpdateWatermark":
   EXEC dbo.usp_update_watermark 'orders', '@{pipeline().parameters.run_time}'`,
           expectedOutput: `Run 1 (Jan 14): watermark=2023-12-31, copies 42,000 rows, updates watermark to Jan 14\nRun 2 (Jan 15): watermark=Jan 14, copies only 4,200 new rows — 10x less data`,
           interview: {
-            question: 'What is a watermark in ADF incremental loading?',
-            answer: 'A watermark is a stored marker (timestamp or max ID) recording the last successfully processed record. Each run reads records newer than the watermark, processes them, then updates the watermark. This ensures no records are missed or double-processed.',
+            question: 'How do you handle late-arriving data in an ADF watermark-based pipeline?',
+            answer: 'Late-arriving data (records that appear in the source after their event time) can be missed if the watermark has already advanced past them. Two strategies: (1) Watermark buffer — subtract 2–4 hours from the watermark lower bound: WHERE created_at > @{old_watermark} - 2 HOURS. This re-processes the overlap window and catches late records; use MERGE at the sink to handle the duplicate rows idempotently. (2) Two-watermark approach — one watermark for "first load" and a separate "repair" pipeline that re-scans a 48-hour lookback window nightly. The choice depends on how late your source can be: if records arrive within minutes, a 1-hour buffer is sufficient; if they can arrive days late (a connected system that was offline), use the repair approach.',
           },
+          commonMistakes: [
+            'Updating the watermark BEFORE the Copy Activity succeeds — if Copy fails after watermark update, data from that window is permanently skipped. Always update watermark on success only, using On Success dependency.',
+            'Not using MERGE at the sink — if the pipeline runs twice (retry after failure), two INSERTs for the same rows create duplicates. Use UPSERT/MERGE so replays are idempotent.',
+            'Using created_at as watermark when the source supports updates — if rows can be updated after creation, use updated_at (or a max(updated_at, created_at) expression) as the watermark column.',
+          ],
+          productionContext: 'The watermark pattern is the most commonly tested ADF concept in data engineering interviews. In production, the watermarks table is a central control table maintained by the pipeline team. Each environment (dev/test/prod) has its own watermarks table so dev runs don\'t advance production watermarks. A separate "backfill" pipeline accepts a date range parameter for recovery scenarios.',
+          performanceTip: 'Index the watermark column (created_at or updated_at) in the source database. Without an index, the WHERE created_at > @watermark filter does a full table scan on every pipeline run. On a 500M-row table, this can be the difference between a 2-second and a 10-minute query.',
           practice: 'Describe the three steps in a watermark-based incremental load pipeline. What table stores the watermark and what happens if the pipeline fails mid-run?',
           hint: 'Steps: (1) Lookup reads old watermark, (2) Copy loads records newer than watermark up to now, (3) Stored Proc updates watermark. On failure: watermark is NOT updated, so next run retries the same window safely.',
           solution: `# Step 1 — Lookup Activity:
@@ -790,6 +811,148 @@ stages:
         'Deploy via CI/CD: Git-backed ADF → Azure DevOps pipeline → parameterised deploy to Test then Prod.',
       ],
       output: 'Production-grade, three-stage medallion pipeline with CI/CD, error alerting, custom logging, and both scheduled and ad-hoc execution.',
+    },
+  ],
+
+  orchestrationPatterns: [
+    {
+      id: 'orch-airflow-vs-adf',
+      title: 'Airflow vs ADF — When to Use Each',
+      difficulty: 'Advanced',
+      explanation: 'Apache Airflow and Azure Data Factory are both orchestration tools but serve different workflows. ADF is visual, low-code, and Azure-native. Airflow is Python-native, code-first, and cloud-agnostic.',
+      why: 'Interviewers ask this comparison frequently. Understanding the tradeoffs demonstrates architectural maturity and shows you can match the tool to the team\'s needs.',
+      syntax: `// ADF strengths:
+// - Visual pipeline builder (accessible to non-engineers)
+// - 90+ native connectors (no code for SAP, Salesforce, etc.)
+// - Native Azure integration (no infrastructure to manage)
+// - Built-in monitoring and alerting UI
+
+// Airflow strengths:
+// - Python code → version-controlled, testable DAGs
+// - Unlimited custom operators (any Python library)
+// - Dynamic DAG generation (generate 100 tasks programmatically)
+// - Complex dependencies (conditional branches, XCom data passing)
+// - Community ecosystem (Astronomer, provider packages for every cloud)`,
+      example: `# Airflow DAG example — Medallion pipeline
+from airflow import DAG
+from airflow.providers.databricks.operators.databricks import DatabricksRunNowOperator
+from airflow.providers.microsoft.azure.operators.adls import ADLSDeleteOperator
+from airflow.utils.dates import days_ago
+from datetime import timedelta
+
+default_args = {
+    "owner": "data-engineering",
+    "retries": 2,
+    "retry_delay": timedelta(minutes=5),
+    "email_on_failure": True,
+    "email": ["data-eng-alerts@company.com"],
+}
+
+with DAG(
+    dag_id="medallion_nightly",
+    default_args=default_args,
+    schedule_interval="0 2 * * *",   # 2am daily
+    start_date=days_ago(1),
+    catchup=False,
+    tags=["medallion", "production"],
+) as dag:
+
+    bronze_job = DatabricksRunNowOperator(
+        task_id="bronze_ingest",
+        databricks_conn_id="databricks_prod",
+        job_id=1001,
+        notebook_params={"load_date": "{{ ds }}"},  # Airflow date template
+    )
+
+    silver_job = DatabricksRunNowOperator(
+        task_id="silver_transform",
+        databricks_conn_id="databricks_prod",
+        job_id=1002,
+        notebook_params={"load_date": "{{ ds }}"},
+    )
+
+    gold_job = DatabricksRunNowOperator(
+        task_id="gold_aggregate",
+        databricks_conn_id="databricks_prod",
+        job_id=1003,
+        notebook_params={"load_date": "{{ ds }}"},
+    )
+
+    # Sequential dependency chain
+    bronze_job >> silver_job >> gold_job`,
+      expectedOutput: 'DAG runs bronze → silver → gold in sequence nightly, with retries and email alerts on failure',
+      interview: {
+        question: 'Your team has 5 data engineers who all know Python. Would you use ADF or Airflow as your orchestration layer? Why?',
+        answer: 'Airflow is the stronger choice for a Python-native team. Reasons: (1) DAGs are Python files — testable with pytest, reviewable via PR, versioned in Git, and portable across clouds. (2) Dynamic DAG generation handles cases like "create one task per table" with a for loop — ADF needs a config table + ForEach. (3) XCom enables data passing between tasks without a database table. (4) The Airflow provider ecosystem (Databricks, Azure, dbt, Slack) covers all modern DE tools. Counter-argument: ADF wins if the team includes non-engineers who need to build and debug pipelines visually, or if you need connectors like SAP/Mainframe that Airflow lacks. In practice, many Azure shops run both: ADF for ingestion from complex sources, Airflow for orchestration of Databricks transformation notebooks.',
+      },
+      commonMistakes: [
+        'Using Airflow to run heavyweight data transformations — Airflow is an orchestrator, not a compute engine. Tasks should trigger Spark jobs, not process data themselves.',
+        'Not setting catchup=False when you don\'t want historical backfill — if catchup=True and your start_date is 1 year ago, Airflow tries to run 365 DAG runs on deployment.',
+        'Using a single Airflow worker for everything — production Airflow needs at minimum: separate scheduler, multiple workers for parallel tasks, and a separate metadata database (not SQLite).',
+      ],
+      productionContext: 'Azure Managed Airflow (Azure MWAA or Airflow on AKS) is the production deployment choice. Team DAGs are stored in Azure Blob; MWAA syncs them automatically. Airflow connections (Databricks, Azure SQL, Event Hubs) are stored in the Airflow metadata DB encrypted — no secrets in DAG code.',
+      performanceTip: 'Set concurrency limits at the DAG and task pool level to prevent Airflow from overwhelming downstream systems. Use pools to cap parallel tasks that hit the same database source. Example: create a pool "databricks_pool" with 10 slots; all Databricks tasks draw from it, capping concurrent Databricks job submissions.',
+    },
+    {
+      id: 'orch-idempotency',
+      title: 'Idempotent Pipeline Design',
+      difficulty: 'Advanced',
+      explanation: 'An idempotent pipeline produces the same result regardless of how many times it runs for the same input. Re-running a pipeline (for retries, backfill, or bug fixes) should not create duplicates or inconsistent data.',
+      why: 'Idempotency is one of the most important properties of production pipelines. Without it, retries after failures corrupt data. With it, you can re-run any pipeline at any time without fear.',
+      syntax: `// Idempotent patterns:
+// 1. DELETE + INSERT (partition overwrite):
+//    DELETE FROM gold.orders WHERE order_date = @load_date
+//    INSERT INTO gold.orders SELECT ... WHERE order_date = @load_date
+
+// 2. MERGE / UPSERT:
+//    MERGE target USING source ON target.key = source.key
+//    WHEN MATCHED → UPDATE
+//    WHEN NOT MATCHED → INSERT
+
+// 3. Delta overwrite by partition:
+//    df.write.format("delta")
+//       .mode("overwrite")
+//       .option("replaceWhere", f"order_date = '{load_date}'")
+//       .save("...")
+
+// 4. Watermark idempotency:
+//    Update watermark ONLY after successful load
+//    On failure, same window re-processes (safe with MERGE at sink)`,
+      example: `# Idempotent Databricks notebook pattern:
+from delta.tables import DeltaTable
+from pyspark.sql.functions import col
+
+load_date = dbutils.widgets.get("load_date")
+
+# Read only this date's Silver data
+silver = spark.table("silver.orders").filter(col("order_date") == load_date)
+
+# Compute Gold aggregation
+gold_day = silver.groupBy("product_category") \
+    .agg({"amount": "sum", "order_id": "count"}) \
+    .withColumn("order_date", lit(load_date))
+
+# Idempotent write: replace only this date's partition
+# Running this 10 times produces the same Gold rows for load_date
+gold_day.write \
+    .format("delta") \
+    .mode("overwrite") \
+    .option("replaceWhere", f"order_date = '{load_date}'") \
+    .saveAsTable("gold.daily_revenue")
+
+print(f"Gold loaded for {load_date}: {gold_day.count()} rows")`,
+      expectedOutput: 'Running for 2025-01-15 five times produces exactly the same gold.daily_revenue rows for that date',
+      interview: {
+        question: 'How do you design a pipeline so that re-running it for the same date produces the same result?',
+        answer: 'Three techniques depending on the storage layer: (1) Partition overwrite — DELETE WHERE load_date = X then INSERT, or Delta replaceWhere. Exactly replaces that date\'s data on every run. Best for Gold aggregation tables. (2) MERGE/UPSERT — ON (natural key), UPDATE if match, INSERT if new. Best for Silver tables where rows can arrive out of order. (3) Watermark update on success only — the watermark doesn\'t advance if the pipeline fails, so the next run reprocesses the same window and MERGE makes it idempotent at the sink. The key principle: separate the pipeline into a "pure computation" phase (input → output, same every time for same input) and a "commit" phase (update control tables, advance watermarks). Only the commit phase should be non-idempotent, and it should only run on success.',
+      },
+      commonMistakes: [
+        'Using INSERT without a prior DELETE for date-partitioned tables — on retry, you get double rows for that date. Always overwrite the date partition.',
+        'Checking idempotency only for the happy path — test idempotency by running the pipeline twice and comparing row counts. Also test failure recovery: kill the pipeline mid-run, re-run, verify correctness.',
+        'Making idempotency more complex than needed — for most Gold aggregation tables, "DELETE date + INSERT date" is simpler and more reliable than MERGE.',
+      ],
+      productionContext: 'Every production pipeline at data-mature companies has a documented "re-run procedure." The procedure should be: "Pass load_date parameter, pipeline is idempotent, safe to re-run." If re-running requires manual cleanup, the pipeline is not production-ready.',
+      performanceTip: 'Delta replaceWhere is the most efficient idempotent overwrite for partitioned tables — it only rewrites the target partition\'s files, not the entire table. Compare to overwrite mode which rewrites everything. For a 1TB Gold table with daily partitions, replaceWhere rewrites ~3GB (one day) vs 1TB (full overwrite).',
     },
   ],
 };

@@ -23,12 +23,16 @@ export const fabricModule = {
 //         → Semantic Model → Power BI Dashboard`,
           expectedOutput: 'End-to-end pipeline from raw data to Power BI in a single platform with no external storage configuration',
           interview: {
-            question: 'How does Microsoft Fabric differ from Azure Synapse Analytics?',
-            answer: 'Fabric is a complete SaaS-based platform built on OneLake — it includes Synapse-like capabilities (Spark, SQL) plus Power BI, Data Factory, and Real-Time Intelligence all under one roof with unified governance. Synapse requires separate storage, compute, and linked service configuration. Fabric removes that complexity and adds Direct Lake mode for near-instant Power BI queries without import.',
+            question: 'How does Microsoft Fabric differ from Azure Synapse Analytics, and when would you recommend migrating?',
+            answer: 'Fabric is a complete SaaS platform built on OneLake — it includes Synapse-like capabilities (Spark, SQL) plus Power BI, Data Factory, and Real-Time Intelligence under one roof with unified governance and billing. Synapse requires you to wire together separate storage accounts, compute pools, linked services, and Power BI workspaces. Fabric removes that infrastructure overhead and adds Direct Lake mode for near-instant Power BI queries without import. Recommend migrating when: the team wants reduced operational overhead, you\'re already deep in Power BI and Azure, or you need to eliminate the Synapse → Power BI refresh latency. Keep Synapse if you have heavy dedicated SQL pool workloads or complex existing pipelines not yet supported in Fabric.',
           },
-          practice: 'List 5 item types you can create in a Fabric workspace and what each one is used for.',
-          hint: 'Think: where does data live, how is it transformed, how is it queried, and how is it visualised?',
-          solution: 'Lakehouse (Delta tables + SQL analytics), Warehouse (T-SQL warehouse), Notebook (PySpark/SparkSQL), Pipeline (orchestration/copy), Semantic Model (Power BI data model)',
+          commonMistakes: [
+            'Treating Fabric as just "Synapse with a new UI" — Fabric is a fundamentally different architecture. OneLake eliminates storage silos; Direct Lake eliminates import refresh. These change how you design your data estate.',
+            'Creating separate storage accounts instead of using OneLake — defeats the purpose of Fabric. All data should live in OneLake to benefit from Shortcuts, Direct Lake, and unified governance.',
+            'Licensing confusion: Fabric requires F-SKU or Power BI Premium P-SKU — it does not run on standard Power BI Pro licenses.',
+          ],
+          productionContext: 'Enterprises migrating from Synapse typically run Fabric alongside Synapse for 6–12 months: new workloads go Fabric-native, existing Synapse pipelines migrate gradually. The migration path: replace ADLS Gen2 storage with OneLake Shortcuts first (no data movement), then migrate pipelines and notebooks, then switch semantic models to Direct Lake.',
+          performanceTip: 'Fabric Spark automatically scales compute based on workload — you don\'t pre-allocate a fixed cluster. For cost control, use Fabric capacity bursting limits and set workspace-level consumption budgets in the Admin portal.',
         },
       ],
     },
@@ -61,12 +65,16 @@ df = spark.read.format("delta").load(
 df = spark.read.format("delta").table("customers")`,
           expectedOutput: 'Spark DataFrame loaded from Delta table on OneLake',
           interview: {
-            question: 'What is a OneLake Shortcut and when would you use one?',
-            answer: 'A Shortcut is a pointer to data stored in another location — another OneLake path, ADLS Gen2, S3, or GCS. It virtualises external data inside a Fabric Lakehouse without copying it. Use Shortcuts when you need to query existing cloud storage without a data migration, or when you want multiple Lakehouses to share the same underlying data.',
+            question: 'What is a OneLake Shortcut and when would you use one over copying data?',
+            answer: 'A Shortcut is a virtual pointer to data stored in another location — another OneLake path, ADLS Gen2, S3, or GCS — without physically copying the data. Use Shortcuts when: (1) data already exists in ADLS or S3 and you want to query it from Fabric immediately without a migration, (2) multiple Lakehouses in different workspaces need to share the same dataset without duplication, (3) you want to bring external data under Fabric governance and query it with Spark or SQL Analytics Endpoint. Copy data into OneLake when: you need full Delta ACID semantics, OPTIMIZE/ZORDER, or write access from Fabric pipelines — Shortcuts are read-only for S3/ADLS sources.',
           },
-          practice: 'Explain the difference between OneLake Shortcuts and data copy. When is each approach appropriate?',
-          hint: 'Consider data governance, cost, and latency trade-offs.',
-          solution: 'Shortcuts reference data in place (no copy, lower cost, original governance applies). Data copy brings data into OneLake under Fabric governance with better query performance. Use Shortcuts for read-only access to external sources; use copy for full Fabric integration.',
+          commonMistakes: [
+            'Assuming Shortcuts give write access to external storage — S3 and ADLS Shortcuts are read-only. Only OneLake-to-OneLake Shortcuts can be writable.',
+            'Not understanding that OneLake is per-tenant not per-workspace — all workspaces in the same Fabric tenant share one OneLake, which is why Shortcuts work cross-workspace without copying.',
+            'Using ABFS paths with workspace name instead of workspace GUID in production code — names can change; GUIDs are stable.',
+          ],
+          productionContext: 'In enterprise Fabric deployments, Shortcuts are the primary migration path from Azure Data Lake Storage Gen2. The data stays in ADLS (no cost for moving petabytes), but Fabric Notebooks and SQL Analytics Endpoints can immediately query it via Shortcuts. Once teams validate the Fabric queries, they schedule a data migration to OneLake proper for full Delta Lake benefits.',
+          performanceTip: 'OneLake stores data as Delta Parquet with automatic file organization. For read performance, run OPTIMIZE on Delta tables regularly and use ZORDER on the most-queried filter columns. Fabric\'s Direct Lake reads Delta Parquet files directly from OneLake — the more compact and Z-ordered your files, the faster Power BI dashboards render.',
         },
       ],
     },
@@ -101,14 +109,60 @@ df.write.format("delta").mode("overwrite").saveAsTable("employees")
 spark.sql("OPTIMIZE employees ZORDER BY (department)")`,
           expectedOutput: 'Delta table created in Lakehouse Tables folder, queryable via SQL Analytics Endpoint',
           interview: {
-            question: 'What is the difference between a Fabric Lakehouse and a Fabric Warehouse?',
-            answer: 'A Lakehouse stores Delta files in OneLake and exposes them via a read-only SQL Analytics Endpoint — writes happen through Spark/notebooks. A Warehouse is a fully managed T-SQL environment with read/write SQL support, better suited for team-shared SQL workloads, views, and stored procedures. Both sit on OneLake; choose Lakehouse for Spark-first workloads and Warehouse for SQL-first workloads.',
+            question: 'What is the difference between a Fabric Lakehouse and a Fabric Warehouse, and how do you choose?',
+            answer: 'A Lakehouse stores Delta files in OneLake and exposes them via a read-only SQL Analytics Endpoint — writes happen through Spark/notebooks. A Warehouse is a fully managed T-SQL environment with full read/write SQL support, including CREATE TABLE, INSERT, UPDATE, stored procedures, and views. The key decision: choose Lakehouse when your team writes code (Python/Spark) and the Spark notebook workflow is the primary transformation path. Choose Warehouse when your team is SQL-first, needs T-SQL stored procedures, or has BI analysts who need to write SQL to create views and derived tables directly. Both sit on OneLake, so you can join across them.',
           },
-          practice: 'Write a Spark command to create a Delta table from a CSV file, then query it using the SQL Analytics Endpoint.',
-          hint: 'Use spark.read.csv() → write.format("delta").saveAsTable()',
-          solution: `df = spark.read.option("header", True).csv("Files/raw/orders.csv")
-df.write.format("delta").mode("overwrite").saveAsTable("orders")
-# Then in SQL: SELECT * FROM orders LIMIT 10;`,
+          commonMistakes: [
+            'Writing to Lakehouse Tables via the SQL Analytics Endpoint — it\'s read-only for T-SQL. Use Spark (saveAsTable) or the Lakehouse Files API to write.',
+            'Forgetting that the SQL Analytics Endpoint schema updates are not instantaneous — after a Spark write, there\'s a brief sync delay before new columns appear in the endpoint.',
+            'Using Files/ folder for structured data instead of Tables/ — data in Files/ is not exposed as a Delta table; the SQL Analytics Endpoint only sees Tables/.',
+          ],
+          productionContext: 'In Fabric production deployments, the standard pattern is: Pipeline or Notebook writes to Lakehouse Tables/ as Delta tables → SQL Analytics Endpoint exposes them for BI analysts who run ad-hoc T-SQL → Default Semantic Model auto-updates → Power BI reports refresh via Direct Lake within minutes of the Spark write completing.',
+          performanceTip: 'Run OPTIMIZE and VACUUM on Gold-layer Lakehouse tables after each pipeline run. Without OPTIMIZE, many small Delta files accumulate and slow both Spark reads and Direct Lake queries. Fabric Lakehouse does not auto-optimize by default — unlike Databricks which has Auto Optimize. Schedule a maintenance notebook that runs OPTIMIZE on all Gold tables nightly.',
+        },
+        {
+          id: 'fabric-lakehouse-vs-warehouse',
+          title: 'Lakehouse vs Warehouse — Decision Guide',
+          difficulty: 'Intermediate',
+          explanation: 'Fabric offers two primary data stores: Lakehouse (Delta files + Spark + SQL Analytics Endpoint) and Warehouse (managed T-SQL). They coexist on OneLake and can be cross-queried. The choice determines your write path, transformation language, and SQL feature set.',
+          why: 'Choosing the wrong store creates friction: SQL-first teams fighting Spark APIs on a Lakehouse, or Python engineers limited by T-SQL on a Warehouse. Match the store to the team\'s skillset and workload pattern.',
+          syntax: `-- Lakehouse: write via Spark, read via SQL Analytics Endpoint (read-only T-SQL)
+-- Good for: Spark transformations, medallion pipelines, ML feature stores
+
+-- Warehouse: write via T-SQL, read/write via T-SQL endpoint
+-- Good for: SQL-native teams, stored procedures, complex views, RBAC at table level
+
+-- Cross-querying (both on OneLake):
+SELECT l.customer_id, l.total_spend, w.credit_limit
+FROM MyLakehouse.dbo.gold_customers l
+JOIN MyWarehouse.dbo.credit_limits w
+  ON l.customer_id = w.customer_id`,
+          example: `// Decision matrix:
+//
+// Scenario                         → Lakehouse  or  Warehouse
+// ----------------------------------------------------------------
+// Spark notebooks primary          → Lakehouse
+// SQL stored procedures needed     → Warehouse
+// Direct Lake Power BI             → Either (both support it)
+// INSERT/UPDATE via T-SQL          → Warehouse
+// Large Spark transformations      → Lakehouse
+// Analysts writing ad-hoc SQL      → Warehouse (full T-SQL)
+// ML feature engineering           → Lakehouse
+// Shared SQL views for BI          → Warehouse
+// Medallion bronze/silver layers   → Lakehouse
+// Gold reporting layer             → Either (or both, cross-queried)`,
+          expectedOutput: 'Architecture decision that matches tool to team workflow and avoids capability gaps',
+          interview: {
+            question: 'A team of 10 has 3 data engineers writing PySpark and 7 BI analysts writing T-SQL. How do you structure a Fabric architecture?',
+            answer: 'Use both — they\'re complementary. Data engineers write Bronze and Silver layers to Lakehouses (Spark notebooks, Delta tables). The Gold layer is a Warehouse: engineers write Spark aggregations to a staging Lakehouse, then use a Copy Activity or stored procedure to land the final gold tables in the Warehouse where analysts can build views, write ad-hoc queries, and use full T-SQL. Power BI semantic models sit on the Warehouse via Direct Lake or DirectQuery. Both stores are on OneLake, so engineers can cross-query from Spark when needed.',
+          },
+          commonMistakes: [
+            'Building everything in one Lakehouse and leaving SQL analysts with a read-only endpoint — analysts can\'t create views or write queries against it. Use a Warehouse for analyst-facing Gold data.',
+            'Building everything in a Warehouse and losing Spark capabilities — you can\'t run large-scale PySpark transformations from a Warehouse.',
+            'Not using cross-querying — many teams don\'t realize they can JOIN Lakehouse and Warehouse tables in a single T-SQL or Spark query.',
+          ],
+          productionContext: 'Mature Fabric deployments typically have: 1-2 Lakehouses for engineering layers (Bronze, Silver), 1 Warehouse for Gold/reporting layers, and cross-workspace Shortcuts connecting them. The Warehouse surfaces clean data to BI teams while Lakehouses remain the engineering transformation zone.',
+          performanceTip: 'Warehouse tables support clustered columnstore indexes automatically — all writes go through Fabric\'s distributed engine. For the highest-performing Warehouse queries, partition large tables by date using table distribution and avoid cross-workspace queries for high-frequency dashboard queries (add the data to the local Warehouse instead).',
         },
         {
           id: 'fabric-medallion',
@@ -143,12 +197,16 @@ silver_df = bronze_df \
 silver_df.write.format("delta").mode("overwrite").saveAsTable("silver.orders")`,
           expectedOutput: 'Clean Delta table in silver layer, with nulls removed and types cast',
           interview: {
-            question: 'In a Fabric Medallion architecture, what do Bronze, Silver, and Gold represent?',
-            answer: 'Bronze = raw data exactly as received (no transformation, historical record). Silver = cleansed, validated, conformed data (correct types, nulls handled, deduplication). Gold = business-level aggregations and KPIs optimized for BI reporting and ML features. Each layer is a Delta table, and transformations between layers run as Spark notebooks or pipelines.',
+            question: 'How would you implement a multi-workspace Medallion architecture in Fabric, and why would you separate workspaces by layer?',
+            answer: 'Separate workspaces by layer (Bronze workspace, Silver workspace, Gold workspace) to enforce clear ownership and access control: ingestion engineers own Bronze, transformation engineers own Silver, BI/analytics teams own Gold. Cross-workspace data access uses OneLake Shortcuts — Silver reads Bronze via a Shortcut, Gold reads Silver via a Shortcut, without copying data. This also allows different Fabric capacity assignment per layer — cheaper/smaller capacity for Bronze ingestion (low compute), larger capacity for Silver Spark transformations. In smaller teams, all three layers can live in the same workspace as separate Lakehouses or schemas.',
           },
-          practice: 'Design a Medallion architecture for an e-commerce company. List what data goes in each layer and what transformations happen between layers.',
-          hint: 'Start with raw order events → cleaned orders → daily revenue aggregations',
-          solution: 'Bronze: raw JSON from order API (no changes). Silver: parse JSON, cast types, deduplicate by order_id, add ingestion timestamp. Gold: daily/weekly revenue by region and product category, joined with customer dimension.',
+          commonMistakes: [
+            'Applying business transformations in Bronze — Bronze must be immutable raw data. Any filtering or transformation in Bronze means you lose the ability to reprocess from original source.',
+            'Using overwrite mode for Silver when MERGE should be used — overwrite re-scans and rewrites the full Silver table nightly, even if only 0.1% of rows changed.',
+            'Not running data quality checks between layers — bad data from Silver should never reach Gold. Add a validation step after each layer transition.',
+          ],
+          productionContext: 'In Fabric, the Medallion pipeline typically runs as: Pipeline (Copy Activity for Bronze ingestion) → Notebook Activity (Bronze → Silver transformation) → Notebook Activity (Silver → Gold aggregation) → Stored Procedure Activity (refresh semantic model). The whole pipeline runs nightly at 2am with email alerts on failure. Incremental loading (not full refresh) is added after the initial full-load version is validated.',
+          performanceTip: 'In Fabric Spark notebooks, use Delta MERGE for Silver layer updates instead of full overwrite. A nightly full overwrite on a 10B-row Silver table takes hours; MERGE on only the rows changed in the last 24 hours takes minutes. The key: watermark the Bronze table with an ingest_timestamp and only MERGE rows where ingest_timestamp > last_successful_run.',
         },
       ],
     },
@@ -178,12 +236,16 @@ silver_df.write.format("delta").mode("overwrite").saveAsTable("silver.orders")`,
 // Each activity has: Retry count, Timeout, Dependencies (success/failure/completion)`,
           expectedOutput: 'End-to-end Medallion pipeline running on a schedule with email alerts on failure',
           interview: {
-            question: 'How is Data Factory in Fabric different from standalone Azure Data Factory?',
-            answer: 'Data Factory in Fabric uses the same pipeline visual experience but is fully integrated in the Fabric workspace — no linked services for OneLake, no separate resource group. Pipelines can directly call Fabric Notebooks, Lakehouses, and Warehouses. The trade-off: Fabric pipelines currently lack some ADF connectors. For migrations, start Fabric-native; use ADF if you need SAP, mainframe, or very specific on-prem connectors.',
+            question: 'How is Data Factory in Fabric different from standalone Azure Data Factory, and when would you keep using ADF?',
+            answer: 'Data Factory in Fabric is fully embedded in the Fabric workspace — no linked services for OneLake, no separate resource group or subscription. Pipelines directly invoke Fabric Notebooks, Lakehouses, and Warehouses without connection strings. It uses the same visual interface as ADF. Keep using standalone ADF when: you need connectors Fabric doesn\'t yet support (SAP, mainframe, Salesforce via specific certified connectors), you have complex existing ADF pipelines already in production, or you need ADF\'s global distribution and self-hosted integration runtime for on-prem connectivity at scale.',
           },
-          practice: 'Design a pipeline that loads data from a SQL Server on-premises source into a Fabric Lakehouse Bronze layer nightly.',
-          hint: 'Use On-premises Data Gateway + Copy Activity → Lakehouse Files',
-          solution: 'Install On-premises Data Gateway on a local machine. In Fabric, create a SQL Server connection using the gateway. Build a Pipeline with a Copy Activity: Source = SQL Server table, Sink = Lakehouse Files/raw/. Schedule nightly. Add a Notebook Activity after copy to move data to Bronze Delta table.',
+          commonMistakes: [
+            'Not setting retry policies on Notebook Activities — transient cluster startup failures are common; always set 1–2 retries with a 30-second retry interval.',
+            'Using sequential notebook chains when activities can run in parallel — Bronze notebooks for different domains (orders, inventory, customers) can all run in parallel before Silver starts.',
+            'Hardcoding dates in pipeline parameters — always use @pipeline().TriggerTime or @addDays(utcNow(), -1) for dynamic date-based loading.',
+          ],
+          productionContext: 'In production Fabric pipelines, parameterize every Notebook Activity with the load_date parameter (passed as @formatDateTime(pipeline().TriggerTime, \'yyyy-MM-dd\')). The notebook reads this widget and uses it as the watermark. This makes every pipeline run independently rerunnable for any date without code changes — critical for backfill scenarios.',
+          performanceTip: 'Use ForEach + Notebook Activity to parallelize table loads. Instead of one notebook that loads 50 tables sequentially, use a Lookup to get the table list, pass it to ForEach (set Batch Count = 10 for 10 concurrent loads). Total load time drops from N × single_load_time to N/10 × single_load_time.',
         },
         {
           id: 'fabric-dataflows-gen2',
@@ -211,17 +273,81 @@ in
 // Fabric auto-identifies the incremental column and runs delta loads`,
           expectedOutput: 'Data loaded into Lakehouse Delta table via Power Query transformation, refreshable on a schedule',
           interview: {
-            question: 'When would you use Dataflows Gen2 vs a Fabric Notebook for transformation?',
-            answer: 'Use Dataflows Gen2 when: the transformation logic is straightforward (filter, rename, join), the author is comfortable with Power Query rather than Python/Spark, or you need to connect to a source not easily accessible from Spark. Use a Notebook when: you need complex custom logic in Python, ML features, large-scale Spark optimization (partitioning, ZORDER), or when you want version-controlled code in Git.',
+            question: 'When would you use Dataflows Gen2 vs a Fabric Notebook for transformation, and what are the tradeoffs?',
+            answer: 'Use Dataflows Gen2 when: the transformation is straightforward (filter, rename, type cast, simple join), the team includes analysts comfortable with Power Query, or you need to connect to a source not easily accessible from Spark (SharePoint lists, Dynamics 365, OData feeds). Use a Notebook when: you need custom Python logic, ML feature engineering, complex window functions, large-scale Spark optimization, or reproducible code in Git. The key tradeoff: Dataflows Gen2 is faster to build but harder to test, version-control, and debug. Notebooks take longer to write but are testable, version-controlled, and infinitely more powerful for scale.',
           },
-          practice: 'Using Power Query M, write a transformation that reads an orders table, filters for completed orders, and renames OrderDate to order_date.',
-          hint: 'Use Table.SelectRows and Table.RenameColumns',
-          solution: `let
-  Source = Lakehouse_Connection{[Item="bronze_orders"]}[Data],
-  Filtered = Table.SelectRows(Source, each [status] = "Completed"),
-  Renamed = Table.RenameColumns(Filtered, {{"OrderDate", "order_date"}})
-in
-  Renamed`,
+          commonMistakes: [
+            'Using Dataflows Gen2 for large-scale transformations — it uses Fabric Spark under the hood but without the control you have in a notebook. For tables > 100M rows, use a notebook.',
+            'Not enabling incremental refresh — without it, Dataflows Gen2 does a full extract and reload on every refresh, making it slow and expensive for large source tables.',
+            'Ignoring the staging Lakehouse — Dataflows Gen2 uses a staging Lakehouse for intermediate results. If you hit capacity limits, data spills here first.',
+          ],
+          productionContext: 'Dataflows Gen2 is most commonly used in Fabric for the "last mile" data ingestion problem: small-to-medium datasets from sources that Notebooks can\'t easily connect to (SharePoint, Dynamics, small SQL tables). Engineering teams use them for quick Bronze loading of these sources, then Notebooks handle Silver/Gold transformations.',
+          performanceTip: 'Enable Fast Copy in Dataflows Gen2 for large datasets — it bypasses the Power Query engine and uses native copy capabilities that are 5–10x faster. Fast Copy automatically activates when source is ADLS/Blob/SQL and destination is Lakehouse; it uses the Copy Activity under the hood rather than the M evaluation engine.',
+        },
+      ],
+    },
+    {
+      title: 'Spark Notebooks',
+      subtopics: [
+        {
+          id: 'fabric-notebooks',
+          title: 'Fabric Spark Notebooks',
+          difficulty: 'Intermediate',
+          explanation: 'Fabric Notebooks are Jupyter-compatible environments running on Fabric Spark compute. They support Python, Scala, SQL, and R in the same notebook. Fabric auto-mounts the workspace Lakehouses so data is accessible without ABFS paths.',
+          why: 'Notebooks are the primary transformation tool for data engineers in Fabric. They combine interactive development with production-ready code that pipelines can schedule. Version control via Git integration turns notebook code into reviewable artifacts.',
+          syntax: `# Fabric Notebooks auto-attach the workspace Lakehouse
+# No SparkSession creation needed — spark is already available
+
+# Read a Delta table (short form — Lakehouse auto-mounted)
+df = spark.read.format("delta").table("silver.orders")
+
+# Write to Lakehouse table
+df.write.format("delta").mode("overwrite").saveAsTable("gold.daily_revenue")
+
+# Use notebookutils for file operations
+notebookutils.fs.ls("Files/raw/")
+
+# Run another notebook from this notebook
+notebookutils.notebook.run("SilverTransform", timeout_seconds=300,
+    arguments={"load_date": "2025-01-15"})`,
+          example: `from pyspark.sql.functions import col, sum, to_date, current_timestamp
+from delta.tables import DeltaTable
+
+# Read Silver
+silver = spark.read.format("delta").table("silver.orders")
+
+# Build Gold aggregate
+gold = silver \
+  .groupBy("order_date", "product_category") \
+  .agg(
+    sum("amount").alias("revenue"),
+    sum("quantity").alias("units_sold")
+  ) \
+  .withColumn("loaded_at", current_timestamp())
+
+# Merge into Gold Delta table (idempotent)
+if DeltaTable.isDeltaTable(spark, "Tables/gold_revenue"):
+    target = DeltaTable.forName(spark, "gold.daily_revenue")
+    target.alias("t").merge(
+        gold.alias("s"),
+        "t.order_date = s.order_date AND t.product_category = s.product_category"
+    ).whenMatchedUpdateAll().whenNotMatchedInsertAll().execute()
+else:
+    gold.write.format("delta").saveAsTable("gold.daily_revenue")
+
+print(f"Gold rows: {spark.table('gold.daily_revenue').count():,}")`,
+          expectedOutput: `Gold rows: 4,200`,
+          interview: {
+            question: 'How does a Fabric Notebook differ from a Databricks Notebook, and what should you watch out for when migrating?',
+            answer: 'Both run on Spark and support PySpark/SparkSQL — most transformation code is portable. Key differences: (1) Fabric uses notebookutils instead of dbutils for file operations and notebook chaining. (2) Fabric Spark auto-mounts workspace Lakehouses; Databricks requires mount points or ABFS paths. (3) Fabric notebooks have no cluster concept — compute starts automatically per notebook run. (4) mssparkutils is the Fabric equivalent of dbutils. Migration gotchas: replace dbutils.fs with notebookutils.fs, replace dbutils.widgets with notebookutils.runtime for parameter passing, and test library imports (some Databricks-specific MLflow integrations need updating).',
+          },
+          commonMistakes: [
+            'Using dbutils in a Fabric Notebook — it doesn\'t exist. Replace all dbutils calls with notebookutils (mssparkutils) equivalents.',
+            'Not parameterizing notebooks before scheduling via Pipeline — hardcoded dates or paths make backfill impossible without editing code.',
+            'Chaining long notebook runs in a single cell — if one step fails, the entire cell output is lost. Structure notebooks as discrete functions/cells with clear checkpoints.',
+          ],
+          productionContext: 'In production Fabric, notebooks are version-controlled via Git integration. The pattern: feature branch → PR with notebook diff review → merge to main → Deployment Pipeline promotes to Prod. Notebooks are parameterized with notebookutils.runtime.getParameterValue() so pipelines can pass load_date, env, and other context.',
+          performanceTip: 'Fabric Spark auto-scales — the cluster grows when your notebook starts a heavy computation and shrinks when idle. To avoid slow cold-start times on production runs, use "Keep Alive" compute settings for critical notebooks that run on tight SLA windows. For exploratory notebooks, let the auto-scale handle it (no cost when idle).',
         },
       ],
     },
@@ -252,12 +378,16 @@ in
 // A downstream Notebook processes them into Bronze Delta tables`,
           expectedOutput: 'Real-time events flowing from IoT Hub into KQL Database with < 1 second latency',
           interview: {
-            question: 'What is the difference between Fabric Eventstream and Azure Stream Analytics?',
-            answer: 'Both handle real-time streaming but Eventstream is no-code and natively integrated in Fabric — it connects directly to KQL Databases, Lakehouses, and Warehouses without extra pipeline config. Azure Stream Analytics uses SQL-like queries and outputs to Azure services outside Fabric. Choose Eventstream for Fabric-first architectures; use Stream Analytics if you need complex CEP (complex event processing) queries or must output to non-Fabric Azure services.',
+            question: 'What is the difference between Fabric Eventstream and Azure Stream Analytics, and when would you choose each?',
+            answer: 'Both handle real-time streaming, but Eventstream is no-code and natively integrated in Fabric — it connects directly to KQL Databases, Lakehouses, and Warehouses without extra pipeline config. Azure Stream Analytics uses SQL-like queries for complex event processing (CEP) and outputs to many Azure services outside Fabric. Choose Eventstream for Fabric-first architectures where you need simple filter/aggregate/route patterns with no-code setup. Choose Stream Analytics if you need complex temporal joins across multiple streams, sophisticated CEP patterns (event detection across windows), or must write to non-Fabric Azure services like Azure SQL, Cosmos DB, or Service Bus.',
           },
-          practice: 'Design an Eventstream topology for a retail company that wants real-time transaction fraud detection. What sources, transformations, and destinations would you use?',
-          hint: 'Think: where does the transaction data come from → what signals indicate fraud → where does the output need to go for alerting?',
-          solution: 'Source: Event Hub receiving POS transactions. Transformation: Aggregate → tumbling 5-minute window, Group By customer_id, flag WHERE transaction_count > 20 in window. Destination: KQL Database for live queries + Lakehouse for historical analysis. Alert: Power BI real-time dashboard on KQL.',
+          commonMistakes: [
+            'Using Eventstream for complex multi-stream joins — Eventstream supports simple transformations; complex CEP queries belong in Stream Analytics or Spark Structured Streaming.',
+            'Not setting a destination for transformed events — Eventstream without a destination drops events. Always configure at least one destination (KQL Database for analytics, Lakehouse for long-term storage).',
+            'Ignoring the event delivery guarantee — Eventstream provides at-least-once delivery. Design destinations to handle duplicates (use a KQL dedup policy or Delta MERGE at the sink).',
+          ],
+          productionContext: 'Fabric Eventstream is typically used in IoT and clickstream scenarios where data arrives via Event Hubs and needs to be: (1) routed to a KQL Database for operational dashboards (< 1s latency), (2) landed in a Lakehouse Bronze table for long-term batch analysis. The dual-sink pattern (KQL + Lakehouse) handles both use cases from a single Eventstream.',
+          performanceTip: 'For high-throughput Eventstream sources (millions of events/second), increase Event Hub partitions before connecting to Eventstream — Eventstream inherits the source partition count and processes partitions in parallel. More partitions = more parallelism = higher throughput. Standard Event Hub supports up to 32 partitions; Premium tier supports up to 200.',
         },
         {
           id: 'fabric-kql',
@@ -281,27 +411,29 @@ sensor_readings
 sensor_readings
 | join kind=inner (devices | project device_id, location) on device_id
 | summarize avg_temp = avg(temperature) by location`,
-          example: `// Real-world KQL: detect temperature spikes
+          example: `// Real-world KQL: detect anomalies in the last 24h
 sensor_readings
 | where timestamp > ago(24h)
-| summarize max_temp = max(temperature) by device_id, bin(timestamp, 1h)
-| where max_temp > 95
+| summarize avg_temp = avg(temperature), max_temp = max(temperature),
+    stddev_temp = stdev(temperature) by device_id, bin(timestamp, 1h)
+| where max_temp > avg_temp + 3 * stddev_temp
 | join kind=inner (
     devices | project device_id, location, owner_email
   ) on device_id
-| project timestamp, location, max_temp, owner_email
+| project timestamp, location, max_temp, avg_temp, owner_email
 | order by max_temp desc`,
-          expectedOutput: 'Table of temperature spikes in the last 24h with device location and owner contact',
+          expectedOutput: 'Anomalous temperature spikes with device context for alerting',
           interview: {
-            question: 'When would you use a KQL Database over a Lakehouse Delta table for analytics?',
-            answer: 'KQL Databases are optimized for time-series, log, and event data with high ingestion rates and millisecond query latency — ideal for operational dashboards, anomaly detection, and security analytics. Delta tables in a Lakehouse are better for batch transformations, large-scale historical analysis, and ML features. Use KQL when queries always filter by time and you need sub-second response for live dashboards.',
+            question: 'When would you use a KQL Database over a Lakehouse Delta table, and what are the limitations of KQL?',
+            answer: 'Use KQL Database for: operational dashboards requiring sub-second latency, high-cardinality time-series data (IoT, logs, telemetry), and streaming data that needs immediate queryability. KQL\'s columnar storage and time-based indexing make it 100x faster than SQL on these patterns. Limitations: KQL is read-optimized — updates and deletes are hard (use table policies or soft deletes). KQL data isn\'t as accessible for ML pipelines as Delta tables. KQL tables have retention policies, not unlimited storage. For long-term historical analysis beyond retention window, use KQL → Lakehouse export as the archival pattern.',
           },
-          practice: 'Write a KQL query that counts events per 10-minute window for the last 6 hours, grouped by event_type.',
-          hint: 'Use summarize with bin(timestamp, 10m) and count()',
-          solution: `events
-| where timestamp > ago(6h)
-| summarize event_count = count() by bin(timestamp, 10m), event_type
-| order by timestamp asc`,
+          commonMistakes: [
+            'Using KQL Database for data that needs updates/deletes — KQL is append-optimized. If rows need corrections, use Delta tables instead.',
+            'Querying without time filters — KQL tables can hold billions of rows. Always filter on timestamp with | where timestamp > ago(Xh) before summarize or join operations.',
+            'Joining large KQL tables without | project first — project (select columns) before a join to reduce the data flowing through the join. Same principle as pushdown in SQL.',
+          ],
+          productionContext: 'KQL Databases in production handle the real-time layer of a dual-path architecture: events flow to both KQL (for immediate operational queries) and Lakehouse Bronze (for long-term batch analysis). Dashboards query KQL for live metrics; data science teams query Bronze/Silver Delta tables for historical model training.',
+          performanceTip: 'Use bin() in summarize operations to reduce the result set before ordering — summarizing at 5-minute bins instead of per-row is 1000x faster and usually sufficient for dashboards. For alerts, use KQL policies (update policies and alert rules) to trigger notifications rather than polling dashboards.',
         },
       ],
     },
@@ -338,12 +470,73 @@ YoY Growth % =
 //    - Queries go directly to OneLake Delta files`,
           expectedOutput: 'Power BI dashboard with live data from Lakehouse Delta tables, no import refresh required',
           interview: {
-            question: 'What is Direct Lake mode in Fabric and how does it differ from Import mode in Power BI?',
-            answer: 'Import mode copies data into the Power BI model — fast queries but requires scheduled refresh and has dataset size limits. Direct Query reads from the source on every query — always fresh but slower. Direct Lake is a new Fabric-only mode that reads Delta Parquet files directly from OneLake — it is as fast as Import but always up-to-date, with no dataset size limit at scale. It only works with Fabric Lakehouses and Warehouses.',
+            question: 'What is Direct Lake mode and what are its limitations compared to Import mode?',
+            answer: 'Direct Lake reads Delta Parquet files directly from OneLake — no import copy, no refresh schedule. Queries are as fast as Import mode for warm (framing-cached) data because Fabric caches Delta column segments in memory. Limitations: (1) Direct Lake falls back to DirectQuery when memory pressure occurs or when querying columns not yet cached — this is called "fallback" and can slow dashboards. (2) Direct Lake only works with Fabric Lakehouses and Warehouses, not external sources. (3) Complex DAX queries that can\'t be pushed to the underlying engine fall back to in-memory evaluation. (4) Calculated columns in DAX are not supported in Direct Lake (use computed columns in the Lakehouse instead). Monitor for fallbacks using the Fabric capacity metrics app.',
           },
-          practice: 'Explain the steps to expose a Gold Lakehouse table as a Power BI report using Direct Lake mode.',
-          hint: 'Gold Delta table → Default Semantic Model → New Report in Fabric',
-          solution: '1. Create Gold Delta table in Lakehouse (e.g., gold.daily_revenue). 2. Open the Lakehouse in Fabric — click SQL Analytics Endpoint. 3. Click "New semantic model" or use the auto-created Default Semantic Model. 4. Select the gold.daily_revenue table. 5. Create a new Report from the semantic model. 6. Build visuals — Power BI reads Delta files via Direct Lake automatically.',
+          commonMistakes: [
+            'Not running OPTIMIZE on Gold tables — Direct Lake reads individual Parquet files; many small files slow down framing (column loading). OPTIMIZE compacts files for faster Direct Lake reads.',
+            'Using calculated columns in DAX with Direct Lake — they\'re not supported. Move calculations to the Lakehouse Spark notebook and store them as physical columns.',
+            'Assuming Direct Lake is always live — Fabric uses a framing process to load new Delta files; there\'s a brief delay (typically seconds to minutes) before new data is visible in Direct Lake.',
+          ],
+          productionContext: 'In production Fabric BI architectures, the pattern is: Spark Gold notebook writes Delta table → OPTIMIZE runs automatically (or via maintenance notebook) → Semantic Model uses Direct Lake → Power BI reports show data within minutes of pipeline completion. This replaces a 2-6 hour Power BI Import refresh cycle with near-real-time data.',
+          performanceTip: 'To minimize Direct Lake fallback, ensure your Gold Lakehouse tables have small row group sizes (≤ 1M rows per file after OPTIMIZE) and that frequently queried columns are ZORDER\'d. Fabric reads entire row groups into memory for framing — large row groups waste memory and increase fallback probability under memory pressure.',
+        },
+      ],
+    },
+    {
+      title: 'Mirroring',
+      subtopics: [
+        {
+          id: 'fabric-mirroring',
+          title: 'Fabric Mirroring',
+          difficulty: 'Advanced',
+          explanation: 'Fabric Mirroring replicates operational databases (Azure SQL, Snowflake, Cosmos DB, Azure SQL Managed Instance) into OneLake in near-real-time using CDC (Change Data Capture). Mirrored data is stored as Delta Parquet in OneLake and queryable via SQL Analytics Endpoint or Spark.',
+          why: 'Mirroring eliminates the Extract step of ETL pipelines: no ADF copy activity, no scheduled batch extract, no stale data window. Changes in the source appear in OneLake within seconds. This enables real-time analytics on operational data without impacting the source database.',
+          syntax: `// Mirroring setup (Fabric UI only — no code required):
+// 1. Create a new Mirrored Database item in your Fabric workspace
+// 2. Select the source: Azure SQL DB, Snowflake, Cosmos DB, etc.
+// 3. Choose tables to mirror
+// 4. Fabric creates a Lakehouse with the mirrored tables as Delta files
+// 5. Query via SQL Analytics Endpoint or Spark immediately
+
+// Query mirrored data (same as any Lakehouse table):
+SELECT TOP 100 * FROM MirroredSalesDB.dbo.orders
+ORDER BY created_at DESC;
+
+// Join mirrored data with Gold aggregations:
+SELECT m.customer_id, m.order_total, g.lifetime_value
+FROM MirroredSalesDB.dbo.orders m
+JOIN GoldLakehouse.dbo.customer_lifetime_value g
+  ON m.customer_id = g.customer_id`,
+          example: `// Real-world Mirroring scenario:
+// Source: Azure SQL Database (production CRM with 50M customer records)
+// Goal: Real-time analytics on CRM data without impacting CRM performance
+
+// Before Mirroring:
+// - ADF runs every 6 hours to copy CRM tables to ADLS
+// - Reports are 0-6 hours stale
+// - 6-hour extract jobs increase load on CRM SQL DB
+
+// After Mirroring:
+// - Mirroring captures CDC changes continuously
+// - Reports show CRM data within seconds
+// - No load on CRM SQL DB (CDC reads the transaction log, not the tables)
+// - No ADF pipeline for CRM ingestion needed
+
+// Mirrored table path in OneLake:
+// OneLake/workspace/MirroredCRM.MirroredDatabase/Tables/dbo/customers`,
+          expectedOutput: 'CRM changes appear in OneLake within seconds; Power BI dashboards show near-real-time operational data',
+          interview: {
+            question: 'How does Fabric Mirroring work under the hood, and what are its limitations?',
+            answer: 'Mirroring uses Change Data Capture (CDC) — it reads the source database\'s transaction log, not the tables themselves, which minimizes source load. Changes are streamed to OneLake as Delta Parquet files continuously. Initial load does a full snapshot, then applies CDC changes incrementally. Limitations: (1) Not all source databases are supported (Azure SQL, Snowflake, Cosmos DB, Azure SQL MI — check current docs for latest). (2) Mirrored tables are read-only in Fabric — you can\'t write back to the source via OneLake. (3) Schema changes in the source (new columns, renamed tables) require a re-sync. (4) Mirroring requires the source database to have CDC enabled and sufficient transaction log retention. (5) It\'s not a replacement for ETL transformations — mirrored data is raw operational schema, not a clean analytics model.',
+          },
+          commonMistakes: [
+            'Treating mirrored tables as analytics-ready — operational tables have denormalized structures, cryptic column names, and technical fields not meant for BI. You still need Silver/Gold transformation on top of mirrored Bronze data.',
+            'Not monitoring replication lag — Mirroring can fall behind if the source has high write volume or network issues. Always add a freshness check on the mirrored table\'s _change_timestamp column.',
+            'Mirroring all tables instead of selected tables — mirror only the tables your analytics pipeline needs. Mirroring everything creates unnecessary OneLake storage and CDC overhead.',
+          ],
+          productionContext: 'Mirroring is transforming how enterprises do operational analytics in Fabric. The pattern: Mirror production Azure SQL DB → OneLake (near-real-time Bronze layer) → Fabric Notebook Silver transformation → Warehouse Gold layer → Direct Lake Power BI. This replaces a 3-step ADF Extract → ADLS Load → Synapse Transform pipeline with a single Mirroring setup plus one Notebook.',
+          performanceTip: 'After the initial Mirroring snapshot, run OPTIMIZE on the mirrored Delta tables to compact the many small CDC files into larger Parquet files. CDC writes arrive as many small files (one per change batch); without OPTIMIZE, query performance degrades over time. Schedule a weekly OPTIMIZE job on mirrored tables.',
         },
       ],
     },
@@ -385,12 +578,16 @@ YoY Growth % =
 // Promotion copies items and optionally replaces data source parameters`,
           expectedOutput: 'Code-reviewed notebook and pipeline promoted from Dev to Production with full audit trail',
           interview: {
-            question: 'How would you implement CI/CD for a Fabric Lakehouse ETL pipeline?',
-            answer: 'Connect each Fabric workspace (Dev, Test, Prod) to a Git branch. Developers work in feature branches, open PRs to main — notebook code is reviewed as Python files in Git. On merge to main, a Deployment Pipeline stage promotes items to Test. After automated data quality tests pass (run via Notebook Activity), a manual approval gates promotion to Production. Use workspace parameters to swap data connections between environments.',
+            question: 'How would you implement a full CI/CD workflow for a Fabric data platform with 5 engineers?',
+            answer: 'Three-layer approach: (1) Git Integration — connect each Fabric workspace to a branch (Dev → feature/* branches, Test → develop branch, Prod → main branch). Engineers open PRs to develop; notebook code is reviewed as Python diff in the PR. (2) Fabric Deployment Pipelines — configure Dev → Test → Prod. Merge to develop auto-syncs Test workspace. (3) Automated validation — a Deployment Pipeline pre-promotion rule runs a data quality Notebook against Test; if DQ checks fail, promotion is blocked. Manual approval gate before Prod promotion. Use workspace parameters to swap data sources between environments. This eliminates the "it works in Dev but not in Prod" problem by making environments identical except for data source parameters.',
           },
-          practice: 'Describe how you would set up a 3-stage Fabric Deployment Pipeline for a team of 5 data engineers working on the same Lakehouse ETL.',
-          hint: 'Consider: Git branching strategy, workspace isolation, parameter replacement, approval gates',
-          solution: 'Create 3 workspaces: dev-analytics, test-analytics, prod-analytics. Connect dev-analytics to a shared Git repo develop branch. Connect prod-analytics to main. Set up Fabric Deployment Pipeline: Dev → Test → Prod. In Dev, engineers use feature branches. PRs merge to develop → auto-deploys to Test. Data quality Notebook runs against Test. After review, manually promote to Prod. Use workspace parameters to replace Lakehouse connection strings per environment.',
+          commonMistakes: [
+            'Not using workspace parameters for environment-specific connections — hardcoded Lakehouse names break when items are promoted to Prod. Use parameters to dynamically resolve workspace/Lakehouse names.',
+            'Promoting without validation — always run at minimum a row-count check and a freshness check against the Test workspace before promoting to Prod.',
+            'Skipping semantic model sync after notebook promotion — Deployment Pipelines promote notebooks and pipelines, but semantic models may need manual refresh or re-binding after data schema changes.',
+          ],
+          productionContext: 'Teams using Fabric CI/CD report 80% reduction in "it worked in Dev" incidents. The key discipline: every notebook must be parameterized, every pipeline must be testable, and every Deployment Pipeline stage must have at least one automated validation step. Start simple: Git integration first (immediate value), Deployment Pipelines after the team is comfortable with Git workflows.',
+          performanceTip: 'Fabric Git sync happens at the item level — committing changes to 50 notebooks at once creates 50 separate Git commits. Use batched commits (select all changed items, commit together) to keep the Git history readable and the sync operation fast.',
         },
       ],
     },

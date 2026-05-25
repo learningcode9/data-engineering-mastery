@@ -5,8 +5,10 @@ import { adfModule }        from './modules/azure-data-factory.js';
 import { databricksModule } from './modules/azure-databricks.js';
 import { awsGlueModule }    from './modules/aws-glue.js';
 import { aiModule }         from './modules/ai-for-data-engineers.js';
-import { fabricModule }     from './modules/fabric.js';
-import { newTopics }        from './newTopics.js';
+import { fabricModule }          from './modules/fabric.js';
+import { kafkaStreamingModule }  from './modules/kafka-streaming.js';
+import { systemDesignModule }    from './modules/system-design.js';
+import { newTopics }             from './newTopics.js';
 import { phases }           from './phases.js';
 
 const coreTopics = [
@@ -348,8 +350,94 @@ const coreTopics = [
       interviewTip: 'Understand OneLake vs ADLS Gen2, when to use a Lakehouse vs Warehouse, and how Direct Lake mode differs from Import/DirectQuery. Medallion architecture in Fabric is the most commonly tested scenario.',
       projectLink: 'Sales Lakehouse Pipeline and Medallion Architecture Project — both map directly to Fabric Lakehouse + Notebook patterns.',
     },
-    nextStep: null,
+    nextStep: {
+      id: 'kafka-streaming',
+      title: 'Kafka & Streaming',
+      reason: 'After mastering Fabric batch pipelines, streaming is the natural next step — Kafka and Spark Structured Streaming are the backbone of real-time Azure DE architectures.',
+    },
     docs: ['ms-fabric-overview', 'ms-fabric-onelake', 'ms-fabric-lakehouse', 'ms-fabric-warehouse', 'ms-fabric-data-factory', 'ms-fabric-spark', 'ms-fabric-rti', 'ms-fabric-deployment'],
+  },
+  {
+    id: 'kafka-streaming',
+    title: 'Kafka & Streaming',
+    label: 'Streaming',
+    category: 'Advanced Engineering',
+    difficulty: 'Intermediate to Advanced',
+    progress: '0%',
+    body: 'Build real-time pipelines with Kafka, Spark Structured Streaming, and Delta Live Tables.',
+    overview: [
+      { title: 'What is this?', body: 'Kafka & Streaming covers the full real-time data pipeline: Kafka partitions and consumer groups, exactly-once semantics, Spark Structured Streaming, watermarking for late data, Delta Live Tables, and CDC streaming patterns.' },
+      { title: 'Why do we use it?', body: 'A data engineer uses streaming when batch jobs are too slow — fraud detection needs sub-second latency, dashboards need live data, and event-driven architectures need continuous processing.' },
+      { title: 'Simple example', body: 'A Kafka topic receives 10,000 orders/second. A Spark Structured Streaming job reads the topic, deduplicates with foreachBatch + MERGE into Delta, and the Gold table reflects reality within 60 seconds.' },
+      { title: 'Practice task', body: 'Explain the difference between event time and processing time, and why watermarking matters for late-arriving events.' },
+    ],
+    questions: [
+      { question: 'What is a Kafka partition?', answer: 'An ordered, immutable log of messages — the unit of parallelism in Kafka. More partitions = more consumers can read in parallel.' },
+      { question: 'What is exactly-once semantics in streaming?', answer: 'A guarantee that each event is processed and written exactly once — achieved with idempotent producers + Spark checkpoints + Delta MERGE.' },
+      { question: 'What is watermarking in Spark Structured Streaming?', answer: 'withWatermark() tells Spark how late data can arrive before it is dropped from aggregations. Needed for stateful operations like windowed counts.' },
+    ],
+    module: kafkaStreamingModule,
+    step: 21,
+    prerequisites: ['microsoft-fabric'],
+    timeEstimate: '3–4 weeks',
+    interviewImportance: 'high',
+    commonMistakes: [
+      'Confusing event time with processing time — always use event timestamps from the message payload, not Spark\'s wall-clock time.',
+      'Skipping checkpoints — without a checkpoint location, a job restart reprocesses all data from the beginning.',
+      'Writing a streaming job without MERGE — append-only writes to Delta cause duplicates on restart; use foreachBatch + MERGE for idempotency.',
+    ],
+    resumeRelevance: 'Highlight Kafka consumer groups, throughput (events/sec), exactly-once guarantees, latency SLAs, and any DLT or Structured Streaming pipelines — these are strong senior DE differentiators.',
+    careerContext: {
+      whyItMatters: 'Real-time streaming is the fastest-growing DE skill area — nearly every senior role now requires experience with Kafka, Structured Streaming, or at minimum Azure Event Hubs + Stream Analytics.',
+      realWorldUseCase: 'A DE at a payments company reads Kafka topics containing 50K transactions/second, joins against a Redis feature store for fraud scoring, and writes results to Delta in under 2 seconds end-to-end.',
+      interviewTip: 'Know the difference between micro-batch (Spark Structured Streaming) and true streaming (Flink). Be ready to explain exactly-once with checkpoints + MERGE, watermarking for late data, and when to use DLT vs raw Structured Streaming.',
+      projectLink: 'CDC Pipeline and Real-Time Fraud Detection — both are built on Kafka + Spark Structured Streaming + Delta Lake.',
+    },
+    nextStep: {
+      id: 'system-design',
+      title: 'System Design',
+      reason: 'With streaming and batch pipelines mastered, system design is how you show senior-level thinking — designing entire architectures, not just individual components.',
+    },
+    docs: ['apache-kafka', 'apache-spark', 'delta-lake'],
+  },
+  {
+    id: 'system-design',
+    title: 'System Design',
+    label: 'Architecture',
+    category: 'Senior Engineering',
+    difficulty: 'Advanced',
+    progress: '0%',
+    body: 'Design production-grade data architectures for real-world scenarios.',
+    overview: [
+      { title: 'What is this?', body: 'System Design for Data Engineers covers end-to-end architecture scenarios: Lambda vs Kappa pipelines, fraud detection systems, multi-tenant data platforms, GDPR erasure in Delta Lake, data observability, incident recovery, and CDC-driven migration patterns.' },
+      { title: 'Why do we use it?', body: 'Senior DE interviews often include a system design round where you must sketch an architecture, justify technology choices, estimate scale, and discuss tradeoffs — not just write code.' },
+      { title: 'Simple example', body: 'Question: "Design a real-time fraud detection system processing 100K transactions/second with <500ms latency." Answer covers: Kafka ingestion → Spark Structured Streaming → Redis feature store → ML model serving → Delta Lake for audit trail → alerting pipeline.' },
+      { title: 'Practice task', body: 'Sketch a Lambda architecture for a retail analytics platform: batch layer (ADF + Databricks medallion), speed layer (Event Hubs + Structured Streaming), and serving layer (Synapse / Fabric Warehouse + Power BI).' },
+    ],
+    questions: [
+      { question: 'What is the difference between Lambda and Kappa architecture?', answer: 'Lambda has a batch layer and a speed layer that must be reconciled. Kappa has only a streaming layer — all reprocessing is done by replaying the event stream. Kappa is simpler but requires a replayable source like Kafka.' },
+      { question: 'How do you implement GDPR erasure in a Delta Lake?', answer: 'Use Delta MERGE or DELETE to remove the target rows, then run VACUUM after the retention window expires to physically remove the files. Time travel must be disabled for that table after VACUUM.' },
+      { question: 'What are the four pillars of data observability?', answer: 'Freshness (is data arriving on time?), Volume (are row counts as expected?), Distribution (do column values look normal?), and Schema (did the structure change?).' },
+    ],
+    module: systemDesignModule,
+    step: 22,
+    prerequisites: ['kafka-streaming'],
+    timeEstimate: '3–4 weeks',
+    interviewImportance: 'critical for senior roles',
+    commonMistakes: [
+      'Jumping to technology before requirements — always clarify scale (rows/sec, GB/day), latency SLA, and read/write patterns before choosing tools.',
+      'Designing for the happy path only — interviewers want to hear failure modes: what happens if Kafka falls behind? If the ML model is slow? If a partition is corrupted?',
+      'Ignoring cost — production architecture must balance performance and cost; always mention partitioning strategy, compute sizing, and data retention policies.',
+    ],
+    resumeRelevance: 'Any project can be reframed as a system design story — describe the requirements, constraints, architecture decisions, and tradeoffs. This is how staff-level engineers narrate their work.',
+    careerContext: {
+      whyItMatters: 'System design separates mid-level from senior DE candidates. Knowing how to write a Spark job is table stakes; knowing how to design a scalable, observable, cost-efficient data platform is what gets you to L5/L6.',
+      realWorldUseCase: 'A staff DE designs a multi-tenant data platform: per-tenant Unity Catalog schemas for isolation, a shared Databricks cluster pool for cost efficiency, row-level security for cross-tenant queries, and a standardised observability layer with Great Expectations + PagerDuty.',
+      interviewTip: 'Structure your answer: Requirements → Scale estimation → High-level architecture → Component deep-dives → Failure modes → Monitoring → Cost. Practice saying "The tradeoff here is..." — it signals senior thinking.',
+      projectLink: 'Any end-to-end project in your portfolio is a system design story — practice narrating it in the Requirements → Architecture → Tradeoffs format.',
+    },
+    nextStep: null,
+    docs: ['apache-kafka', 'delta-lake', 'ms-fabric-overview'],
   },
 ];
 

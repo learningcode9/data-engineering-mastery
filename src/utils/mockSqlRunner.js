@@ -248,8 +248,8 @@ function executeJoin(n, joinInfo) {
 export function runMockSQL(sql) {
   const n = norm(sql);
 
-  // CTE and window function support — mark as complex with a helpful message
-  if (/\bwith\s+\w+\s+as\s*\(|\bover\s*\(|\brow_number\b|\brank\b|\bdense_rank\b|\bpartition\s+by\b|\blag\b|\blead\b/.test(n)) {
+  // CTE, window function, and CASE WHEN — mark as complex with a helpful message
+  if (/\bwith\s+\w+\s+as\s*\(|\bover\s*\(|\brow_number\b|\brank\b|\bdense_rank\b|\bntile\b|\bpartition\s+by\b|\blag\b|\blead\b|\bcase\s+when\b/.test(n)) {
     return { complex: true, feature: 'cte_window' };
   }
 
