@@ -591,5 +591,137 @@ JOIN GoldLakehouse.dbo.customer_lifetime_value g
         },
       ],
     },
+    {
+      title: 'Fabric Warehouse',
+      subtopics: [
+        {
+          id: 'fabric-warehouse-depth',
+          title: 'Fabric Warehouse — When to Use SQL Over Spark',
+          difficulty: 'Intermediate',
+          explanation: 'A Fabric Warehouse is a fully managed T-SQL data warehouse built on OneLake. Unlike the Lakehouse SQL Analytics Endpoint (read-only T-SQL over Delta files), the Warehouse supports full DML: INSERT, UPDATE, DELETE, CREATE TABLE, and stored procedures. It uses a distributed query engine optimized for concurrent analytical workloads.',
+          why: 'Use the Warehouse when you need concurrent multi-user SQL access with heavy DML workloads, stored procedures, complex schema management, or when your team is SQL-first and not comfortable with Spark notebooks. The Lakehouse is better for Spark-heavy transformations and file-level access.',
+          syntax: `-- Create a table in Fabric Warehouse (T-SQL)
+CREATE TABLE gold.dim_customer (
+  customer_id    INT           NOT NULL,
+  customer_name  NVARCHAR(200) NOT NULL,
+  region         NVARCHAR(50),
+  account_tier   NVARCHAR(20),
+  effective_date DATE          NOT NULL,
+  expiry_date    DATE,
+  is_current     BIT           DEFAULT 1,
+  CONSTRAINT pk_dim_customer PRIMARY KEY (customer_id)
+);
+
+-- INSERT with staging pattern
+INSERT INTO gold.dim_customer
+SELECT DISTINCT customer_id, customer_name, region, 'Standard', GETDATE(), NULL, 1
+FROM silver.customers
+WHERE customer_id NOT IN (SELECT customer_id FROM gold.dim_customer WHERE is_current = 1);
+
+-- Cross-database query: Warehouse can query Lakehouse SQL Endpoint
+SELECT w.order_id, l.customer_name
+FROM warehouse.dbo.fact_orders w
+JOIN lakehouse_sql.customers l ON w.customer_id = l.customer_id;`,
+          example: `-- SCD Type 2 implementation in Fabric Warehouse
+-- Step 1: Identify changed records
+WITH changes AS (
+  SELECT s.customer_id, s.customer_name, s.region
+  FROM silver.customers s
+  JOIN gold.dim_customer d ON s.customer_id = d.customer_id
+  WHERE d.is_current = 1
+    AND (s.customer_name <> d.customer_name OR s.region <> d.region)
+)
+-- Step 2: Expire old records
+UPDATE gold.dim_customer
+SET is_current = 0, expiry_date = CAST(GETDATE() AS DATE)
+WHERE customer_id IN (SELECT customer_id FROM changes) AND is_current = 1;
+
+-- Step 3: Insert new versions
+INSERT INTO gold.dim_customer (customer_id, customer_name, region, account_tier, effective_date, expiry_date, is_current)
+SELECT c.customer_id, c.customer_name, c.region, 'Standard', CAST(GETDATE() AS DATE), NULL, 1
+FROM changes c;`,
+          expectedOutput: 'SCD Type 2 slowly-changing dimension with current row flagging, no Spark required',
+          interview: {
+            question: 'When would you use a Fabric Warehouse over a Fabric Lakehouse with SQL Analytics Endpoint?',
+            answer: 'Use the Warehouse when you need: (1) Full DML — UPDATE/DELETE/stored procedures that the read-only SQL Analytics Endpoint cannot do. (2) Concurrent SQL users — Warehouse has a dedicated distributed SQL engine tuned for concurrency; the Lakehouse SQL endpoint serializes some operations. (3) T-SQL-first teams — SQL engineers who do not write Spark notebooks are more productive in the Warehouse. (4) Complex schema management — Warehouse supports constraints, schemas, and full DDL. Use the Lakehouse when: you need Spark notebooks for complex transformations, Direct Lake Power BI, or Delta time travel and ACID semantics are the priority.',
+          },
+          commonMistakes: [
+            'Storing raw or Bronze data in the Warehouse — Warehouses are expensive compute for structured Gold-layer data, not raw ingestion. Use Lakehouse for Bronze/Silver.',
+            'Assuming Warehouse tables are Delta format — Fabric Warehouse uses its own internal format (not Delta Parquet). You cannot run Delta time travel or OPTIMIZE on Warehouse tables.',
+            'Forgetting that cross-database queries are possible — teams build unnecessary data copies instead of using the SQL Analytics Endpoint cross-reference to query Lakehouse data from the Warehouse.',
+          ],
+          productionContext: 'Enterprise patterns: Bronze/Silver in Lakehouse (Spark transforms), Gold dimension and fact tables in Warehouse (T-SQL SCD logic, stored procedures for complex business rules). Power BI reports connect to Warehouse via DirectQuery for write-back scenarios. Migration from Azure Synapse Dedicated SQL Pool to Fabric Warehouse is the most common Synapse exit path — Fabric Warehouse is serverless so there is no capacity to pre-provision.',
+          performanceTip: 'Fabric Warehouse scales compute automatically — you do not set a DWU count like Synapse. For concurrent user workloads, the Warehouse distributes queries across nodes. To optimize: use round-robin distribution for fact tables, replicated distribution for small dimension tables, and always filter on partitioned columns in WHERE clauses. Statistics are auto-generated but you can run CREATE STATISTICS manually for complex query plans.',
+          juniorMistake: 'Treating Fabric Warehouse as a Synapse Dedicated SQL Pool replacement by trying to manage distribution keys manually — Fabric Warehouse handles distribution automatically. Focus on query design and indexing, not distribution strategy.',
+          productionTradeoff: 'Fabric Warehouse has no Delta Lake format — you gain full T-SQL DML but lose Delta time travel, Delta MERGE with complex conditions, and OPTIMIZE/ZORDER. For teams that rely heavily on Delta Lake features, Lakehouse + SQL Analytics Endpoint is a better long-term architecture even if it requires learning Spark.',
+          whenNotToUse: 'Do not use Fabric Warehouse for: (1) Streaming ingestion — use Lakehouse Delta tables with Spark Structured Streaming. (2) Unstructured or semi-structured data processing — use Notebooks. (3) Teams already fluent in PySpark — the Lakehouse Spark path is more powerful and flexible. (4) Cost-sensitive workloads where Delta Lakehouse compute is cheaper for batch transforms.',
+        },
+      ],
+    },
+    {
+      title: 'Fabric Security and RBAC',
+      subtopics: [
+        {
+          id: 'fabric-security-rbac',
+          title: 'Fabric Security, RBAC, and Data Governance',
+          difficulty: 'Advanced',
+          explanation: 'Fabric uses a layered security model: Fabric capacity-level admin controls, workspace-level RBAC (Admin/Member/Contributor/Viewer), item-level permissions, and data-level controls (row-level security, column-level security, object-level security). Microsoft Entra ID (formerly Azure AD) is the identity backbone.',
+          why: 'Fabric handles both analytics AND data access in one platform — a single RBAC misconfiguration can expose sensitive data across Lakehouses, Warehouses, and Power BI reports simultaneously. Security must be designed before data is loaded, not retrofitted.',
+          syntax: `-- Row-Level Security in Fabric Warehouse (T-SQL)
+-- Step 1: Create the security predicate function
+CREATE FUNCTION dbo.fn_region_security(@region NVARCHAR(50))
+RETURNS TABLE
+WITH SCHEMABINDING
+AS
+RETURN SELECT 1 AS result
+  WHERE @region = USER_NAME()          -- user-based
+     OR IS_MEMBER('data_admin') = 1;   -- admin bypass
+
+-- Step 2: Create security policy
+CREATE SECURITY POLICY RegionFilter
+ADD FILTER PREDICATE dbo.fn_region_security(region)
+ON gold.dim_customer
+WITH (STATE = ON);
+
+-- Column-Level Security: DENY specific columns
+DENY SELECT ON gold.dim_customer (ssn, account_number) TO analyst_role;
+
+-- Object-Level Security: grant table access to role
+GRANT SELECT ON gold.dim_customer TO analyst_role;`,
+          example: `-- Fabric workspace RBAC roles and what they can do:
+-- Admin:       Full control — can delete workspace, manage access, publish items
+-- Member:      Create and edit items, manage data connections
+-- Contributor: Create and edit items, cannot share externally
+-- Viewer:      Read-only access to items the workspace exposes
+
+-- OneLake Data Access Roles (item-level)
+-- These are separate from workspace RBAC:
+-- Lakehouse → Manage item → Data access roles
+-- Create custom roles with folder-level read/write permissions
+-- Example: 'bronze_reader' role gets read access to /Tables/bronze_* only
+
+-- Fabric + Microsoft Purview integration:
+-- Purview auto-scans OneLake and catalogs all Delta tables
+-- Apply sensitivity labels (Confidential, PII, Internal) in Purview
+-- Labels propagate to Power BI reports automatically`,
+          expectedOutput: 'Row-level and column-level security enforced at the data layer, with workspace RBAC controlling platform access',
+          interview: {
+            question: 'A Fabric workspace has 20 analysts who should only see their region\'s data in Power BI. How do you implement this without managing individual user permissions?',
+            answer: 'Three-layer approach: (1) Entra ID Security Groups — create groups per region (group: "APAC-Analysts", "EMEA-Analysts"). Assign groups to workspace Viewer role, not individuals. (2) Row-Level Security in the Fabric Warehouse or Lakehouse SQL layer — create a security policy that filters rows based on the user\'s group membership using IS_MEMBER(). (3) Power BI RLS — add a Dynamic RLS rule on the semantic model that maps the authenticated user to their region. This way: adding a new analyst = add them to the correct Entra group. No individual permission changes needed. OneLake Data Access Roles give fine-grained folder-level control if analysts need Spark notebook access too.',
+          },
+          commonMistakes: [
+            'Setting workspace role to Admin or Member for all users "for simplicity" — workspace Admin can delete the entire workspace and all its data. Use Viewer for analysts, Contributor for engineers.',
+            'Not enabling OneLake Data Access Roles — without these, any workspace Contributor can read ALL data in the Lakehouse including Bronze raw data with PII. Data Access Roles let you restrict to specific folders.',
+            'Relying only on Power BI RLS without data-layer RLS — if anyone queries the SQL Analytics Endpoint or Warehouse directly (via SSMS, Azure Data Studio), Power BI RLS is bypassed. Always enforce security at the data layer.',
+            'Not integrating Microsoft Purview — without Purview, there is no audit trail for who queried what data, no sensitivity labels, and no data lineage. Regulated industries (banking, healthcare) require Purview integration.',
+          ],
+          productionContext: 'Enterprise Fabric security architecture: Entra ID groups as the source of truth for roles. Workspace RBAC + item-level sharing for access breadth. OneLake Data Access Roles for folder-level control. Warehouse/Lakehouse SQL RLS for row/column filtering. Power BI Dynamic RLS for report-level filtering. Purview for audit and compliance. The key principle: never grant access to an individual — always use groups. Offboarding = removing from the group, not hunting through 15 workspace permission screens.',
+          performanceTip: 'Row-Level Security adds a filter predicate to every query. For large tables with millions of rows, ensure the RLS filter column (e.g., region) is indexed or partitioned. An unindexed RLS predicate on a 500M row fact table can 10x query latency. Test RLS performance with a realistic data volume before going to production.',
+          juniorMistake: 'Implementing security only at the Power BI report layer — then the Lakehouse SQL endpoint and Warehouse are completely open. Security must be enforced at the closest layer to the data, not the presentation layer.',
+          productionTradeoff: 'Fabric RBAC is simpler than Synapse + ADLS Gen2 + Azure AD POSIX ACLs — but it means Fabric controls both your compute and your security. If you need multi-cloud or want to keep data governance separate from the analytics platform, Unity Catalog on Databricks gives you more separation of concerns.',
+          whenNotToUse: 'Fabric RBAC is not sufficient for: (1) Data residency requirements across multiple Azure regions — Fabric is single-region per tenant. (2) Cross-cloud governance — use Unity Catalog or Apache Atlas if data spans AWS + Azure. (3) Highly regulated workloads requiring hardware-level isolation — use dedicated compute with private endpoints and Fabric Private Links.',
+        },
+      ],
+    },
   ],
 };

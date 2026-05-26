@@ -797,6 +797,305 @@ dbutils.notebook.exit(json.dumps(result))  # pass result to parent workflow`,
         { question: 'How do you migrate from workspace-level security to Unity Catalog?', answer: 'Create a Unity Catalog metastore, assign it to the workspace. Migrate existing tables to Unity Catalog using the SYNC command or by recreating external tables pointing to existing Delta locations. Set up group mappings. Grant permissions using GRANT SQL statements.' },
       ],
     },
+    {
+      title: 'Databricks Performance Engineering',
+      subtopics: [
+        {
+          id: 'databricks-photon',
+          title: 'Photon Engine — Vectorized Query Execution',
+          difficulty: 'Advanced',
+          explanation: 'Photon is Databricks\' native vectorized query engine written in C++ that replaces the JVM-based Spark SQL engine for supported operations. It processes data in batches (vectors) of 1024 rows using SIMD CPU instructions — achieving 2-10x throughput improvement over standard Spark SQL.',
+          why: 'JVM Spark SQL has overhead from garbage collection, JVM object creation, and row-by-row processing. Photon bypasses all of this by operating in native C++ on columnar data. For analytical SQL workloads (aggregations, joins, scans) on large datasets, Photon dramatically reduces compute time and therefore cost.',
+          syntax: `// Photon is enabled at the cluster level — no code changes required
+// Enable: Cluster config → Enable Photon acceleration ✓
+
+// Operations accelerated by Photon:
+// - SELECT, WHERE, GROUP BY, ORDER BY, JOIN
+// - Window functions
+// - Delta Lake reads and writes
+// - SQL aggregations (SUM, COUNT, AVG, MIN, MAX)
+
+// Operations NOT accelerated by Photon (fall back to Spark JVM):
+// - Python UDFs (use Pandas UDFs/vectorized UDFs instead)
+// - RDD operations
+// - Complex CASE WHEN with external Python logic`,
+          example: `-- This query runs 5x faster on Photon vs standard Spark SQL:
+SELECT
+  region,
+  DATE_TRUNC('month', order_date) AS month,
+  SUM(amount)                     AS total_revenue,
+  COUNT(DISTINCT customer_id)     AS unique_customers,
+  AVG(amount)                     AS avg_order_value
+FROM gold.fact_orders
+WHERE order_date >= '2024-01-01'
+GROUP BY region, DATE_TRUNC('month', order_date)
+ORDER BY month, total_revenue DESC;
+
+-- Check if Photon is being used:
+-- In the Spark UI → SQL tab → query plan shows "PhotonGroupingAgg"
+-- vs standard "HashAggregate" for non-Photon`,
+          expectedOutput: 'Sub-second aggregation on 500M rows, Photon node visible in query plan',
+          interview: {
+            question: 'When does Photon NOT help, and how do you work around those limitations?',
+            answer: 'Photon does not accelerate Python UDFs — each row crosses the JVM-to-Python boundary, negating Photon\'s vectorization. Workaround: rewrite Python UDFs as Pandas UDFs (vectorized UDFs) which process batches of rows as Pandas Series — Photon can then accelerate the surrounding SQL and the Pandas UDF handles the Python logic efficiently. Also: custom RDD operations and Scala UDFs using non-SQL logic fall back to the JVM engine. For maximum Photon benefit, write workloads as pure SQL or DataFrame API without custom Python functions.',
+          },
+          commonMistakes: [
+            'Assuming Photon is enabled on all cluster types — Photon requires a Photon-enabled runtime (DBR 9.1+). Standard clusters without Photon runtime do not use it regardless of the UI setting.',
+            'Mixing Python UDFs into SQL pipelines on Photon clusters — each Python UDF call disables Photon for that stage. Profile with Spark UI to find UDF hotspots.',
+            'Not using Photon for Databricks SQL Warehouses — SQL Warehouses automatically use Photon. If you are running analytical SQL on an all-purpose cluster instead of a SQL Warehouse, you may be missing free Photon acceleration.',
+          ],
+          productionContext: 'Photon delivers the most value on: large aggregation queries (GROUP BY on 100M+ rows), hash joins between large tables, and Delta Lake scan-heavy workloads. Teams report 40-70% cost reduction for analytics SQL workloads after enabling Photon — the same query runs faster, so the cluster terminates sooner, billing less DBU time.',
+          performanceTip: 'Profile your workload in the Spark UI SQL tab before and after enabling Photon. Queries with "PhotonGroupingAgg", "PhotonShuffleExchangeSink", and "PhotonScan" nodes in the plan are fully accelerated. If you see standard Spark nodes mixed in, find the UDF or unsupported operation causing the fallback.',
+          juniorMistake: 'Rewriting working Python pipelines to SQL just to enable Photon — the rewrite cost is rarely worth it for non-bottleneck code. Profile first, optimize only the slowest stages.',
+          productionTradeoff: 'Photon clusters cost slightly more per DBU than non-Photon clusters but run faster — net effect is usually cost neutral or cost reduction. For short-running jobs (<5 min), the per-job fixed overhead reduces Photon\'s relative benefit.',
+        },
+        {
+          id: 'databricks-aqe',
+          title: 'Adaptive Query Execution (AQE)',
+          difficulty: 'Advanced',
+          explanation: 'Adaptive Query Execution (AQE) is a Spark feature that re-optimizes the query plan at runtime using actual data statistics — instead of relying only on pre-execution estimates. It dynamically adjusts the number of shuffle partitions, converts sort-merge joins to broadcast joins when a table turns out to be small, and handles skewed join partitions.',
+          why: 'Static query plans fail when data statistics are stale or unavailable. AQE fixes three of the most common Spark performance problems automatically: too many small shuffle partitions (reduces overhead), wrong join type (avoids expensive sort-merge when broadcast would work), and skewed partitions (splits large skewed partitions).',
+          syntax: `# Enable AQE (default ON in Databricks Runtime 10+):
+spark.conf.set("spark.sql.adaptive.enabled", "true")
+
+# AQE auto-coalesces shuffle partitions:
+spark.conf.set("spark.sql.adaptive.coalescePartitions.enabled", "true")
+spark.conf.set("spark.sql.adaptive.advisoryPartitionSizeInBytes", "128mb")
+
+# AQE skew join handling:
+spark.conf.set("spark.sql.adaptive.skewJoin.enabled", "true")
+spark.conf.set("spark.sql.adaptive.skewJoin.skewedPartitionFactor", "5")
+# A partition is skewed if it is 5x larger than the median partition`,
+          example: `# AQE in action — skewed join example:
+# orders table: 500M rows, customer_id column has 90% rows for customer_id=1 (skewed)
+# customers table: 100K rows
+
+# Without AQE: one executor processes 450M rows (customer_id=1), others sit idle
+# With AQE skew join: Spark splits the skewed partition into sub-partitions
+# Result: work distributed evenly, job completes 8x faster
+
+orders_df = spark.read.format("delta").table("silver.orders")
+customers_df = spark.read.format("delta").table("silver.customers")
+
+# AQE handles the skewed join automatically:
+result = orders_df.join(customers_df, "customer_id", "inner")
+result.write.format("delta").mode("overwrite").saveAsTable("gold.orders_enriched")
+
+# Check AQE decisions in Spark UI → SQL → query plan:
+# Look for "AQEShuffleRead" and "CustomShuffleReader" nodes`,
+          expectedOutput: 'Job completes without OOM errors, AQEShuffleRead visible in plan, execution time reduced',
+          interview: {
+            question: 'What are the three main things AQE does at runtime, and what problem does each solve?',
+            answer: '(1) Coalesce shuffle partitions — after a shuffle, AQE merges small partitions into larger ones. Problem solved: 200 small partitions that each complete in 10ms waste scheduler overhead; AQE merges them into 20 larger partitions. (2) Convert sort-merge join to broadcast join — if the runtime statistics show a table is smaller than the broadcast threshold, AQE switches to broadcast join. Problem solved: static planning estimated the table was large, but after filtering it was only 10MB — broadcast join is 100x faster. (3) Split skewed partitions — if one partition is 5x+ larger than median, AQE splits it into sub-partitions. Problem solved: one executor processing all data for customer_id=1 while 99 others are idle — AQE redistributes.',
+          },
+          commonMistakes: [
+            'Manually setting spark.sql.shuffle.partitions to a fixed number (200) when AQE is enabled — AQE overrides this dynamically, so a fixed setting is ignored. Let AQE determine the partition count based on actual data.',
+            'Assuming AQE fixes all skew problems — AQE handles join skew and shuffle skew, but GROUP BY skew (many rows with the same group key) still requires manual salting.',
+            'Disabling AQE to "simplify" debugging — AQE makes execution non-deterministic (different plan each run), which confuses some engineers. Keep it enabled; use the Spark UI AQE tab to understand what it changed.',
+          ],
+          productionContext: 'AQE is one of the most impactful Spark features for production stability. Before AQE, a spike in data volume could cause OOM from a skewed partition — requiring manual tuning of spark.sql.shuffle.partitions per job. With AQE, the same job adapts to 10x data volume changes without intervention. Enable AQE globally in your cluster policy or Spark config and rarely touch it again.',
+          performanceTip: 'Set spark.sql.adaptive.advisoryPartitionSizeInBytes to 128-256MB. This is the target partition size after AQE coalescing. Too small → too many tasks. Too large → executor memory pressure. Monitor partition size distribution in Spark UI → Stages → shuffle read/write sizes.',
+          juniorMistake: 'Running EXPLAIN on a query and treating the output as the actual plan — with AQE, the plan changes at runtime. Use EXPLAIN FORMATTED or the Spark UI SQL tab to see the actual executed plan with AQE decisions.',
+          productionTradeoff: 'AQE adds planning overhead between shuffle stages (re-optimizing the plan). For very short-running jobs (<30 seconds), AQE overhead can be measurable. Disable AQE only for micro-jobs where you have measured that AQE planning costs more than it saves.',
+        },
+        {
+          id: 'databricks-liquid-clustering',
+          title: 'Liquid Clustering and Delta Optimization',
+          difficulty: 'Advanced',
+          explanation: 'Liquid Clustering is the next generation of Delta Lake data layout optimization — replacing ZORDER for most use cases. Instead of rewriting all files in a specific column order (ZORDER), Liquid Clustering incrementally clusters files by selected columns, supports multiple clustering keys simultaneously, and is incremental — only newly written files are clustered, avoiding full table rewrites.',
+          why: 'ZORDER requires a full table scan and rewrite every time you run OPTIMIZE — expensive for large tables. Liquid Clustering clusters only the new data written since the last OPTIMIZE, making maintenance dramatically cheaper. It also handles multiple clustering keys better than ZORDER, which degrades with more than 2 columns.',
+          syntax: `-- Enable Liquid Clustering at table creation:
+CREATE TABLE gold.fact_orders
+  (order_id BIGINT, customer_id INT, order_date DATE, amount DECIMAL(10,2))
+  USING DELTA
+  CLUSTER BY (customer_id, order_date);
+
+-- Add Liquid Clustering to an existing table:
+ALTER TABLE silver.events CLUSTER BY (event_date, user_id);
+
+-- Run incremental clustering (only clusters new/changed data):
+OPTIMIZE silver.events;
+
+-- Check clustering status:
+DESCRIBE DETAIL silver.events;
+-- Returns: clusteringColumns: ["event_date", "user_id"]
+
+-- ZORDER (old approach — avoid for new tables):
+OPTIMIZE silver.events ZORDER BY (event_date, user_id);  -- full table rewrite every time`,
+          example: `# Liquid Clustering maintenance job (runs incrementally — fast even on large tables):
+spark.sql("OPTIMIZE silver.events")   # Only clusters files written since last OPTIMIZE
+
+# Then VACUUM to remove old file versions:
+spark.sql("VACUUM silver.events RETAIN 168 HOURS")  # Keep 7 days for time travel
+
+# Choosing clustering columns — follow these rules:
+# 1. High-cardinality columns used in WHERE filters
+# 2. Columns used in JOIN conditions
+# 3. Columns used in GROUP BY
+# Maximum 4 clustering columns for Liquid Clustering
+
+# Bad: clustering by a column with 3 distinct values (low cardinality, no benefit)
+# Good: clustering by customer_id (millions of distinct values) + order_date`,
+          expectedOutput: 'OPTIMIZE completes in minutes (not hours) for a 10TB table; query scan reduced from 10TB to 200GB for filtered queries',
+          interview: {
+            question: 'When would you use Liquid Clustering over ZORDER, and what are the tradeoffs?',
+            answer: 'Use Liquid Clustering for: (1) large tables where full-table ZORDER rewrites are too expensive, (2) tables with multiple frequently-queried columns (ZORDER degrades beyond 2 columns), (3) tables that receive frequent incremental writes. ZORDER may still be appropriate for: small tables (<100GB) where full rewrites are fast, or if you need strict column ordering for a specific query pattern. Key tradeoff: Liquid Clustering is incremental (fast maintenance) but takes several OPTIMIZE runs to fully cluster historical data. ZORDER applies to all data in one run but requires a full table rewrite each time. Migration: `ALTER TABLE t CLUSTER BY (col)` removes any existing ZORDER configuration automatically.',
+          },
+          commonMistakes: [
+            'Using CLUSTER BY on write-heavy columns that change frequently — clustering is most valuable for read-heavy filter columns. Clustering a column that every write touches causes constant reclustering overhead.',
+            'Setting more than 4 clustering columns — Delta\'s file pruning algorithm is less effective beyond 4 columns. Choose the 2-4 most selective WHERE/JOIN columns.',
+            'Not running OPTIMIZE after enabling Liquid Clustering — enabling clustering does not recluster existing data. Run OPTIMIZE to begin the incremental clustering process on existing files.',
+          ],
+          productionContext: 'Migration path from ZORDER to Liquid Clustering: (1) `ALTER TABLE t CLUSTER BY (same_cols_as_zorder)` — one-time change, no data rewrite. (2) OPTIMIZE runs incrementally from this point forward. (3) After 3-5 OPTIMIZE runs, historical files are fully clustered. Teams report 30-50% reduction in OPTIMIZE job duration after switching from ZORDER to Liquid Clustering for large tables.',
+          performanceTip: 'Run OPTIMIZE on a schedule matched to your write cadence — hourly writes → daily OPTIMIZE. Very frequent writes (streaming) → enable delta.autoOptimize.optimizeWrite=true to produce larger initial files, and run OPTIMIZE weekly. VACUUM after OPTIMIZE to reclaim storage from old file versions.',
+          juniorMistake: 'Running OPTIMIZE ZORDER on a Liquid Clustered table — once a table has CLUSTER BY, OPTIMIZE ignores any ZORDER BY clause. The error is silent: the command succeeds but ZORDER is ignored.',
+          productionTradeoff: 'Liquid Clustering is optimized for analytical read patterns — it improves query performance by enabling file pruning. It does not help with write-heavy workloads like high-frequency streaming inserts where write amplification is the bottleneck. For streaming, use small frequent writes + scheduled OPTIMIZE + delta.autoOptimize.optimizeWrite.',
+        },
+      ],
+    },
+    {
+      title: 'Delta Live Tables and Unity Catalog',
+      subtopics: [
+        {
+          id: 'databricks-dlt',
+          title: 'Delta Live Tables (DLT)',
+          difficulty: 'Advanced',
+          explanation: 'Delta Live Tables (DLT) is a declarative framework for building reliable, maintainable data pipelines on Databricks. You declare your transformations as Python or SQL table definitions; DLT handles dependency resolution, incremental processing, error handling, and monitoring. Tables can be "Streaming" (incremental) or "Materialized View" (recomputed).',
+          why: 'Traditional Spark pipelines require manual dependency management — if Table C depends on Table B which depends on Table A, you must orchestrate the order and handle failures. DLT infers the dependency graph automatically, runs tables in the correct order, handles retries, and provides built-in data quality assertions (expectations). This eliminates an entire class of pipeline orchestration bugs.',
+          syntax: `import dlt
+from pyspark.sql.functions import col, current_timestamp
+
+# Bronze: streaming table from Autoloader
+@dlt.table(
+  name="bronze_orders",
+  comment="Raw orders from cloud storage via Autoloader"
+)
+def bronze_orders():
+  return (
+    spark.readStream.format("cloudFiles")
+      .option("cloudFiles.format", "json")
+      .option("cloudFiles.schemaLocation", "/mnt/checkpoints/bronze_orders")
+      .load("/mnt/raw/orders/")
+  )
+
+# Silver: streaming table with data quality expectations
+@dlt.table(name="silver_orders")
+@dlt.expect_or_drop("valid_amount", "amount > 0")
+@dlt.expect_or_drop("non_null_customer", "customer_id IS NOT NULL")
+def silver_orders():
+  return (
+    dlt.read_stream("bronze_orders")
+      .select(
+        col("order_id").cast("long"),
+        col("customer_id").cast("int"),
+        col("amount").cast("decimal(10,2)"),
+        col("order_date").cast("date"),
+        current_timestamp().alias("processed_at")
+      )
+  )
+
+# Gold: materialized view (recomputed, not incremental)
+@dlt.table(name="gold_daily_revenue")
+def gold_daily_revenue():
+  return (
+    dlt.read("silver_orders")
+      .groupBy("order_date")
+      .agg({"amount": "sum", "order_id": "count"})
+  )`,
+          example: `# DLT Expectations — three behaviors:
+# expect()             → log violation, keep row
+# expect_or_drop()     → log violation, drop row
+# expect_or_fail()     → log violation, fail pipeline
+
+@dlt.table(name="silver_customers")
+@dlt.expect("valid_email", "email LIKE '%@%.%'")           # warn but keep
+@dlt.expect_or_drop("positive_age", "age > 0 AND age < 120")  # drop invalid
+@dlt.expect_or_fail("non_null_id", "customer_id IS NOT NULL")  # halt pipeline
+def silver_customers():
+  return dlt.read_stream("bronze_customers")
+
+# DLT pipelines run in two modes:
+# Continuous: always on, processes data as it arrives
+# Triggered:  run on demand or on schedule, then stop`,
+          expectedOutput: 'DLT pipeline runs Bronze → Silver → Gold automatically, violations logged to pipeline event log',
+          interview: {
+            question: 'How does DLT handle schema evolution, and what happens when the source schema changes?',
+            answer: 'DLT with Autoloader and schema inference automatically handles new column additions — new columns are added to the Bronze Delta table schema without pipeline failure. For schema changes that break existing logic (renamed columns, type changes), DLT fails the pipeline with a schema mismatch error. Best practice: define an explicit schema in Bronze Autoloader (not inferred) and add schema evolution logic in Silver — use `from_json` with a defined schema to be explicit about what fields you process. Configure `cloudFiles.schemaEvolutionMode=addNewColumns` for Bronze to auto-add new source fields without failing.',
+          },
+          commonMistakes: [
+            'Using dlt.read() instead of dlt.read_stream() for streaming pipelines — dlt.read() is for batch materialized views. Using it in a streaming pipeline reprocesses all data on every run instead of incrementally.',
+            'Adding expectations to Bronze tables — expectations that drop rows at Bronze lose data permanently. Bronze should store all raw data; apply dropping expectations in Silver where data has been validated.',
+            'Not separating Continuous and Triggered pipelines — Continuous pipelines have higher cost (always-on compute). Use Triggered mode for batch-latency acceptable pipelines (hourly, daily) to save cost.',
+          ],
+          productionContext: 'DLT is the recommended pattern for new Databricks pipelines. It replaces: manually ordered Databricks Workflows, custom retry logic, manual data quality checks, and pipeline event logging. The DLT event log records every expectation violation, pipeline run, and table update — providing audit-ready data quality history without custom logging code.',
+          performanceTip: 'DLT pipelines use "Enhanced Autoscaling" — the cluster scales workers based on backlog size. For streaming pipelines processing a large initial backlog, set max workers high initially; DLT will scale down once backlog is clear. For steady-state streaming with low latency, use Continuous mode with 2-4 workers and a Photon-enabled cluster.',
+          juniorMistake: 'Building a DLT pipeline then separately scheduling it in a Databricks Workflow — DLT pipelines have their own scheduler (Triggered mode with a cron). No need to wrap in a Workflow unless chaining with non-DLT tasks.',
+          productionTradeoff: 'DLT is more opinionated than raw Spark — you cannot use arbitrary Spark operations freely. Complex cross-pipeline operations (reading from a different DLT pipeline\'s output) require materialized views and careful dependency management. Teams with highly custom pipeline logic sometimes find raw Workflows + Notebooks more flexible, but lose DLT\'s built-in quality assertions and automatic dependency resolution.',
+        },
+        {
+          id: 'databricks-unity-catalog',
+          title: 'Unity Catalog — Governance and Lineage',
+          difficulty: 'Advanced',
+          explanation: 'Unity Catalog (UC) is Databricks\' unified governance layer — a metastore that spans all workspaces in an account. It provides: centralized access control (GRANT/REVOKE on any object), data lineage (column-level lineage across notebooks, jobs, and SQL), fine-grained permissions (table, column, row-level), and cross-workspace data sharing without copying.',
+          why: 'Without Unity Catalog, permissions are workspace-scoped — access changes must be made in every workspace separately. Unity Catalog centralizes governance: one GRANT statement applies across all workspaces that share the metastore. Lineage shows exactly which job or notebook wrote to a table, what it read from, and which column transformations occurred — critical for compliance (GDPR, CCPA right-to-erasure impact analysis).',
+          syntax: `-- Unity Catalog three-level namespace: catalog.schema.table
+SELECT * FROM prod.gold.dim_customer;
+
+-- Grant table access:
+GRANT SELECT ON TABLE prod.gold.dim_customer TO \`analyst@company.com\`;
+GRANT SELECT ON TABLE prod.gold.dim_customer TO \`data-analysts-group\`;
+
+-- Grant schema-level access (inherits to all tables):
+GRANT USE SCHEMA, SELECT ON SCHEMA prod.gold TO \`data-analysts-group\`;
+
+-- Row-level security via Dynamic Views:
+CREATE VIEW prod.gold.dim_customer_view AS
+SELECT *
+FROM prod.gold.dim_customer
+WHERE region = current_user()          -- filter by logged-in user's mapped region
+   OR IS_ACCOUNT_GROUP_MEMBER('data_admin');
+
+-- Column masking (Data Masking function):
+ALTER TABLE prod.gold.dim_customer
+ALTER COLUMN ssn SET MASK prod.security.mask_ssn USING COLUMNS (ssn);`,
+          example: `-- Unity Catalog lineage — view in Databricks UI: Data → table → Lineage tab
+-- Programmatically query lineage via system tables (preview):
+SELECT
+  source_table_full_name,
+  target_table_full_name,
+  created_by,
+  event_time
+FROM system.access.table_lineage
+WHERE target_table_full_name = 'prod.gold.dim_customer'
+ORDER BY event_time DESC;
+
+-- Unity Catalog tags for data classification:
+ALTER TABLE prod.gold.dim_customer
+SET TAGS ('pii' = 'true', 'data_domain' = 'customer', 'retention_days' = '2555');
+
+-- Audit log query (system table):
+SELECT user_identity, action_name, request_object_type, request_object_name
+FROM system.access.audit
+WHERE request_object_name LIKE 'prod.gold%'
+  AND event_date >= current_date - 30
+ORDER BY event_time DESC;`,
+          expectedOutput: 'Centralized access control, column-level lineage, audit logs, and PII masking applied across all workspaces',
+          interview: {
+            question: 'How does Unity Catalog column-level lineage work, and why does it matter for GDPR compliance?',
+            answer: 'Unity Catalog tracks column-level lineage by intercepting Spark and SQL query plans at execution time — recording which source columns were read and which target columns were written. For GDPR: when a "right to erasure" request arrives for customer_id=12345, lineage shows every downstream table that received data derived from that customer\'s rows — enabling a complete deletion impact analysis without manual code archaeology. Without lineage, deleting a customer from the source means manually tracing all pipelines that might have copied that data. With Unity Catalog lineage, this is a UI query showing the complete data propagation graph for that column.',
+          },
+          commonMistakes: [
+            'Granting admin-level access (account admin, metastore admin) to individual engineers instead of using groups — Unity Catalog admins can access all data in all workspaces. Use data steward groups with limited grants.',
+            'Using the Hive metastore alongside Unity Catalog — Databricks supports both but they are isolated. Hive metastore tables are not governed by Unity Catalog. Migrate fully to Unity Catalog; do not run hybrid.',
+            'Not enabling column masking for PII columns before granting analyst access — analysts can see unmasked SSNs, credit card numbers, etc. if masking is not configured before the GRANT.',
+          ],
+          productionContext: 'Unity Catalog migration pattern from Hive metastore: (1) Create new Unity Catalog tables in a new catalog (prod, dev, test). (2) Migrate table by table using DEEP CLONE or CTAS (CREATE TABLE ... AS SELECT). (3) Update notebook references from `schema.table` to `catalog.schema.table`. (4) Apply GRANT statements to groups, not individuals. (5) Enable audit logging (system.access.audit) from day one — retroactive audit is not possible. Teams typically run UC and Hive metastore in parallel for 3-6 months during migration.',
+          performanceTip: 'Unity Catalog adds a governance check overhead on every query — typically 10-50ms per query for permission validation. This is negligible for batch jobs but noticeable for high-frequency micro-queries. For latency-sensitive workloads, cache permission checks using Databricks SQL Warehouse result caching.',
+          juniorMistake: 'Thinking Unity Catalog works like a database schema — it is a metastore, not a storage layer. Dropping a Unity Catalog table does not delete the underlying Delta files unless USING LOCATION is not specified (managed tables). Always check if a table is managed or external before dropping.',
+          productionTradeoff: 'Unity Catalog requires upgrading cluster runtime to DBR 11.3+. Some legacy Spark operations (RDD-based access to DBFS paths, spark.hadoop.fs.* direct calls) do not pass through UC governance. Full UC coverage requires using DataFrame API and SQL, not low-level RDD or file system calls.',
+        },
+      ],
+    },
   ],
 
   miniProjects: [

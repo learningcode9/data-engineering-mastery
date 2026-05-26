@@ -279,7 +279,7 @@ export const learningPathPhases = [
               ],
               explanation: 'A data warehouse is a structured, SQL-queryable database designed for analytics (Snowflake, BigQuery, Redshift). It stores clean, modelled data and serves dashboards and reports fast. A data lake is cheap object storage (S3, Azure Data Lake Storage) that holds raw data in any format — JSON, CSV, Parquet, images. It scales to petabytes cheaply. Modern companies use a lakehouse — a data lake with a table format layer (Delta Lake) that adds ACID transactions and SQL on top.',
               analogy: {
-                title: 'Library vs Warehouse',
+                title: 'Data Lake vs Warehouse',
                 text: 'A data warehouse is like a well-organised library: every book (table) is catalogued, indexed, and in the right place. Searching is fast and reliable. A data lake is like a giant warehouse full of boxes: you can store anything — books, equipment, raw materials — cheaply and at scale, but finding what you need takes more work. The lakehouse is a library built inside a warehouse: cheap storage with library-grade organisation on top.',
               },
               keyPoints: [
