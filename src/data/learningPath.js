@@ -993,6 +993,44 @@ export const learningPathPhases = [
         ],
       },
       {
+        id: 'azure-security-module',
+        title: 'Azure Security & Secrets Management',
+        lessons: [
+          {
+            id: 'azure-security-managed-identity',
+            title: 'Managed Identity & Key Vault',
+            topicId: 'azure-security',
+            label: 'Security',
+            difficulty: 'Advanced',
+            body: 'Replace connection strings and Service Principal secrets with Managed Identity. Store remaining credentials in Key Vault and reference them from ADF Linked Services and Databricks secret scopes.',
+          },
+          {
+            id: 'azure-security-rbac',
+            title: 'RBAC & Unity Catalog Access Control',
+            topicId: 'azure-security',
+            label: 'Security',
+            difficulty: 'Advanced',
+            body: 'Design least-privilege RBAC for a medallion architecture: container-scoped Storage roles, Unity Catalog GRANT statements, column masking for PII, and AAD group management.',
+          },
+          {
+            id: 'azure-security-networking',
+            title: 'Private Networking & Data Governance',
+            topicId: 'azure-security',
+            label: 'Security',
+            difficulty: 'Advanced',
+            body: 'Lock down ADLS and Key Vault with Private Endpoints and DNS configuration. Scan and classify data with Microsoft Purview for GDPR compliance.',
+          },
+          {
+            id: 'azure-security-cicd',
+            title: 'Secrets in CI/CD & Incident Response',
+            topicId: 'azure-security',
+            label: 'Security',
+            difficulty: 'Advanced',
+            body: 'Implement OIDC federation for GitHub Actions and Azure DevOps — no long-lived credentials in pipelines. Run through incident scenarios: leaked keys, exposed public blobs, 403 debugging.',
+          },
+        ],
+      },
+      {
         id: 'production-ops',
         title: 'Production Operations',
         lessons: [

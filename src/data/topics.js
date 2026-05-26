@@ -9,6 +9,7 @@ import { aiModule }         from './modules/ai-for-data-engineers.js';
 import { fabricModule }          from './modules/fabric.js';
 import { kafkaStreamingModule }  from './modules/kafka-streaming.js';
 import { systemDesignModule }    from './modules/system-design.js';
+import { azureSecurityModule }   from './modules/azure-security.js';
 import { newTopics }             from './newTopics.js';
 import { phases }           from './phases.js';
 
@@ -480,8 +481,46 @@ const coreTopics = [
       interviewTip: 'Structure your answer: Requirements → Scale estimation → High-level architecture → Component deep-dives → Failure modes → Monitoring → Cost. Practice saying "The tradeoff here is..." — it signals senior thinking.',
       projectLink: 'Any end-to-end project in your portfolio is a system design story — practice narrating it in the Requirements → Architecture → Tradeoffs format.',
     },
-    nextStep: null,
+    nextStep: 'azure-security',
     docs: ['apache-kafka', 'delta-lake', 'ms-fabric-overview'],
+  },
+  {
+    id: 'azure-security',
+    title: 'Azure Security & Secrets Management',
+    label: 'Security',
+    category: 'Cloud Security',
+    difficulty: 'Advanced',
+    step: 23,
+    prerequisites: ['azure-data-factory', 'azure-databricks'],
+    module: azureSecurityModule,
+    timeEstimate: '2–3 weeks',
+    interviewImportance: 'critical for senior Azure roles',
+    overview: [
+      { title: 'What is this?', body: 'Azure Security for Data Engineers covers Managed Identity, Key Vault, RBAC, Private Networking, Microsoft Purview, and secrets management in CI/CD pipelines — the production security patterns every senior Azure DE must know.' },
+      { title: 'Why does it matter?', body: 'Security incidents caused by leaked credentials, misconfigured RBAC, or public-facing storage accounts are the most common production failures in Azure data platforms. Knowing how to prevent them is non-negotiable at senior level.' },
+      { title: 'Simple example', body: 'Instead of storing a storage account key in an ADF Linked Service, configure Managed Identity on the ADF instance, assign Storage Blob Data Reader on the target container, and use the MI for authentication — no secrets, no rotation, no risk of credential leak.' },
+      { title: 'Practice task', body: 'Audit an existing Azure data platform: identify all Linked Services using connection strings or SAS tokens, replace with Managed Identity or Key Vault references, then implement Private Endpoints for ADLS and Key Vault to eliminate public access.' },
+    ],
+    questions: [
+      { question: 'What is a Managed Identity and why is it preferred over a Service Principal?', answer: 'A Managed Identity is an AAD identity automatically managed by Azure — no secret to create, store, or rotate. A Service Principal has a client secret with an expiry date that must be rotated manually. MIs eliminate the credential leak risk entirely and are the recommended pattern for Azure service-to-service auth.' },
+      { question: 'How does Key Vault integration work in ADF Linked Services?', answer: 'Instead of storing a connection string in the Linked Service directly, reference the Key Vault secret by URL. ADF fetches the secret at runtime using its Managed Identity, which must have Key Vault Secrets User role on the vault. The secret value never leaves Key Vault and is not visible in ADF configuration.' },
+      { question: 'What is the difference between Azure RBAC and Key Vault Access Policies?', answer: 'Azure RBAC is the modern control plane — roles are assigned at subscription/resource group/resource scope and work uniformly. Access Policies are the legacy Key Vault mechanism, applied per-vault, with no inheritance and no audit trail in Azure Policy. Microsoft recommends RBAC for all new deployments.' },
+    ],
+    module: azureSecurityModule,
+    careerContext: {
+      whyItMatters: 'Security is the final barrier between passing a senior interview and failing it. FAANG-tier and enterprise Azure roles explicitly test whether candidates can design secure-by-default data platforms — not just build functional ones.',
+      realWorldUseCase: 'A senior DE is asked to onboard a new data source from a vendor. Secure pattern: create a user-assigned Managed Identity for the ingestion pipeline, assign Storage Blob Data Contributor on the landing container only, store the vendor\'s API key in Key Vault, reference via KV-backed Linked Service, deploy using a GitHub Actions workflow with OIDC federation — no secrets in code or config.',
+      interviewTip: 'When asked any Azure architecture question, add a security dimension unprompted: "I would also ensure the ADF uses Managed Identity rather than a connection string, and ADLS would be on a Private Endpoint with public access disabled." This signals senior-level thinking.',
+      projectLink: 'Refactor any personal Azure project to remove all connection strings from config files — replace with Managed Identity or Key Vault references. This single change demonstrates production-grade security awareness.',
+    },
+    commonMistakes: [
+      'Using connection strings in Linked Services — these end up in Terraform state, git history, and ADF export files. Always use Managed Identity or Key Vault references.',
+      'Assigning Owner or Contributor at subscription scope — RBAC should be scoped to the minimum resource level (container, not storage account).',
+      'Skipping Private Endpoints because they are "complex" — public ADLS with firewall rules still exposes the storage account to the internet. Private Endpoints eliminate this attack surface.',
+    ],
+    resumeRelevance: 'Add a bullet: "Implemented Managed Identity-based authentication for all ADF Linked Services, eliminating 12 service principal secrets and reducing credential rotation toil by 100%."',
+    nextStep: null,
+    docs: ['azure-managed-identity', 'azure-key-vault', 'azure-rbac'],
   },
 ];
 

@@ -1233,4 +1233,84 @@ export const categoryQuestions = {
       },
     ],
   },
+  'azure-security': {
+    beginner: [
+      {
+        q: 'What is a Managed Identity in Azure and why should you use it instead of a Service Principal with a client secret?',
+        a: 'A Managed Identity is an Azure Active Directory identity that Azure creates and manages automatically for a resource — no password, no secret, no expiry date. A Service Principal with a client secret has an expiry date (typically 1-2 years) that must be manually rotated. If the rotation is missed or the secret leaks, the pipeline breaks or an attacker gains access. Managed Identity eliminates the entire credential management problem: Azure handles token issuance, rotation is automatic, and there is nothing to steal.',
+        tags: ['Azure', 'Security', 'Identity'],
+      },
+      {
+        q: 'What is the difference between a system-assigned and a user-assigned Managed Identity?',
+        a: 'System-assigned: created for one specific resource (e.g., one ADF instance), lives and dies with that resource, 1:1 relationship. User-assigned: created as a standalone Azure resource, can be assigned to multiple resources (e.g., 10 ADF pipelines all using the same identity), survives resource deletion. Use system-assigned for single-resource scenarios, user-assigned when multiple resources need the same permissions or when you need the identity to persist independently.',
+        tags: ['Azure', 'Security', 'Identity'],
+      },
+      {
+        q: 'How does Azure Key Vault work with ADF Linked Services?',
+        a: 'Instead of pasting a connection string into the Linked Service configuration (which would be stored in ADF\'s internal database and visible in JSON exports), you store the connection string in Key Vault as a secret and reference it by URL in the Linked Service. ADF fetches the secret at runtime using its own Managed Identity, which must have the Key Vault Secrets User role. The secret value is never stored in ADF and never appears in Terraform state or git history.',
+        tags: ['Azure', 'ADF', 'Key Vault'],
+      },
+      {
+        q: 'What is Azure RBAC and how is it different from Key Vault Access Policies?',
+        a: 'Azure RBAC is a unified permission system for all Azure resources — you assign roles (Owner, Contributor, Storage Blob Data Reader, etc.) to principals (users, groups, managed identities) at a specific scope (subscription, resource group, resource, or sub-resource like a container). Key Vault Access Policies are a legacy mechanism specific to Key Vault — applied per-vault, no inheritance, limited audit trail. Microsoft now recommends RBAC for Key Vault as it works consistently with the rest of Azure\'s permission model.',
+        tags: ['Azure', 'RBAC', 'Security'],
+      },
+    ],
+    intermediate: [
+      {
+        q: 'Walk me through how you would replace a Service Principal secret in an existing ADF pipeline with Managed Identity.',
+        a: '1. Enable system-assigned Managed Identity on the ADF instance (it already has one by default after creation — confirm it is enabled). 2. Note the MI Object ID from ADF → Properties. 3. Go to the target resource (e.g., ADLS Gen2 storage account) → IAM → Add Role Assignment. Assign Storage Blob Data Reader (or Contributor) to the ADF Managed Identity, scoped to the specific container — not the storage account. 4. In ADF Linked Service, change the authentication method from Service Principal to Managed Identity. 5. Test the connection in ADF. 6. Remove the old Service Principal\'s permission. 7. Delete the client secret from Azure AD.',
+        tags: ['Azure', 'ADF', 'Managed Identity'],
+      },
+      {
+        q: 'How do you give a Databricks cluster access to ADLS Gen2 without storing storage account keys?',
+        a: 'Two approaches: (1) Unity Catalog with External Locations — grant Databricks a Storage Credential backed by a Managed Identity or service principal with RBAC on the storage, then create an External Location pointing to the ADLS container. All clusters using Unity Catalog access the data through the credential without ever seeing the key. (2) Instance Profile (AWS) or Managed Identity (Azure) mounted at cluster level — the cluster VM has an identity with RBAC on ADLS, and Databricks uses that identity without any key in the notebook. Never use `spark.conf.set("fs.azure.account.key...")` in notebooks — that key ends up in notebook history and Spark UI.',
+        tags: ['Databricks', 'Azure', 'Security'],
+      },
+      {
+        q: 'What is the principle of least privilege and how do you apply it to a medallion architecture on ADLS?',
+        a: 'Least privilege: grant only the permissions needed for the task, at the minimum scope, for the minimum time. For a medallion on ADLS: Bronze container — ingestion pipeline MI gets Storage Blob Data Contributor (must write). Silver and Gold containers — transformation pipeline MI gets Storage Blob Data Contributor. Analysts and reporting tools get Storage Blob Data Reader on Gold only. The Bronze MI has no access to Silver/Gold — it cannot see transformed data. Each pipeline uses a separate Managed Identity so a compromise of one identity does not affect others. Never assign Contributor at the storage account level — it grants access to all containers.',
+        tags: ['Azure', 'RBAC', 'ADLS', 'Security'],
+      },
+      {
+        q: 'What is a Private Endpoint in Azure and when would you use one for ADLS?',
+        a: 'A Private Endpoint gives an Azure resource a private IP address inside your VNet, routing all traffic to it through Microsoft\'s backbone network rather than the public internet. For ADLS: without a Private Endpoint, even with firewall rules, the storage account has a public hostname resolvable from the internet. With a Private Endpoint: the storage account gets a private IP in your VNet, public access can be disabled entirely, and traffic never leaves the Azure network. Use it whenever the data platform handles sensitive data, when compliance requires network isolation (PCI, HIPAA), or when you want to eliminate the public attack surface entirely.',
+        tags: ['Azure', 'Networking', 'Security'],
+      },
+    ],
+    advanced: [
+      {
+        q: 'How do you implement OIDC-based authentication for GitHub Actions deploying to Azure — and why is this better than storing a client secret in GitHub Secrets?',
+        a: 'Workload Identity Federation (OIDC): 1. In Azure AD, create an App Registration with a Federated Credential pointing to your GitHub repo (subject: `repo:org/repo:ref:refs/heads/main`). 2. Assign the App Registration the required RBAC roles on Azure resources. 3. In GitHub Actions, use `azure/login@v2` with `client-id`, `tenant-id`, `subscription-id` — no `client-secret`. GitHub presents an OIDC token to Azure, which validates it against the Federated Credential. Why better: no secret to store, no expiry to track, no risk of the secret being logged or leaked in CI output. The OIDC token is ephemeral — it expires in minutes and cannot be reused outside the validated context.',
+        tags: ['Azure', 'CI/CD', 'Security', 'GitHub Actions'],
+      },
+      {
+        q: 'A junior engineer accidentally pushed a storage account key to a public GitHub repository. Walk me through the incident response.',
+        a: '1. Immediately rotate the key in the Azure Portal (Storage Account → Access Keys → Rotate). The old key is invalidated within seconds. 2. If the key was used in any service, update those services to use the new key or — better — migrate them to Managed Identity now. 3. Check Azure Monitor Storage logs for any access using that key in the window between the push and the rotation — look for unexpected IPs, geographic anomalies, or unusual data volumes. 4. Remove the key from git history using `git filter-repo` and force-push (coordinate with team). 5. Enable GitHub secret scanning on the repo to catch future leaks automatically. 6. Post-incident: file a corrective action to migrate all remaining keys to Managed Identity so this class of incident cannot recur.',
+        tags: ['Azure', 'Incident Response', 'Security'],
+      },
+      {
+        q: 'How does Unity Catalog enforce column-level security, and what are its limitations?',
+        a: 'Unity Catalog column masking: `ALTER TABLE catalog.schema.table ALTER COLUMN ssn SET MASK mask_ssn USING COLUMNS (user_group);` — at query time, Unity Catalog evaluates the mask function for each row based on the querying user\'s group membership. Analysts in the "pii_restricted" group see `XXX-XX-XXXX`; analysts in "pii_full_access" see the real value. Row filters work similarly: `CREATE ROW FILTER region_filter ON catalog.schema.table USING (region = current_user_region());`. Limitations: (1) column masking requires Databricks Runtime 12.2+ and Unity Catalog governance enabled; (2) masking is bypassed if data is exported to a non-Unity Catalog location; (3) complex mask functions add query overhead at scale; (4) does not protect data accessed directly from ADLS — Unity Catalog only governs access through Databricks.',
+        tags: ['Databricks', 'Unity Catalog', 'Security', 'Governance'],
+      },
+      {
+        q: 'How would you use Microsoft Purview to respond to a GDPR Subject Access Request (SAR) in a data platform with 50 Delta tables?',
+        a: 'Purview approach: 1. Purview has already scanned and classified the Delta tables — it knows which tables contain fields classified as "PersonName", "EmailAddress", "NationalID". 2. For a SAR on customer_id=12345: query Purview\'s data catalog API to list all assets containing PII. 3. Run SQL against each identified table: `SELECT * FROM table WHERE customer_id = 12345`. 4. Purview lineage shows derived tables downstream — check those too. 5. Compile the subject\'s data across all tables into the SAR response. 6. For erasure: MERGE/DELETE from each table, then VACUUM after Delta retention period. Limitation: Purview classification catches known patterns but may miss custom identifiers — supplement with a manual data inventory for non-standard PII fields.',
+        tags: ['Azure', 'Purview', 'Governance', 'GDPR'],
+      },
+    ],
+    scenario: [
+      {
+        q: 'You inherit an Azure data platform where all ADF Linked Services use connection strings stored directly in ADF, several storage accounts have public access enabled, and the deployment pipeline stores an Azure service principal secret in GitHub Secrets. How do you remediate this without breaking production?',
+        a: 'Phase 1 (no downtime): Enable Managed Identity on ADF (already exists, just confirm it\'s enabled). Identify all Linked Services using connection strings via ADF → Manage → Linked Services. For each one: create the equivalent Key Vault secret, update the Linked Service to use Key Vault reference, test the connection, then publish. Do this during business hours with monitoring on pipeline runs. Phase 2: For each storage account, add a Private Endpoint in the VNet, update DNS, test from ADF, then disable public access. Do one storage account at a time. Phase 3: Replace GitHub Secrets SP secret with Workload Identity Federation — add Federated Credential to the App Registration, update GitHub Actions workflow to use OIDC login, test on a non-production branch, then migrate main. Timeline: 2-4 weeks for a medium platform. Track progress in a security remediation board.',
+        tags: ['Azure', 'Remediation', 'Security', 'Production'],
+      },
+      {
+        q: 'An ADF pipeline starts failing with 403 Forbidden on an ADLS container it was successfully accessing yesterday. What is your debugging process?',
+        a: '1. Check ADF pipeline run error — the 403 message often includes the specific resource path and the identity that was rejected. 2. Confirm which identity ADF is using: if Managed Identity, go to Storage Account → IAM → Role Assignments → filter by the ADF MI Object ID. Check the role still exists at the right scope. Common cause: someone removed the role assignment, or it was assigned at the storage account level and a new container was added that it cannot access. 3. If using Key Vault reference: verify the Key Vault secret has not been deleted or disabled. Check ADF MI has Key Vault Secrets User. 4. Check Private Endpoint: if the storage account recently had public access disabled, verify the Private Endpoint DNS is resolving to the private IP (not the public endpoint). `nslookup storageaccount.blob.core.windows.net` from within the VNet should return a 10.x.x.x address. 5. Check RBAC propagation: new role assignments can take up to 5 minutes to propagate — if someone just added the assignment, wait and retry.',
+        tags: ['Azure', 'Debugging', 'ADF', 'RBAC'],
+      },
+    ],
+  },
 };
