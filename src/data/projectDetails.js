@@ -132,6 +132,20 @@ spark.sql("ANALYZE TABLE gold.daily_sales COMPUTE STATISTICS FOR ALL COLUMNS")` 
       'Optimized Gold layer queries by 60% using Z-ORDER clustering and table statistics',
       'Orchestrated multi-notebook Databricks pipeline with ADF dependency management and alerting',
     ],
+    patterns: ['Medallion Architecture', 'Auto Loader', 'SCD Type 2', 'Incremental Loading', 'MERGE Upsert', 'Data Quality', 'Orchestration', 'CI/CD', 'RBAC Security', 'Cost Optimization'],
+    officialDocs: ['ms-databricks', 'databricks-docs', 'delta-lake', 'databricks-unity-catalog', 'ms-adf'],
+    resumeTiers: {
+      beginner: [
+        'Built Bronze-Silver-Gold medallion pipeline on Databricks using PySpark and Delta Lake',
+        'Implemented daily batch ingestion with Azure Data Factory triggering Databricks notebooks on file arrival',
+        'Applied data deduplication and type casting in Silver transformation layer, writing clean records to Delta tables',
+      ],
+      senior: [
+        'Designed medallion lakehouse for 50+ store retail feeds, cutting daily reporting latency from 48h to <1h using Auto Loader with incremental processing and trigger(availableNow=True)',
+        'Engineered SCD Type 2 customer dimension with Delta MERGE upsert and Z-ORDER clustering, achieving 60% query performance improvement and eliminating historical data overwrites',
+        'Implemented blue/green CI/CD via Databricks Asset Bundles with quality gates — Silver row count ≥95% Bronze required before Gold promotion, eliminating downstream data incidents across 12 dashboards',
+      ],
+    },
     challenges: [
       'Schema drift when source CSV columns change — solved with Auto Loader schemaEvolutionMode',
       'Duplicate orders in raw data due to re-delivery — solved with window deduplication on ingestion',
@@ -333,6 +347,20 @@ def load(df: pd.DataFrame, engine, table: str, pk: str) -> int:
       'Implemented UPSERT load pattern ensuring zero data duplication on pipeline reruns',
       'Added data quality validation layer quarantining bad records to separate table for review',
     ],
+    patterns: ['Incremental Loading', 'Watermark Pattern', 'Idempotent UPSERT', 'Data Quality', 'Retry Handling', 'Logging', 'CI/CD'],
+    officialDocs: ['python-docs', 'postgresql-docs'],
+    resumeTiers: {
+      beginner: [
+        'Built Python-based incremental ETL pipeline that extracts only changed records using a high-watermark pattern',
+        'Implemented UPSERT loading into PostgreSQL analytics database, preventing data duplication on pipeline reruns',
+        'Added structured logging, row-count alerting, and a data quarantine table for validation failures',
+      ],
+      senior: [
+        'Designed idempotent incremental ETL pipeline with high-watermark state tracking, reducing nightly data sync from 4h to 12min by eliminating full table scans on a 50M+ row source',
+        'Engineered crash-safe recovery: watermark committed inside the same DB transaction as the load, guaranteeing exactly-once semantics without coordination — validated with intentional crash injection tests',
+        'Implemented tiered testing strategy (SQLite unit, production-snapshot integration, live synthetic smoke) achieving >95% coverage and catching a schema drift bug before it reached production',
+      ],
+    },
     challenges: [
       'Clock skew between source DB servers causing missed records — solved with 5-minute overlap window',
       'Large transactions updating same row multiple times within extraction window — solved with MAX(last_modified) dedup',
@@ -544,6 +572,20 @@ def process_batch(batch_df, batch_id):
       'Handled insert/update/delete events with idempotent MERGE operations in Delta Lake',
       'Configured checkpointing and exactly-once semantics for fault-tolerant streaming pipeline',
     ],
+    patterns: ['CDC', 'Kafka Streaming', 'Exactly-Once Semantics', 'Idempotent MERGE', 'Schema Registry', 'Retry Handling', 'Monitoring', 'CI/CD'],
+    officialDocs: ['apache-kafka', 'spark-structured-streaming', 'delta-lake', 'kafka-streams'],
+    resumeTiers: {
+      beginner: [
+        'Implemented CDC pipeline from PostgreSQL to Delta Lake using Debezium, Kafka, and Spark Structured Streaming',
+        'Handled INSERT, UPDATE, and DELETE CDC events with MERGE operations for idempotent Delta Lake writes',
+        'Configured Spark checkpointing and Kafka offset tracking for fault-tolerant pipeline recovery',
+      ],
+      senior: [
+        'Engineered sub-minute CDC pipeline (Debezium WAL → Kafka → Spark Streaming → Delta) for core banking replication at <30s latency, replacing hourly ETL for fraud detection SLA compliance',
+        'Implemented event-timestamp-ordered MERGE with __op field handling for out-of-order CDC events, guaranteeing idempotent exactly-once delivery on duplicate Kafka messages',
+        'Designed blue/green Spark Streaming deployment using parallel consumer groups with Kafka lag comparison gate, enabling zero-downtime schema migrations without message loss',
+      ],
+    },
     challenges: [
       'Kafka consumer lag during backfill of historical data — solved with separate backfill job and separate consumer group',
       'Out-of-order CDC events for rapid update sequences — solved with event timestamp ordering in MERGE logic',
@@ -757,6 +799,20 @@ def write_parquet_partitioned(df: pd.DataFrame, output_path: str):
       'Automated daily campaign data extraction replacing 2-hour manual process with 8-minute automated pipeline',
       'Handled nested JSON flattening and Parquet output with date-based partitioning in ADLS Gen2',
     ],
+    patterns: ['Incremental Loading', 'Retry Handling', 'OAuth2 Auth', 'Idempotent Writes', 'Logging', 'CI/CD', 'Secret Management'],
+    officialDocs: ['python-docs', 'ms-adf', 'azure-key-vault'],
+    resumeTiers: {
+      beginner: [
+        'Built REST API ingestion pipeline with OAuth2 client credentials authentication and cursor-based pagination',
+        'Automated daily campaign data extraction replacing 2-hour manual CSV export with an 8-minute pipeline',
+        'Output date-partitioned Parquet files to ADLS Gen2 with Snappy compression for cost-efficient storage',
+      ],
+      senior: [
+        'Engineered production-grade API client with OAuth2 token proactive refresh, three-tier rate limit handling (reactive 429, proactive pacing, adaptive backoff with jitter), and per-run idempotent Parquet overwrite',
+        'Reduced marketing analytics lag from 2h manual export to 8min automated pipeline; abstracted pagination/auth/retry into reusable framework supporting 10+ APIs without code changes',
+        'Implemented layered test strategy — mock-server unit tests, API sandbox integration tests, live synthetic smoke tests — achieving zero credential exposure and catching API schema drift before downstream impact',
+      ],
+    },
     challenges: [
       'API returning different JSON shapes for different campaigns — solved with pd.json_normalize defensive flattening',
       'OAuth token expiry mid-paginated run — solved with proactive token refresh 60s before expiry',
@@ -950,6 +1006,20 @@ ALTER TABLE healthcare.silver.silver_patient_events
       'Achieved full data lineage tracking from raw ADLS ingestion to Power BI dashboard',
       'Reduced data quality incidents by 90% by replacing ad-hoc notebooks with declarative DLT pipelines',
     ],
+    patterns: ['Medallion Architecture', 'DLT Pipelines', 'Data Quality Constraints', 'Unity Catalog RBAC', 'Column Masking', 'Row-Level Security', 'Data Lineage', 'CI/CD', 'HIPAA Compliance'],
+    officialDocs: ['databricks-docs', 'databricks-unity-catalog', 'databricks-delta-live-tables', 'delta-lake', 'ms-purview'],
+    resumeTiers: {
+      beginner: [
+        'Implemented Databricks Delta Live Tables Bronze and Silver pipeline with Auto Loader and data quality expectations',
+        'Configured Unity Catalog for table-level access control, data lineage tracking, and audit logging',
+        'Applied column masking on patient PII using Unity Catalog dynamic view functions for HIPAA compliance',
+      ],
+      senior: [
+        'Designed HIPAA-compliant healthcare data platform using DLT with @dlt.expect_or_drop quality constraints, reducing data quality incidents by 90% vs ad-hoc notebooks and enabling SLA compliance for clinical reporting',
+        'Implemented Unity Catalog column masking (SHA2 de-identification) and ward-level row filters enforcing data boundaries for 200+ staff across 12 hospital wards — zero PII exposure incidents post-deployment',
+        'Engineered DLT CI/CD via Databricks Asset Bundles: Silver constraint violation rate <2% required before production promotion; automated DLT event log monitoring alerting on quality regressions within 5 minutes',
+      ],
+    },
     challenges: [
       'DLT streaming tables not supporting MERGE — worked around with CDC log pattern in silver layer',
       'Unity Catalog row filters impacting query performance — solved with materialized filtered views for hot paths',
@@ -1134,6 +1204,20 @@ windowed_kpis = (
       'Implemented 5-minute tumbling window aggregations with 2-minute watermark for late event tolerance',
       'Reduced time-to-detect checkout funnel issues from 60 minutes to 5 minutes',
     ],
+    patterns: ['Kafka Streaming', 'Windowed Aggregation', 'Watermark', 'Exactly-Once Semantics', 'Delta CDF', 'Backpressure', 'Monitoring', 'CI/CD'],
+    officialDocs: ['apache-kafka', 'spark-structured-streaming', 'delta-lake', 'databricks-structured-streaming'],
+    resumeTiers: {
+      beginner: [
+        'Built Kafka → Spark Structured Streaming pipeline with 5-minute tumbling window aggregations for clickstream KPIs',
+        'Configured 2-minute watermark to handle late-arriving events from mobile clients with unreliable connectivity',
+        'Reduced time-to-detect checkout funnel drop incidents from 60 minutes to under 5 minutes',
+      ],
+      senior: [
+        'Engineered real-time clickstream pipeline processing 2M events/hour with <30s dashboard latency using Spark Structured Streaming, maxOffsetsPerTrigger backpressure, and Delta CDF for efficient Grafana incremental queries',
+        'Resolved Kafka partition skew from bot traffic using post-read repartition, reducing p99 micro-batch latency by 65% and eliminating hot executor OOM failures that caused 4 production incidents',
+        'Designed blue/green streaming deployment with parallel consumer group offset comparison gate, enabling zero-downtime schema migrations validated in <5 minutes with automated rollback',
+      ],
+    },
     challenges: [
       'Skewed Kafka partitions from bot traffic causing hot executor — solved with repartition after Kafka read',
       'State store growing unbounded with long watermark — reduced watermark to 2 min after analysis',
@@ -1328,6 +1412,20 @@ spark.sql("""
       'Optimized Delta tables with ZORDER clustering reducing scan sizes by 70%',
       'Enabled AQE with adaptive partition coalescing to dynamically handle variable data volumes',
     ],
+    patterns: ['Performance Optimization', 'AQE', 'Data Skew Mitigation', 'Broadcast Join', 'Z-ORDER Clustering', 'Delta OPTIMIZE', 'Cost Optimization', 'Monitoring', 'CI/CD'],
+    officialDocs: ['databricks-docs', 'delta-lake', 'apache-spark'],
+    resumeTiers: {
+      beginner: [
+        'Analyzed Spark UI to diagnose data skew and applied broadcast hints to eliminate shuffle for small dimension joins',
+        'Enabled Adaptive Query Execution (AQE) for automatic partition coalescing and runtime join strategy selection',
+        'Ran Delta OPTIMIZE with ZORDER clustering to compact small files and improve query scan efficiency by 70%',
+      ],
+      senior: [
+        'Reduced nightly Databricks pipeline runtime from 4h to 38min through systematic Spark UI diagnosis: salted skewed store_id join key (salt factor 10), eliminated 500GB shuffle with broadcast join on 50MB products table',
+        'Engineered performance regression gate in CI: benchmark notebook publishes Spark stage durations to Azure Monitor on every merge to main, failing builds that regress >20% vs baseline — caught 3 regressions pre-production',
+        'Right-sized cluster from 20→8 workers with higher-spec compute nodes: same throughput at 40% lower cost; documented optimization decisions in runbook for on-call team context during incidents',
+      ],
+    },
     challenges: [
       'Salting introduced cartesian product risk — mitigated by careful selection of salt factor and validation',
       'OPTIMIZE ZORDER conflicts with streaming append workloads — scheduled during off-peak window',
@@ -1593,6 +1691,20 @@ hourly_health.write.format("delta").mode("overwrite").toTable("gold.device_healt
       'Built medallion architecture on Delta Lake with 90-day raw retention and hourly device health scoring for operations dashboard',
       'Reduced mean time to equipment failure detection from 15 minutes to under 30 seconds, preventing $50K/hour downtime incidents',
     ],
+    patterns: ['IoT Streaming', 'Kafka Streaming', 'Windowed Aggregation', 'Anomaly Detection', 'Medallion Architecture', 'Alerting', 'Monitoring', 'Managed Identity', 'CI/CD'],
+    officialDocs: ['apache-kafka', 'spark-structured-streaming', 'delta-lake', 'ms-databricks', 'azure-managed-identity'],
+    resumeTiers: {
+      beginner: [
+        'Built Azure IoT Hub → Event Hubs → Spark Structured Streaming pipeline ingesting sensor telemetry from industrial devices',
+        'Implemented 5-second window anomaly detection for temperature, pressure, and vibration threshold breaches',
+        'Stored device health metrics in Delta Gold tables feeding a live Power BI operations dashboard',
+      ],
+      senior: [
+        'Engineered industrial IoT platform processing 10K+ sensors at 5-second telemetry intervals with 30-second anomaly detection SLA, using rolling Z-score detection and Azure Service Bus alerting — preventing estimated $50K/hour equipment downtime',
+        'Designed medallion architecture with broadcast-refreshed device twin joins (refreshed every 15min) at 200K events/second, avoiding streaming join state explosion while maintaining near-real-time threshold updates',
+        'Implemented per-device X.509 certificate authentication at IoT Hub with Managed Identity Event Hubs access, eliminating shared-key credential risk across 10K-device fleet with zero rotation overhead',
+      ],
+    },
     challenges: [
       'Buffered offline devices sending bursts of out-of-order events — solved with batch reconciliation job reading IoT Hub 7-day retention alongside streaming layer',
       'Faulty sensor flooding alerts — solved with mapGroupsWithState per-device alert deduplication and flapping detection',
@@ -1814,6 +1926,20 @@ blocked.writeStream.foreachBatch(publish_to_service_bus).trigger(processingTime=
       'Reduced fraud losses by 35% over rule-based system while cutting false positive rate from 3% to 0.8%',
       'Deployed A/B model testing framework enabling safe model updates without production fraud risk',
     ],
+    patterns: ['Kafka Streaming', 'Feature Store', 'ML Online Scoring', 'Real-time Decision', 'Exactly-Once', 'Model Monitoring', 'Audit Logging', 'A/B Testing', 'Graceful Degradation'],
+    officialDocs: ['apache-kafka', 'spark-structured-streaming', 'delta-lake', 'ms-databricks', 'databricks-structured-streaming'],
+    resumeTiers: {
+      beginner: [
+        'Built real-time fraud scoring pipeline integrating Kafka streaming with Azure ML managed model endpoint',
+        'Implemented Redis feature store for pre-computed account velocity features enabling sub-millisecond lookup in the scoring path',
+        'Wrote all scoring decisions to Delta Lake audit table for compliance reporting and model performance monitoring',
+      ],
+      senior: [
+        'Designed sub-200ms fraud detection system at 5K transactions/second: Event Hubs → Spark Streaming feature computation → Redis feature store (sub-ms lookup) → Azure ML endpoint scoring → Delta audit trail with graceful rule-engine fallback',
+        'Improved fraud detection from 60% to 87% catch rate while reducing false positives from 3% to 0.8% via XGBoost with 1h/24h/7d velocity features; validated via A/B shadow mode before full cutover',
+        'Engineered model drift monitoring: daily feature distribution checks alert when key feature means deviate >2σ from training baseline, triggering automated retraining pipeline — caught 2 distribution shifts before model degradation impacted production',
+      ],
+    },
     challenges: [
       'ML endpoint cold-start latency spikes causing SLA breaches — solved with minimum warm instance configuration and 150ms timeout with rule-engine fallback',
       'Redis partition skew from high-activity accounts — solved with per-account key design rather than bucketed keys',
@@ -2062,6 +2188,20 @@ for query in validation_queries:
       'Reduced infrastructure operational complexity by 60% and estimated platform costs by 30% through Fabric capacity consolidation',
       'Validated migration correctness with automated row-count and checksum comparison across all tables before production cutover',
     ],
+    patterns: ['Medallion Architecture', 'OneLake Storage', 'Direct Lake', 'Zero-Copy Migration', 'CI/CD', 'Data Governance', 'Cost Optimization'],
+    officialDocs: ['ms-fabric-overview', 'ms-fabric-onelake', 'ms-fabric-lakehouse', 'ms-fabric-data-factory', 'ms-fabric-semantic-models', 'ms-fabric-deployment'],
+    resumeTiers: {
+      beginner: [
+        'Migrated Azure Synapse Analytics lakehouse to Microsoft Fabric using OneLake shortcuts for zero-copy data access from existing ADLS Gen2 storage',
+        'Converted Synapse PySpark notebooks to Fabric Notebooks with path and mount-point adjustments',
+        'Set up Fabric Pipelines replacing Azure Data Factory for Bronze-Silver-Gold orchestration',
+      ],
+      senior: [
+        'Led Synapse → Fabric migration for retail analytics platform: replaced 4-minute cold-start Synapse Spark with Fabric Notebooks, reducing pipeline execution lag by 85% and achieving 30% licensing cost reduction through Fabric capacity consolidation',
+        'Implemented Direct Lake semantic models over OneLake Delta tables, eliminating Power BI Import refresh lag and enabling always-fresh executive dashboards — identified and resolved Direct Lake → DirectQuery fallback on 3 large partition tables',
+        'Designed zero-downtime migration: OneLake shortcuts maintained ADLS read access during 4-week parallel run; automated row-count and checksum validation across 47 tables before decommissioning Synapse — zero data incidents',
+      ],
+    },
     challenges: [
       'Spark version differences between Synapse 3.1 and Fabric 3.4 — required fixing deprecated API calls in 12 notebooks',
       'Power BI Direct Lake falling back to DirectQuery on large partition Gold tables — resolved by implementing table partitioning within Direct Lake framing limits',

@@ -1,5 +1,6 @@
 import { memo, useState, useEffect } from 'react';
 import { CodeBlock } from '../ui/CodeBlock.jsx';
+import { DocLinksPanel } from '../ui/DocLinksPanel.jsx';
 import useLearningStore from '../../store/learningStore.js';
 
 const TABS = ['Overview', 'Architecture', 'Steps', 'Interview', 'Resume', 'Senior Notes'];
@@ -30,6 +31,17 @@ function OverviewTab({ project }) {
             <>
               <h3>Ingestion Strategy</h3>
               <p className="proj-overview-text">{project.ingestionStrategy}</p>
+            </>
+          )}
+
+          {project.patterns?.length > 0 && (
+            <>
+              <h3>Engineering Patterns</h3>
+              <div className="proj-tools-list proj-patterns-list">
+                {project.patterns.map(p => (
+                  <span key={p} className="proj-tool-chip proj-pattern-chip">{p}</span>
+                ))}
+              </div>
             </>
           )}
 
@@ -164,6 +176,10 @@ function ArchitectureTab({ project }) {
           </div>
         </>
       )}
+
+      {project.officialDocs?.length > 0 && (
+        <DocLinksPanel docIds={project.officialDocs} />
+      )}
     </div>
   );
 }
@@ -273,37 +289,70 @@ function InterviewTab({ project }) {
   );
 }
 
-function ResumeTab({ project }) {
-  const [copiedIndex, setCopiedIndex] = useState(null);
+function ResumeBullet({ pt, uid, copiedKey, onCopy }) {
+  return (
+    <div className="proj-resume-point">
+      <span className="proj-resume-bullet">▸</span>
+      <span className="proj-resume-text">{pt}</span>
+      <button
+        type="button"
+        className={`proj-copy-btn${copiedKey === uid ? ' proj-copy-btn--done' : ''}`}
+        onClick={() => onCopy(pt, uid)}
+        title="Copy to clipboard"
+      >
+        {copiedKey === uid ? '✓' : '⎘'}
+      </button>
+    </div>
+  );
+}
 
-  function copyPoint(text, i) {
+function ResumeTab({ project }) {
+  const [copiedKey, setCopiedKey] = useState(null);
+
+  function copyPoint(text, key) {
     navigator.clipboard.writeText(text).then(() => {
-      setCopiedIndex(i);
-      setTimeout(() => setCopiedIndex(null), 2000);
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 2000);
     });
   }
+
+  const tiers = project.resumeTiers;
 
   return (
     <div className="proj-tab-content">
       <p className="proj-resume-intro">
         Copy these achievement-style bullet points for your CV or LinkedIn. Customise numbers to match your actual project.
       </p>
-      <div className="proj-resume-points">
-        {project.resumePoints.map((pt, i) => (
-          <div key={i} className="proj-resume-point">
-            <span className="proj-resume-bullet">▸</span>
-            <span className="proj-resume-text">{pt}</span>
-            <button
-              type="button"
-              className={`proj-copy-btn${copiedIndex === i ? ' proj-copy-btn--done' : ''}`}
-              onClick={() => copyPoint(pt, i)}
-              title="Copy to clipboard"
-            >
-              {copiedIndex === i ? '✓' : '⎘'}
-            </button>
+
+      {tiers ? (
+        <>
+          <div className="proj-resume-tier-header proj-resume-tier-header--beginner">
+            <span className="proj-resume-tier-label">For junior &amp; mid-level CVs</span>
+            <span className="proj-resume-tier-hint">Focus on tools used and outcomes achieved</span>
           </div>
-        ))}
-      </div>
+          <div className="proj-resume-points">
+            {tiers.beginner.map((pt, i) => (
+              <ResumeBullet key={i} pt={pt} uid={`b-${i}`} copiedKey={copiedKey} onCopy={copyPoint} />
+            ))}
+          </div>
+          <div className="proj-resume-tier-header proj-resume-tier-header--senior">
+            <span className="proj-resume-tier-label">For senior &amp; staff-level CVs</span>
+            <span className="proj-resume-tier-hint">Lead with scale, trade-offs, and measurable impact</span>
+          </div>
+          <div className="proj-resume-points">
+            {tiers.senior.map((pt, i) => (
+              <ResumeBullet key={i} pt={pt} uid={`s-${i}`} copiedKey={copiedKey} onCopy={copyPoint} />
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="proj-resume-points">
+          {project.resumePoints.map((pt, i) => (
+            <ResumeBullet key={i} pt={pt} uid={`flat-${i}`} copiedKey={copiedKey} onCopy={copyPoint} />
+          ))}
+        </div>
+      )}
+
       <div className="proj-resume-tip">
         <strong>Tip:</strong> Quantify every bullet. Replace placeholders like "50+" with your actual numbers.
         Lead with action verbs: Built, Designed, Implemented, Reduced, Optimised.

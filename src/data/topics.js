@@ -141,7 +141,7 @@ const coreTopics = [
       title: 'PySpark',
       reason: 'dbt handles SQL-native transformations inside the warehouse — PySpark handles transformations at Spark scale when data is too large for a single SQL warehouse query.',
     },
-    docs: ['dbt-docs'],
+    docs: ['dbt-docs', 'dbt-best-practices', 'dbt-materializations', 'dbt-sources', 'dbt-tests', 'dbt-snapshots', 'dbt-jinja-macros'],
   },
   {
     id: 'pyspark',
@@ -270,7 +270,7 @@ const coreTopics = [
       title: 'AWS Glue',
       reason: 'Databricks is the Azure world — AWS Glue is the equivalent on AWS. Most DE job descriptions list both, so knowing both makes you cloud-agnostic and more hireable.',
     },
-    docs: ['ms-databricks', 'databricks-docs', 'databricks-unity-catalog', 'delta-lake'],
+    docs: ['ms-databricks', 'databricks-docs', 'databricks-unity-catalog', 'delta-lake', 'databricks-workflows', 'databricks-delta-live-tables', 'databricks-structured-streaming'],
   },
   {
     id: 'aws-glue',
@@ -400,7 +400,7 @@ const coreTopics = [
       title: 'Kafka & Streaming',
       reason: 'After mastering Fabric batch pipelines, streaming is the natural next step — Kafka and Spark Structured Streaming are the backbone of real-time Azure DE architectures.',
     },
-    docs: ['ms-fabric-overview', 'ms-fabric-onelake', 'ms-fabric-lakehouse', 'ms-fabric-warehouse', 'ms-fabric-data-factory', 'ms-fabric-spark', 'ms-fabric-rti', 'ms-fabric-deployment'],
+    docs: ['ms-fabric-overview', 'ms-fabric-onelake', 'ms-fabric-lakehouse', 'ms-fabric-warehouse', 'ms-fabric-data-factory', 'ms-fabric-spark', 'ms-fabric-rti', 'ms-fabric-deployment', 'ms-purview'],
   },
   {
     id: 'kafka-streaming',
@@ -443,7 +443,7 @@ const coreTopics = [
       title: 'System Design',
       reason: 'With streaming and batch pipelines mastered, system design is how you show senior-level thinking — designing entire architectures, not just individual components.',
     },
-    docs: ['apache-kafka', 'apache-spark', 'delta-lake'],
+    docs: ['apache-kafka', 'apache-spark', 'delta-lake', 'spark-structured-streaming', 'kafka-streams', 'databricks-structured-streaming'],
   },
   {
     id: 'system-design',
@@ -482,7 +482,7 @@ const coreTopics = [
       projectLink: 'Any end-to-end project in your portfolio is a system design story — practice narrating it in the Requirements → Architecture → Tradeoffs format.',
     },
     nextStep: 'azure-security',
-    docs: ['apache-kafka', 'delta-lake', 'ms-fabric-overview'],
+    docs: ['apache-kafka', 'delta-lake', 'ms-fabric-overview', 'azure-architecture-center', 'azure-de-architecture', 'databricks-delta-live-tables'],
   },
   {
     id: 'azure-security',
@@ -520,7 +520,7 @@ const coreTopics = [
     ],
     resumeRelevance: 'Add a bullet: "Implemented Managed Identity-based authentication for all ADF Linked Services, eliminating 12 service principal secrets and reducing credential rotation toil by 100%."',
     nextStep: null,
-    docs: ['azure-managed-identity', 'azure-key-vault', 'azure-rbac'],
+    docs: ['azure-managed-identity', 'azure-key-vault', 'azure-rbac', 'azure-private-endpoints', 'ms-purview', 'azure-workload-identity', 'databricks-unity-catalog'],
   },
 ];
 
