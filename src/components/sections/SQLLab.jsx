@@ -456,6 +456,67 @@ const COL_TYPES = {
   run_id: 'INT PK', pipeline_name: 'VARCHAR', rows_processed: 'INT', duration_secs: 'INT', run_date: 'DATE',
 };
 
+// ─── Mismatch analysis ────────────────────────────────────────────────────────
+
+function analyzeMismatch(question, result) {
+  if (!result || result.error || result.complex) return null;
+  const expected = runMockSQL(question.answer);
+  if (!expected || expected.error || expected.complex) return null;
+
+  const actualRows   = result.rows   ?? [];
+  const expectedRows = expected.rows ?? [];
+  const actualCols   = result.columns   ?? [];
+  const expectedCols = expected.columns ?? [];
+
+  const colsSorted  = JSON.stringify([...actualCols].sort()) === JSON.stringify([...expectedCols].sort());
+  const colsOrdered = JSON.stringify(actualCols) === JSON.stringify(expectedCols);
+  const rowCountOk  = actualRows.length === expectedRows.length;
+  const isClose     = colsSorted && Math.abs(actualRows.length - expectedRows.length) <= 1;
+
+  let likelyIssue = '';
+  let hint = '';
+
+  if (!colsSorted) {
+    const missing = expectedCols.filter(c => !actualCols.includes(c));
+    const extra   = actualCols.filter(c => !expectedCols.includes(c));
+    if (missing.length > 0) {
+      likelyIssue = `Missing column${missing.length > 1 ? 's' : ''}: ${missing.join(', ')}`;
+      hint = 'Add the missing column(s) to your SELECT list.';
+    } else if (extra.length > 0) {
+      likelyIssue = `Unexpected column${extra.length > 1 ? 's' : ''}: ${extra.join(', ')}`;
+      hint = 'Remove the extra column(s) from your SELECT list.';
+    } else {
+      likelyIssue = 'Column aliases differ from expected';
+      hint = 'Check your column aliases — they must match exactly.';
+    }
+  } else if (!colsOrdered) {
+    likelyIssue = 'Column order differs from expected';
+    hint = 'Reorder your SELECT columns to match the expected output.';
+  } else if (!rowCountOk) {
+    likelyIssue = actualRows.length > expectedRows.length
+      ? `Too many rows — got ${actualRows.length}, expected ${expectedRows.length}`
+      : `Too few rows — got ${actualRows.length}, expected ${expectedRows.length}`;
+    hint = actualRows.length > expectedRows.length
+      ? 'Your WHERE clause may be missing or too broad.'
+      : 'Your WHERE clause may be too restrictive, or a filter value may be wrong.';
+  } else {
+    likelyIssue = 'Row values differ — columns and count match';
+    hint = 'Double-check your ORDER BY direction, aggregate expressions, or WHERE values.';
+  }
+
+  return {
+    expectedRowCount: expectedRows.length,
+    actualRowCount:   actualRows.length,
+    expectedColumns:  expectedCols,
+    actualColumns:    actualCols,
+    expectedRows:     expectedRows.slice(0, 5),
+    actualRows:       actualRows.slice(0, 5),
+    likelyIssue,
+    hint,
+    isClose,
+  };
+}
+
 // ─── Schema Browser ───────────────────────────────────────────────────────────
 
 function SchemaBrowser({ onInsertCol }) {
@@ -581,6 +642,13 @@ function QuestionPanel({ question, hintsShown, onShowHint, result, onScore, scor
   const ds = DIFF_STYLE[question.difficulty] || DIFF_STYLE.intermediate;
   const passed = question.validate?.(result ?? {});
   const [showContext, setShowContext] = useState(false);
+  const [showExpected, setShowExpected] = useState(false);
+
+  useEffect(() => { setShowExpected(false); }, [question.id]);
+
+  const mismatch = (!passed && result && !result.error && !result.complex)
+    ? analyzeMismatch(question, result)
+    : null;
 
   return (
     <div className="sqll-qpanel">
@@ -610,13 +678,87 @@ function QuestionPanel({ question, hintsShown, onShowHint, result, onScore, scor
       {hintsShown >= 2 && <div className="sqll-hint sqll-hint--2">{question.hint2}</div>}
       {hintsShown >= 3 && <div className="sqll-hint sqll-hint--3">{question.hint3}</div>}
 
-      {result && !result.error && (
-        <div className={`sqll-validate ${passed ? 'sqll-validate--pass' : (result.complex ? 'sqll-validate--complex' : 'sqll-validate--fail')}`}>
-          {result.complex
-            ? '◈ Advanced query — check expected output below'
-            : passed
-              ? '✓ Output matches expected'
-              : '✗ Output mismatch — recheck your query'}
+      {result && !result.error && (passed || result.complex) && (
+        <div className={`sqll-validate ${result.complex ? 'sqll-validate--complex' : 'sqll-validate--pass'}`}>
+          {result.complex ? '◈ Advanced query — check expected output below' : '✓ Output matches expected'}
+        </div>
+      )}
+
+      {mismatch && (
+        <div className="sqll-mismatch">
+          <div className="sqll-mismatch-header">
+            <span className="sqll-mismatch-icon">✗</span>
+            <span className="sqll-mismatch-title">Output mismatch</span>
+            {mismatch.isClose && (
+              <span className="sqll-mismatch-close">Your query is close — check column order, row order, or exact filter</span>
+            )}
+          </div>
+
+          <div className="sqll-mismatch-grid">
+            <div className="sqll-mismatch-cell">
+              <span className="sqll-mismatch-label">Expected</span>
+              <span className="sqll-mismatch-val">{mismatch.expectedRowCount} row{mismatch.expectedRowCount !== 1 ? 's' : ''}</span>
+              <span className="sqll-mismatch-cols">{mismatch.expectedColumns.join(', ')}</span>
+            </div>
+            <div className="sqll-mismatch-sep">vs</div>
+            <div className="sqll-mismatch-cell sqll-mismatch-cell--actual">
+              <span className="sqll-mismatch-label">Your output</span>
+              <span className="sqll-mismatch-val">{mismatch.actualRowCount} row{mismatch.actualRowCount !== 1 ? 's' : ''}</span>
+              <span className="sqll-mismatch-cols">{mismatch.actualColumns.length > 0 ? mismatch.actualColumns.join(', ') : '—'}</span>
+            </div>
+          </div>
+
+          <div className="sqll-mismatch-detail">
+            <span className="sqll-mismatch-detail-label">Likely issue:</span>
+            <span>{mismatch.likelyIssue}</span>
+          </div>
+          <div className="sqll-mismatch-detail sqll-mismatch-detail--hint">
+            <span className="sqll-mismatch-detail-label">Next step:</span>
+            <span>{mismatch.hint}</span>
+          </div>
+
+          <button type="button" className="sqll-show-expected-btn" onClick={() => setShowExpected(v => !v)}>
+            {showExpected ? '▾ Hide expected output' : '▸ Show expected output'}
+          </button>
+
+          {showExpected && (
+            <div className="sqll-compare">
+              <div className="sqll-compare-col">
+                <div className="sqll-compare-label sqll-compare-label--exp">
+                  Expected — {mismatch.expectedRowCount} row{mismatch.expectedRowCount !== 1 ? 's' : ''}{mismatch.expectedRowCount > 5 ? ' (first 5)' : ''}
+                </div>
+                <div className="sqll-compare-scroll">
+                  <table className="sqll-compare-table">
+                    <thead><tr>{mismatch.expectedColumns.map(c => <th key={c}>{c}</th>)}</tr></thead>
+                    <tbody>
+                      {mismatch.expectedRows.map((row, i) => (
+                        <tr key={i}>{mismatch.expectedColumns.map(c => (
+                          <td key={c}>{row[c] == null ? <span className="sqll-null">NULL</span> : String(row[c])}</td>
+                        ))}</tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div className="sqll-compare-col">
+                <div className="sqll-compare-label sqll-compare-label--act">
+                  Your output — {mismatch.actualRowCount} row{mismatch.actualRowCount !== 1 ? 's' : ''}{mismatch.actualRowCount > 5 ? ' (first 5)' : ''}
+                </div>
+                <div className="sqll-compare-scroll">
+                  <table className="sqll-compare-table">
+                    <thead><tr>{mismatch.actualColumns.map(c => <th key={c}>{c}</th>)}</tr></thead>
+                    <tbody>
+                      {mismatch.actualRows.map((row, i) => (
+                        <tr key={i}>{mismatch.actualColumns.map(c => (
+                          <td key={c}>{row[c] == null ? <span className="sqll-null">NULL</span> : String(row[c])}</td>
+                        ))}</tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -1,7 +1,7 @@
 import { MOCK_DB } from '../data/mockDatabase.js';
 
 function norm(sql) {
-  return (sql ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+  return (sql ?? '').replace(/\s+/g, ' ').trim().toLowerCase().replace(/;+$/, '');
 }
 
 const SQL_KW = new Set([
