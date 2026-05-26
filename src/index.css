@@ -18733,6 +18733,36 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .sqll-eng-block--wrong .sqll-eng-label { color: #fca5a5; }
 .sqll-eng-block--opt   { background: #1e1b4b30; border: 1px solid #4c1d9540; }
 .sqll-eng-block--opt .sqll-eng-label   { color: #a78bfa; }
+.sqll-eng-block--ctx  { background: #17100420; border: 1px solid #92400e30; }
+.sqll-eng-block--ctx .sqll-eng-label   { color: #fb923c; }
+.sqll-eng-block--perf { background: #0c1a2e20; border: 1px solid #0369a130; }
+.sqll-eng-block--perf .sqll-eng-label  { color: #38bdf8; }
+.sqll-eng-block--interview { background: #1a0a2e20; border: 1px solid #6b21a830; }
+.sqll-eng-block--interview .sqll-eng-label { color: #e879f9; }
+
+/* Debug mode */
+.sqll-debug-meta { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px; }
+.sqll-debug-type-label { font-size: 11px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.sqll-debug-type { font-size: 11px; color: #fb923c; background: #17100430; border: 1px solid #92400e40; border-radius: 4px; padding: 2px 7px; font-family: monospace; }
+.sqll-debug-fixed { font-family: monospace; font-size: 11px; color: #4ade80; white-space: pre-wrap; word-break: break-all; margin: 6px 0 0; line-height: 1.5; }
+
+/* Production Incidents */
+.sqll-incidents { display: flex; flex-direction: column; gap: 10px; max-width: 900px; margin: 0 auto; }
+.sqll-incidents-header { padding: 14px 0 6px; }
+.sqll-incidents-title { display: block; font-size: 15px; font-weight: 800; color: var(--heading); margin-bottom: 4px; }
+.sqll-incidents-sub   { font-size: 12.5px; color: var(--muted); }
+.sqll-incident-card { border: 1px solid var(--card-border); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.sqll-incident-header {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  padding: 11px 14px; background: var(--surface-soft); cursor: pointer;
+  border: none; text-align: left;
+}
+.sqll-incident-header:hover { background: var(--card-border); }
+.sqll-incident-sev { font-size: 10px; font-weight: 900; border-radius: 4px; padding: 2px 7px; flex-shrink: 0; letter-spacing: .04em; }
+.sqll-incident-title-text { flex: 1; font-size: 13px; font-weight: 700; color: var(--heading); }
+.sqll-incident-chevron { font-size: 10px; color: var(--muted); }
+.sqll-incident-body { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; }
+.sqll-incident-sql { font-family: monospace; font-size: 11px; color: #94a3b8; white-space: pre-wrap; word-break: break-all; margin: 6px 0 0; line-height: 1.5; }
 
 /* Interview completion */
 .sqll-done { display: flex; flex-direction: column; gap: 16px; max-width: 560px; }

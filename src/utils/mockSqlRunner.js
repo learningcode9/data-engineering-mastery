@@ -11,20 +11,70 @@ const SQL_KW = new Set([
   'true','false','case','when','then','else','end','coalesce','nullif',
 ]);
 
+// Evaluate CASE WHEN col op val THEN n ELSE m END against a single row
+function evalRowCaseExpr(row, caseExpr) {
+  const m = caseExpr.match(
+    /case\s+when\s+(?:\w+\.)?(\w+)\s*(=|!=|<>|>|<|>=|<=)\s*(?:'([^']*)'|([-\d.]+))\s+then\s+([-\d.]+)(?:\s+else\s+([-\d.]+))?\s+end/i
+  );
+  if (!m) return 0;
+  const [, col, op, strVal, numVal, thenV, elseV = '0'] = m;
+  const rowVal = row[col];
+  let cond = false;
+  if (strVal !== undefined) {
+    const rv = String(rowVal ?? '').toLowerCase();
+    const cv = strVal.toLowerCase();
+    if (op === '=' || op === '==') cond = rv === cv;
+    else if (op === '!=' || op === '<>') cond = rv !== cv;
+    else if (op === '>') cond = rv > cv;
+    else if (op === '<') cond = rv < cv;
+    else if (op === '>=') cond = rv >= cv;
+    else if (op === '<=') cond = rv <= cv;
+  } else {
+    const nv = Number(rowVal);
+    const cv = Number(numVal);
+    if (op === '=' || op === '==') cond = nv === cv;
+    else if (op === '!=' || op === '<>') cond = nv !== cv;
+    else if (op === '>') cond = nv > cv;
+    else if (op === '<') cond = nv < cv;
+    else if (op === '>=') cond = nv >= cv;
+    else if (op === '<=') cond = nv <= cv;
+  }
+  return cond ? Number(thenV) : Number(elseV);
+}
+
 function applyWhere(rows, clause, allCols) {
-  const conditions = clause.trim().split(/\s+and\s+/i);
+  // Protect BETWEEN...AND... from the AND-split
+  const betweens = [];
+  const safe = clause.replace(
+    /\b((?:\w+\.)?\w+)\s+between\s+(-?\d+\.?\d*)\s+and\s+(-?\d+\.?\d*)/gi,
+    (_, fullCol, lo, hi) => {
+      betweens.push({ col: fullCol.replace(/^\w+\./, ''), lo: Number(lo), hi: Number(hi) });
+      return `__btw${betweens.length - 1}__`;
+    }
+  );
+  const conditions = safe.trim().split(/\s+and\s+/i);
   return rows.filter(row =>
     conditions.every(cond => {
       cond = cond.trim();
+
+      const bm = cond.match(/^__btw(\d+)__$/);
+      if (bm) {
+        const { col, lo, hi } = betweens[+bm[1]];
+        const v = Number(row[col]);
+        return v >= lo && v <= hi;
+      }
+
       let m;
 
       // table.col = 'val' or col = 'val'
       m = cond.match(/^(?:\w+\.)?(\w+)\s*=\s*'([^']*)'$/);
       if (m) return String(row[m[1]] ?? '').toLowerCase() === m[2].toLowerCase();
 
+      // Numeric equals
       m = cond.match(/^(?:\w+\.)?(\w+)\s*=\s*(-?\d+\.?\d*)$/);
       if (m) return Number(row[m[1]]) === Number(m[2]);
 
+      // Numeric comparisons
       m = cond.match(/^(?:\w+\.)?(\w+)\s*>\s*(-?\d+\.?\d*)$/);
       if (m) return Number(row[m[1]]) > Number(m[2]);
 
@@ -37,8 +87,20 @@ function applyWhere(rows, clause, allCols) {
       m = cond.match(/^(?:\w+\.)?(\w+)\s*<=\s*(-?\d+\.?\d*)$/);
       if (m) return Number(row[m[1]]) <= Number(m[2]);
 
+      // String inequality
       m = cond.match(/^(?:\w+\.)?(\w+)\s*!=\s*'([^']*)'$/);
       if (m) return String(row[m[1]] ?? '').toLowerCase() !== m[2].toLowerCase();
+
+      // String comparisons — handles date columns like created_at > '2024-01-17'
+      m = cond.match(/^(?:\w+\.)?(\w+)\s*(>|<|>=|<=)\s*'([^']*)'$/);
+      if (m) {
+        const [, col, op, val] = m;
+        const rv = String(row[col] ?? '');
+        if (op === '>') return rv > val;
+        if (op === '<') return rv < val;
+        if (op === '>=') return rv >= val;
+        if (op === '<=') return rv <= val;
+      }
 
       m = cond.match(/^(?:\w+\.)?(\w+)\s+like\s+'([^']+)'$/);
       if (m) {
@@ -59,12 +121,6 @@ function applyWhere(rows, clause, allCols) {
         return vals.includes(String(row[m[1]] ?? '').toLowerCase());
       }
 
-      m = cond.match(/^(?:\w+\.)?(\w+)\s+between\s+(-?\d+\.?\d*)\s+and\s+(-?\d+\.?\d*)$/);
-      if (m) {
-        const v = Number(row[m[1]]);
-        return v >= Number(m[2]) && v <= Number(m[3]);
-      }
-
       return true;
     })
   );
@@ -76,10 +132,8 @@ function applyHaving(rows, clause) {
   return rows.filter(row =>
     conditions.every(cond => {
       cond = cond.trim();
-      // count(*) > N  or  sum(col) >= N etc.
       let m = cond.match(/^\w+\s*\(\s*[\w*]+\s*\)\s*(?:as\s+\w+\s*)?(>|<|>=|<=|=|!=)\s*(-?\d+\.?\d*)$/i);
       if (m) {
-        // find the first numeric value in the row that matches the aggregate label
         const aggKey = Object.keys(row).find(k => typeof row[k] === 'number' && k !== 'count(*)');
         const aggVal = aggKey ? row[aggKey] : (row['count(*)'] ?? 0);
         const rhs = Number(m[2]);
@@ -91,32 +145,91 @@ function applyHaving(rows, clause) {
         if (op === '=') return aggVal === rhs;
         if (op === '!=') return aggVal !== rhs;
       }
+      // HAVING alias > N (e.g., HAVING run_count > 2)
+      m = cond.match(/^(\w+)\s*(>|<|>=|<=|=|!=)\s*(-?\d+\.?\d*)$/);
+      if (m) {
+        const [, alias, op, rhs] = m;
+        const val = row[alias];
+        if (val !== undefined) {
+          const n = Number(val), r = Number(rhs);
+          if (op === '>') return n > r;
+          if (op === '<') return n < r;
+          if (op === '>=') return n >= r;
+          if (op === '<=') return n <= r;
+          if (op === '=') return n === r;
+          if (op === '!=') return n !== r;
+        }
+      }
       return true;
     })
   );
 }
 
-// Resolve a column expression that may be prefixed with a table alias
 function resolveCol(row, expr) {
-  // strip table prefix
   const col = expr.replace(/^\w+\./, '').trim();
   return row[col];
 }
 
-// Evaluate simple CASE WHEN expressions
-function evalCaseWhen(row, expr) {
-  const whenClauses = [];
-  const whenRe = /when\s+'?([^']+)'?\s+then\s+'?([^']+)'?/g;
-  let m;
-  while ((m = whenRe.exec(expr)) !== null) wenClauses.push({ when: m[1], then: m[2] });
-  return null; // fall through to raw value
+// Apply aggregates to a group of rows, returning one result row
+function applyAggregates(selectRaw, groupCol, groupKey, grp) {
+  const out = groupCol ? { [groupCol]: isNaN(groupKey) ? groupKey : Number(groupKey) } : {};
+
+  // Standard aggregate: COUNT(*), SUM(col), AVG(col), MAX(col), MIN(col)
+  const stdAggRe = /\b(count|sum|avg|max|min)\s*\(\s*(\*|\w+(?:\.\w+)?)\s*\)(?:\s+as\s+(\w+))?/gi;
+  for (const [, fn, col, alias] of selectRaw.matchAll(stdAggRe)) {
+    const c = col === '*' ? col : col.replace(/^\w+\./, '');
+    const label = alias ?? `${fn}(${c})`;
+    const nums = grp.map(r => Number(r[c] ?? 0));
+    if (fn === 'count') out[label] = grp.length;
+    else if (fn === 'sum') out[label] = nums.reduce((a, b) => a + b, 0);
+    else if (fn === 'avg') out[label] = +(nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(2);
+    else if (fn === 'max') out[label] = Math.max(...nums);
+    else if (fn === 'min') out[label] = Math.min(...nums);
+  }
+
+  // CASE WHEN aggregate: SUM(CASE WHEN col = 'val' THEN 1 ELSE 0 END)
+  const caseAggRe = /\b(count|sum|avg|max|min)\s*\(\s*(case\s+when\s+.+?\s+end)\s*\)(?:\s+as\s+(\w+))?/gi;
+  for (const [, fn, caseExpr, alias] of selectRaw.matchAll(caseAggRe)) {
+    const label = alias ?? `${fn}(case)`;
+    const vals = grp.map(r => evalRowCaseExpr(r, caseExpr));
+    if (fn === 'sum' || fn === 'count') out[label] = vals.reduce((a, b) => a + b, 0);
+    else if (fn === 'avg') out[label] = +(vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2);
+    else if (fn === 'max') out[label] = Math.max(...vals);
+    else if (fn === 'min') out[label] = Math.min(...vals);
+  }
+
+  return out;
+}
+
+// Multi-column ORDER BY
+function applyOrderBy(rows, orderClause) {
+  const clauses = orderClause.split(',').map(c => {
+    const t = c.trim();
+    const m = t.match(/^([\w.]+)\s*(asc|desc)?$/i);
+    if (!m) return null;
+    return { col: m[1].replace(/^\w+\./, ''), desc: (m[2] ?? '').toLowerCase() === 'desc' };
+  }).filter(Boolean);
+
+  if (clauses.length === 0) return rows;
+
+  return [...rows].sort((a, b) => {
+    for (const { col, desc } of clauses) {
+      const va = a[col], vb = b[col];
+      if (va == null && vb == null) continue;
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      const cmp = typeof va === 'number' && typeof vb === 'number'
+        ? va - vb
+        : String(va).localeCompare(String(vb));
+      if (cmp !== 0) return desc ? -cmp : cmp;
+    }
+    return 0;
+  });
 }
 
 // Parse a simple JOIN query
 function parseJoin(n) {
-  // Patterns: FROM t1 [INNER] JOIN t2 ON t1.col = t2.col
-  //           FROM t1 LEFT [OUTER] JOIN t2 ON ...
-  const joinRe = /\bfrom\s+(\w+)(?:\s+(?:as\s+)?(\w+))?\s+((?:inner\s+)?join|left(?:\s+outer)?\s+join)\s+(\w+)(?:\s+(?:as\s+)?(\w+))?\s+on\s+(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)/;
+  const joinRe = /\bfrom\s+(\w+)(?:\s+(?:as\s+)?(?!inner\b|left\b|right\b|full\b|cross\b|join\b)(\w+))?\s+((?:inner\s+)?join|left(?:\s+outer)?\s+join)\s+(\w+)(?:\s+(?:as\s+)?(?!on\b|where\b|group\b|order\b|having\b|limit\b)(\w+))?\s+on\s+(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)/;
   const m = n.match(joinRe);
   if (!m) return null;
 
@@ -137,7 +250,6 @@ function executeJoin(n, joinInfo) {
   if (!t1) return { error: `Table '${t1Name}' not found.` };
   if (!t2) return { error: `Table '${t2Name}' not found.` };
 
-  // Build joined rows
   let joined = [];
   for (const r1 of t1.rows) {
     const matches = t2.rows.filter(r2 => String(r1[onC1]) === String(r2[onC2]));
@@ -146,7 +258,6 @@ function executeJoin(n, joinInfo) {
         const row = {};
         t1.columns.forEach(c => { row[c] = r1[c]; });
         t2.columns.forEach(c => { if (!(c in row)) row[c] = r2[c]; else row[`${t2Name}_${c}`] = r2[c]; });
-        // Also store prefixed versions for qualification
         t1.columns.forEach(c => { row[`${t1Alias}.${c}`] = r1[c]; });
         t2.columns.forEach(c => { row[`${t2Alias}.${c}`] = r2[c]; });
         joined.push(row);
@@ -163,11 +274,9 @@ function executeJoin(n, joinInfo) {
 
   const allCols = [...new Set([...t1.columns, ...t2.columns.filter(c => !t1.columns.includes(c))])];
 
-  // Apply WHERE
   const whereMatch = n.match(/\bon\s+\w+\.\w+\s*=\s*\w+\.\w+\s+where\s+(.+?)(?=\s+(?:group\s+by|order\s+by|having|limit)\b|$)/);
   if (whereMatch) joined = applyWhere(joined, whereMatch[1], allCols);
 
-  // Apply GROUP BY
   const groupMatch = n.match(/\bgroup\s+by\s+(\w+(?:\.\w+)?)/);
   const selectRaw = n.match(/^select\s+(.+?)\s+from\b/)?.[1] ?? '*';
 
@@ -180,53 +289,23 @@ function executeJoin(n, joinInfo) {
       if (!groups[k]) groups[k] = [];
       groups[k].push(r);
     });
-
-    joined = Object.entries(groups).map(([key, grp]) => {
-      const out = { [groupCol]: isNaN(key) ? key : Number(key) };
-      const aggRe = /\b(count|sum|avg|max|min)\s*\(\s*(\*|\w+(?:\.\w+)?)\s*\)(?:\s+as\s+(\w+))?/g;
-      for (const [, fn, rawCol, alias] of selectRaw.matchAll(aggRe)) {
-        const col = rawCol === '*' ? rawCol : rawCol.replace(/^\w+\./, '');
-        const label = alias ?? `${fn}(${col})`;
-        const nums = grp.map(r => Number(r[col] ?? 0));
-        if (fn === 'count') out[label] = grp.length;
-        else if (fn === 'sum') out[label] = nums.reduce((a, b) => a + b, 0);
-        else if (fn === 'avg') out[label] = +(nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(2);
-        else if (fn === 'max') out[label] = Math.max(...nums);
-        else if (fn === 'min') out[label] = Math.min(...nums);
-      }
-      return out;
-    });
+    joined = Object.entries(groups).map(([key, grp]) => applyAggregates(selectRaw, groupCol, key, grp));
   }
 
-  // Apply HAVING
   const havingMatch = n.match(/\bhaving\s+(.+?)(?=\s+(?:order\s+by|limit)\b|$)/);
   if (havingMatch && groupMatch) joined = applyHaving(joined, havingMatch[1]);
 
-  // Apply ORDER BY
-  const orderMatch = n.match(/\border\s+by\s+(\w+(?:\.\w+)?)(?:\s+(asc|desc))?/);
-  if (orderMatch) {
-    const col = orderMatch[1].replace(/^\w+\./, '');
-    const desc = orderMatch[2] === 'desc';
-    joined = [...joined].sort((a, b) => {
-      const va = a[col], vb = b[col];
-      if (va == null) return 1;
-      if (vb == null) return -1;
-      const cmp = typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb));
-      return desc ? -cmp : cmp;
-    });
-  }
+  const orderMatch = n.match(/\border\s+by\s+(.+?)(?=\s+(?:limit)\b|$)/);
+  if (orderMatch) joined = applyOrderBy(joined, orderMatch[1]);
 
-  // Apply LIMIT
   const limitMatch = n.match(/\blimit\s+(\d+)/);
   if (limitMatch) joined = joined.slice(0, parseInt(limitMatch[1], 10));
 
-  // Project columns
   if (selectRaw !== '*') {
     const colDefs = selectRaw.split(',').map(c => {
       const t = c.trim();
       const asM = t.match(/^([\w.]+)\s+as\s+(\w+)$/i);
       if (asM) return { from: asM[1].replace(/^\w+\./, ''), to: asM[2] };
-      // skip aggregates (already computed)
       if (/^\w+\s*\(/.test(t)) return null;
       const col = t.replace(/^\w+\./, '');
       return { from: col, to: col };
@@ -248,9 +327,16 @@ function executeJoin(n, joinInfo) {
 export function runMockSQL(sql) {
   const n = norm(sql);
 
-  // CTE, window function, and CASE WHEN — mark as complex with a helpful message
-  if (/\bwith\s+\w+\s+as\s*\(|\bover\s*\(|\brow_number\b|\brank\b|\bdense_rank\b|\bntile\b|\bpartition\s+by\b|\blag\b|\blead\b|\bcase\s+when\b/.test(n)) {
+  // CTE and window functions → complex mode
+  if (/\bwith\s+\w+\s+as\s*\(|\bover\s*\(|\brow_number\b|\brank\b|\bdense_rank\b|\bntile\b|\bpartition\s+by\b|\blag\b|\blead\b/.test(n)) {
     return { complex: true, feature: 'cte_window' };
+  }
+
+  // CASE WHEN: only mark complex if it appears OUTSIDE an aggregate function context
+  if (/\bcase\s+when\b/i.test(n)) {
+    const totalCW = (n.match(/\bcase\s+when\b/gi) ?? []).length;
+    const aggCW   = (n.match(/\b(?:sum|count|avg|max|min)\s*\(\s*case\s+when\b/gi) ?? []).length;
+    if (totalCW !== aggCW) return { complex: true, feature: 'cte_window' };
   }
 
   // JOIN handling
@@ -275,65 +361,31 @@ export function runMockSQL(sql) {
   const whereMatch = n.match(/\bwhere\b\s+(.+?)(?=\s+(?:group\s+by|order\s+by|having|limit)\b|$)/);
   if (whereMatch) rows = applyWhere(rows, whereMatch[1], tableData.columns);
 
-  const groupMatch = n.match(/\bgroup\s+by\s+(\w+)/);
+  const groupMatch = n.match(/\bgroup\s+by\s+([\w.]+)/);
   const selectRaw  = n.match(/^select\s+(.+?)\s+from\b/)?.[1] ?? '*';
 
   if (groupMatch) {
-    const groupCol = groupMatch[1];
+    const groupCol = groupMatch[1].replace(/^\w+\./, '');
     const groups   = {};
     rows.forEach(r => {
       const k = String(r[groupCol] ?? 'null');
       if (!groups[k]) groups[k] = [];
       groups[k].push(r);
     });
+    rows = Object.entries(groups).map(([key, grp]) => applyAggregates(selectRaw, groupCol, key, grp));
 
-    rows = Object.entries(groups).map(([key, grp]) => {
-      const out = { [groupCol]: isNaN(key) ? key : Number(key) };
-      const aggRe = /\b(count|sum|avg|max|min)\s*\(\s*(\*|\w+)\s*\)(?:\s+as\s+(\w+))?/g;
-      for (const [, fn, col, alias] of selectRaw.matchAll(aggRe)) {
-        const label = alias ?? `${fn}(${col})`;
-        const nums  = grp.map(r => Number(r[col] ?? 0));
-        if (fn === 'count') out[label] = grp.length;
-        else if (fn === 'sum') out[label] = nums.reduce((a, b) => a + b, 0);
-        else if (fn === 'avg') out[label] = +(nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(2);
-        else if (fn === 'max') out[label] = Math.max(...nums);
-        else if (fn === 'min') out[label] = Math.min(...nums);
-      }
-      return out;
-    });
-
-    // HAVING
     const havingMatch = n.match(/\bhaving\s+(.+?)(?=\s+(?:order\s+by|limit)\b|$)/);
     if (havingMatch) rows = applyHaving(rows, havingMatch[1]);
   }
 
+  // Standalone aggregate (no GROUP BY)
   if (!groupMatch && /\b(count|sum|avg|max|min)\s*\(/.test(selectRaw)) {
-    const out   = {};
-    const aggRe = /\b(count|sum|avg|max|min)\s*\(\s*(\*|\w+)\s*\)(?:\s+as\s+(\w+))?/g;
-    for (const [, fn, col, alias] of selectRaw.matchAll(aggRe)) {
-      const label = alias ?? `${fn}(${col})`;
-      const nums  = rows.map(r => Number(r[col] ?? 0));
-      if (fn === 'count') out[label] = rows.length;
-      else if (fn === 'sum') out[label] = nums.reduce((a, b) => a + b, 0);
-      else if (fn === 'avg') out[label] = +(nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(2);
-      else if (fn === 'max') out[label] = Math.max(...nums);
-      else if (fn === 'min') out[label] = Math.min(...nums);
-    }
+    const out = applyAggregates(selectRaw, null, null, rows);
     rows = [out];
   }
 
-  const orderMatch = n.match(/\border\s+by\s+(\w+)(?:\s+(asc|desc))?/);
-  if (orderMatch) {
-    const col  = orderMatch[1];
-    const desc = orderMatch[2] === 'desc';
-    rows = [...rows].sort((a, b) => {
-      const va = a[col], vb = b[col];
-      if (va == null) return 1;
-      if (vb == null) return -1;
-      const cmp = typeof va === 'number' ? va - vb : String(va).localeCompare(String(vb));
-      return desc ? -cmp : cmp;
-    });
-  }
+  const orderMatch = n.match(/\border\s+by\s+(.+?)(?=\s+(?:limit)\b|$)/);
+  if (orderMatch) rows = applyOrderBy(rows, orderMatch[1]);
 
   const limitMatch = n.match(/\blimit\s+(\d+)/);
   if (limitMatch) rows = rows.slice(0, parseInt(limitMatch[1], 10));
