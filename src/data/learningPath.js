@@ -595,6 +595,44 @@ export const learningPathPhases = [
         ],
       },
       {
+        id: 'dbt-analytics-engineering',
+        title: 'dbt & Analytics Engineering',
+        lessons: [
+          {
+            id: 'dbt-overview',
+            title: 'dbt Fundamentals',
+            topicId: 'dbt',
+            label: 'Transform',
+            difficulty: 'Intermediate',
+            body: 'dbt models, staging/intermediate/mart layers, sources, ref(), and how dbt turns SQL files into a production transformation pipeline with built-in lineage.',
+          },
+          {
+            id: 'dbt-testing-docs',
+            title: 'dbt Tests and Documentation',
+            topicId: 'dbt',
+            label: 'Quality',
+            difficulty: 'Intermediate',
+            body: 'not_null, unique, accepted_values, relationships — built-in tests plus custom singular tests. Documentation YAML, lineage graph, and dbt docs serve.',
+          },
+          {
+            id: 'dbt-incremental-snapshots',
+            title: 'Incremental Models and Snapshots',
+            topicId: 'dbt',
+            label: 'Advanced',
+            difficulty: 'Intermediate to Advanced',
+            body: 'is_incremental() for large fact tables with lookback buffers. SCD Type 2 via dbt snapshots. --full-refresh strategies for schema evolution.',
+          },
+          {
+            id: 'dbt-macros-production',
+            title: 'Macros, Jinja, and Production dbt',
+            topicId: 'dbt',
+            label: 'Production',
+            difficulty: 'Advanced',
+            body: 'Reusable Jinja macros, dbt Cloud vs dbt Core with Airflow, CI/CD on PRs, and adapter configuration for Snowflake, Databricks, Fabric, and Synapse.',
+          },
+        ],
+      },
+      {
         id: 'pipeline-patterns',
         title: 'Pipeline Patterns',
         lessons: [

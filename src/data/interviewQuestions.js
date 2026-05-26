@@ -882,6 +882,121 @@ export const categoryQuestions = {
       },
     ],
   },
+  dbt: {
+    beginner: [
+      {
+        q: 'What is dbt and where does it fit in the modern data stack?',
+        a: 'dbt is the transformation layer in an ELT pipeline. You write SQL SELECT statements (models); dbt handles CREATE TABLE/VIEW, dependency ordering, testing, and documentation automatically. It sits between the ingestion layer (Fivetran/ADF/Airbyte) and the BI layer (Power BI/Looker/Tableau). The modern stack: ingest raw → load to warehouse → dbt transforms → serve to BI.',
+        detailedAnswer: 'The key distinction: dbt implements the T in ELT, not ETL. In ELT, data is loaded raw into the warehouse first, then transformed in-place using the warehouse\'s SQL engine. dbt makes that workflow production-grade by adding version control (every model is a .sql file in Git), automated testing (dbt test runs assertions on materialised tables), and documentation (dbt docs generate builds a lineage site). Before dbt, teams used stored procedures, handwritten SQL scripts, or Airflow PythonOperators — all with no lineage, no testing, and no shared documentation.',
+        followUps: ['What is the difference between ETL and ELT, and why does dbt prefer ELT?', 'What does dbt do with a model .sql file?'],
+        tags: ['All'],
+      },
+      {
+        q: 'What is a dbt model?',
+        a: 'A .sql file containing a SELECT statement. dbt wraps it in CREATE TABLE AS or CREATE VIEW AS (based on materialisation config) and runs it in the data warehouse. Every model in the models/ directory becomes a table or view. Models reference each other with {{ ref() }}, which creates DAG dependencies.',
+        detailedAnswer: 'A model is the fundamental unit of work in dbt. The model filename becomes the table or view name. Materialisation options: view (no data stored, re-executes on query), table (physically stored, rebuilt on each dbt run), incremental (only processes new rows), ephemeral (compiled as a CTE, no warehouse object created). The {{ ref("stg_orders") }} call is resolved by dbt at compile time to the correct schema for the current environment — dev schema in development, production schema in CI/CD.',
+        followUps: ['What is the difference between table and view materialisation?', 'What does the {{ ref() }} function do?'],
+        tags: ['All'],
+      },
+      {
+        q: 'What is the difference between source() and ref() in dbt?',
+        a: 'source() references raw tables loaded by the ingestion layer (Fivetran, ADF, Airbyte) — tables dbt did not create, defined in _sources.yml. ref() references another dbt model — creates a DAG dependency and handles schema resolution automatically between dev and prod environments.',
+        detailedAnswer: 'source() purpose: (1) makes the raw→staging boundary explicit and auditable, (2) enables dbt source freshness checks to alert when ingestion is delayed. ref() purpose: (1) creates the execution DAG so dbt runs models in correct order, (2) resolves to the correct schema per environment — {{ ref("stg_orders") }} in dev resolves to dev_yourname.stg_orders, in production to analytics.stg_orders. Rule: never hardcode table names in dbt models. Always use source() for raw tables and ref() for any table dbt created.',
+        followUps: ['What is dbt source freshness and when would you run it?', 'What happens if a ref() points to a model that does not exist?'],
+        tags: ['All'],
+      },
+      {
+        q: 'What are the three layers in a standard dbt project and what belongs in each?',
+        a: 'Staging (stg_): one model per source table — clean types, rename columns, no business logic. Intermediate (int_): business logic — joins, business rules, derived columns. Not exposed to BI. Marts (fct_/dim_): final tables consumed by BI and analysts — optimised for query performance.',
+        detailedAnswer: 'Staging purpose: isolate source quirks. If a source renames a column, fix one staging model — not all downstream models. Intermediate purpose: reusable business logic. Customer LTV defined once in int_customer_lifetime is referenced by multiple mart models. Mart purpose: serve specific consumer needs — finance mart optimised for revenue queries, marketing mart for campaign analysis. The three-layer pattern separates concerns: source changes only affect staging, business rule changes only affect intermediate, BI schema changes only affect marts.',
+        followUps: ['What prefix convention do dbt teams use for each layer?', 'Should staging models contain JOIN logic?'],
+        tags: ['All'],
+      },
+    ],
+    intermediate: [
+      {
+        q: 'What is an incremental model in dbt and when would you use one?',
+        a: 'An incremental model only processes new/changed records each run instead of rebuilding the entire table. On first run it acts like a table materialisation (full load). On subsequent runs, the is_incremental() block adds a WHERE clause filtering to records newer than the existing table\'s MAX timestamp. Use for large fact tables (events, orders) where a full rebuild would be too slow or expensive.',
+        detailedAnswer: 'The is_incremental() block runs only when: (1) the model already exists as a table AND (2) --full-refresh was not passed. The WHERE clause typically looks like: WHERE created_at > (SELECT MAX(created_at) FROM {{ this }}). Use a lookback buffer to catch late-arriving data: WHERE created_at > (SELECT DATEADD("hour", -25, MAX(created_at)) FROM {{ this }}). unique_key + incremental_strategy="merge" enables upserts instead of appends — safer for tables where source records can be updated after creation.',
+        followUps: ['What happens if you run dbt run --full-refresh on an incremental model?', 'What is the risk of a narrow lookback window for late-arriving data?'],
+        tags: ['All'],
+      },
+      {
+        q: 'How does dbt snapshot implement SCD Type 2?',
+        a: 'A snapshot compares the current source SELECT result to the previous snapshot state on each run. Changed rows: the current record is closed (dbt_valid_to = current timestamp); a new record is inserted with dbt_valid_from = now and dbt_valid_to = NULL. New rows: inserted with dbt_valid_from = now. Unchanged rows: no action. dbt adds dbt_valid_from, dbt_valid_to, and dbt_scd_id columns automatically.',
+        detailedAnswer: 'Two snapshot strategies: (1) timestamp — use an updated_at column to detect changes, efficient. (2) check — hash all specified columns and compare hashes, use when source has no updated_at. The invalidate_hard_deletes: true config sets dbt_valid_to on snapshot records whose source row no longer exists — prevents orphaned "current" records. To query point-in-time: WHERE dbt_valid_from <= "2024-01-15" AND (dbt_valid_to > "2024-01-15" OR dbt_valid_to IS NULL).',
+        followUps: ['What is the check strategy in dbt snapshots and when would you use it over timestamp?', 'How do you query a snapshot for historical point-in-time state?'],
+        tags: ['All'],
+      },
+      {
+        q: 'What dbt tests are built-in and how do you add a custom test?',
+        a: 'Built-in generic tests: not_null, unique, accepted_values (column value is in a list), relationships (FK check — values exist in another model\'s column). Defined in schema .yml files. Custom singular tests: a .sql file in tests/ that returns failing rows — if the query returns any rows, the test fails. Custom generic tests: Jinja macros that wrap a SQL assertion, reusable across models.',
+        detailedAnswer: 'Generic test example in schema.yml: `- name: order_id\n  tests: [unique, not_null]`. Accepted values: `tests: [{accepted_values: {values: [pending, shipped]}}]`. Relationships (FK): `tests: [{relationships: {to: ref("dim_customers"), field: customer_id}}]`. Singular test example: tests/assert_positive_amounts.sql — `SELECT * FROM {{ ref("stg_orders") }} WHERE amount <= 0`. Any rows returned = test failure. Test severity: add `severity: warn` to alert without blocking the pipeline. Store failures: `dbt test --store-failures` writes failing rows to a table for debugging.',
+        followUps: ['What does --store-failures do in dbt test?', 'How do you mark a test as warn severity instead of error?'],
+        tags: ['All'],
+      },
+      {
+        q: 'What is a dbt macro and when would you write one?',
+        a: 'A Jinja function defined in macros/*.sql that generates SQL at compile time. Write a macro when the same SQL pattern appears in 3+ models — deduplication logic, audit column additions, cents-to-dollars conversion, date spine generation. Macros keep SQL DRY and make it easy to change a pattern in one place.',
+        detailedAnswer: 'Macro definition: `{% macro clean_string(col) %} LOWER(TRIM({{ col }})) {% endmacro %}`. Usage in model: `{{ clean_string("email") }}`. Compiled to: `LOWER(TRIM(email))`. dbt-utils package provides production-ready macros: generate_surrogate_key (MD5 hash of multiple columns), date_spine (generate a date dimension), get_column_values (dynamic SQL from column values), pivot. Install with packages.yml + dbt deps. Rule: use dbt-utils for standard patterns, custom macros for business-specific logic only.',
+        followUps: ['What is the dbt-utils package and what macros does it provide?', 'How do you install a dbt package?'],
+        tags: ['All'],
+      },
+    ],
+    advanced: [
+      {
+        q: 'How would you design a production dbt CI/CD pipeline with dev, staging, and production environments?',
+        a: 'Dev: engineers run dbt locally against personal schemas (dbt_yourname). On PR: CI runs dbt run --select state:modified+ (changed models + downstream only) and dbt test --select state:modified+. PR blocks merge on failures. Production: scheduled job — dbt source freshness (halt if ingestion stale) → dbt run (all models) → dbt test (all tests) → dbt docs generate. Alert on failure.',
+        detailedAnswer: 'Environment isolation: profile targets map to schemas. Dev target → schema dbt_yourname (personal, no collision). CI target → schema dbt_ci_pr42 (per-PR, cleaned up after merge). Prod target → schema analytics (stable). The --state flag enables dbt to detect model changes using manifest.json from the previous production run — dbt run --select state:modified+ only runs changed models and their downstream dependents, keeping CI under 5 minutes for large projects. In dbt Cloud, this is built-in via the Slim CI feature. In dbt Core with GitHub Actions, pass the previous production manifest.json as the --state artifact.',
+        followUps: ['What is the dbt --state flag and how does it enable Slim CI?', 'How do you handle dbt secrets (warehouse credentials) in a CI environment?'],
+        tags: ['Enterprise', 'Cloud-Native'],
+      },
+      {
+        q: 'How does dbt behave differently on Databricks (Unity Catalog) vs Snowflake?',
+        a: 'Databricks uses a three-level namespace (catalog.schema.table vs Snowflake\'s database.schema.table). Models run as Spark SQL — Snowflake-specific functions (DATEADD, IFF) are not available on Databricks; use date_add and IF instead. Databricks supports Liquid Clustering via the cluster_by config. Databricks SQL Warehouses have cold-start latency; use Serverless SQL Warehouses. Snowflake has the most mature dbt experience — fewer adapter limitations and more community examples.',
+        detailedAnswer: 'Unity Catalog profile requires catalog: field in addition to schema:. Models materialised as tables in Databricks use Delta format automatically (file_format: delta in config). Incremental strategy: merge works in both; insert_overwrite is Databricks-specific and faster for partition-based incremental. Date functions differ: Snowflake uses DATEADD("hour", -1, MAX(col)), Databricks uses MAX(col) - INTERVAL 1 HOUR. The dbt-databricks adapter handles most differences automatically, but complex Snowflake-specific SQL (FLATTEN, LATERAL, OBJECT_CONSTRUCT) requires platform-specific macros or conditional Jinja.',
+        followUps: ['How do you write a dbt model that works on both Snowflake and Databricks?', 'What is the dbt-databricks adapter and how does it differ from dbt-spark?'],
+        tags: ['Enterprise', 'Cloud-Native'],
+      },
+      {
+        q: 'How would you handle a dbt project with 500+ models and 5 engineers without degrading CI time or causing merge conflicts?',
+        a: 'Three strategies: (1) Slim CI — use --select state:modified+ with a stored manifest.json from the last prod run. Only changed models + downstream run in CI, keeping it under 5 minutes. (2) Sub-project structure — split by domain (finance/, marketing/, ops/) with separate dbt_project.yml and independent CI runs per domain. (3) Developer isolation — each engineer targets their own personal schema. Never run dbt run without --select in development.',
+        detailedAnswer: 'Slim CI setup: in CI, run `dbt run --select state:modified+ --defer --state ./prod-manifest`. The --defer flag means unmodified upstream models resolve to their production table rather than being rebuilt in CI. This makes a 500-model project run CI in the same time as a 10-model project as long as the PR only touches a few models. Merge conflict prevention: each .sql model file is self-contained — no merge conflicts on model logic. Conflicts happen in schema.yml and dbt_project.yml. Convention: one schema.yml per folder, not one global file. dbt_project.yml should only contain global defaults, not per-model overrides.',
+        followUps: ['What is the --defer flag in dbt run and when would you use it?', 'How do you organise dbt_project.yml for a large multi-team project?'],
+        tags: ['Enterprise', 'FAANG'],
+      },
+      {
+        q: 'Your dbt incremental model has been running for 6 months. An analyst reports that a historical fact table has wrong revenue for Q1. How do you diagnose and fix it?',
+        a: 'Diagnose: check the model\'s lookback window — was there a schema change or data restatement in Q1 that arrived after the lookback window expired? Check the model\'s git history for changes to the WHERE clause. Fix: run dbt run --select fct_orders --full-refresh for the specific table to rebuild all historical data with the current SQL. If the model is large, use a partition-targeted backfill: temporarily widen the is_incremental WHERE clause to the Q1 date range, run once, revert.',
+        detailedAnswer: 'Root cause patterns: (1) Late-arriving data — source records with Q1 dates arrived after the lookback window; they were skipped silently. (2) Logic bug — the incremental model had incorrect SQL for 6 months; all runs since that commit produced wrong data. (3) Source restatement — the upstream source corrected historical data, but incremental only processes new data. Fix strategy: if the bug was introduced in a specific commit, use `dbt run --select fct_orders --full-refresh` to rebuild from the corrected SQL. For very large tables (billions of rows), create a backfill model that only processes the affected date range: `WHERE order_date BETWEEN "2024-01-01" AND "2024-03-31"`, run it once, then delete the backfill model.',
+        followUps: ['How do you prevent historical data correctness issues in incremental models?', 'What dbt test would catch a revenue calculation error before it reaches production?'],
+        tags: ['Enterprise', 'Production'],
+      },
+    ],
+    scenarios: [
+      {
+        q: 'You are joining a team that has 60 SQL stored procedures in Snowflake and no dbt. The team wants to migrate to dbt. Walk through your migration approach.',
+        a: 'Phase 1 (2 weeks): Audit — map all stored procedures, identify dependencies (which procs call others), catalogue source tables (Fivetran/ADF loaded vs proc-generated). Phase 2 (4 weeks): Build staging layer — one stg_ model per source table using {{ source() }}, add basic tests. Do not touch Gold tables yet. Phase 3 (8 weeks): Migrate intermediate and mart models — rewrite procs as dbt models in dependency order, add tests at each step. Phase 4: Cutover — run dbt models in parallel with procs for 2 weeks, validate row counts and revenue match, then disable procs.',
+        detailedAnswer: 'Key migration risks: (1) Circular dependencies — stored procs can call each other in loops; dbt DAG is acyclic. Identify and break cycles before migration. (2) Proc-specific features — stored procs may use procedural logic (loops, IF statements) that SQL SELECT cannot express. These become macros or Jinja in dbt. (3) Data validation — before cutover, run reconciliation queries comparing proc output to dbt model output on the same date. Difference > 0.01% = investigate. (4) Scheduling — stored procs on SQL Agent schedules must be replaced by dbt Cloud jobs or Airflow DAGs. Parallel-run phase is critical: never cut over without 2 weeks of side-by-side validation.',
+        followUps: ['How would you convince stakeholders that dbt is worth the migration effort?', 'What do you do when a stored procedure has business logic that cannot be expressed in a SELECT statement?'],
+        tags: ['Enterprise', 'Production'],
+      },
+      {
+        q: 'Your dbt project runs on Databricks. The daily dbt run is taking 3 hours and the team needs it under 30 minutes. How do you approach this?',
+        a: 'Step 1: Profile — run dbt run with --profiles-dir and check the Databricks query history. Identify the 5 slowest models (likely large full-table rebuilds). Step 2: Convert slow table models to incremental — add is_incremental() WHERE clause. Step 3: Parallelism — increase threads in profiles.yml (from 4 to 16 for Databricks SQL Warehouse). Step 4: Materialisation audit — are any views doing complex joins on large tables that should be tables? Step 5: Slim CI approach for dev runs — only run changed models. Step 6: Check for fan-out — is one model being referenced by 50 downstream models? Cache it with a table materialisation.',
+        detailedAnswer: 'Concretely: most 3-hour dbt runs have 2-3 models that account for 80% of run time. The fix is almost always converting full-table rebuilds to incremental materialisation with a proper unique_key and merge strategy. Databricks-specific: use Serverless SQL Warehouses instead of Classic to eliminate cold-start time (saves 2-5 minutes per run). Enable Photon on the SQL Warehouse — vectorised execution speeds up dbt aggregation models significantly. For models that must be full rebuilds (dimension tables), use OPTIMIZE + ZORDER after each dbt run to maintain Delta read performance. Partition large fact tables by order_date — dbt incremental MERGE with a date filter prunes to the relevant partition.',
+        followUps: ['How do you use the dbt --threads flag to parallelize model execution?', 'What is the relationship between dbt model count and run time?'],
+        tags: ['Enterprise', 'Cloud-Native', 'Production'],
+      },
+      {
+        q: 'An analyst reports that revenue in the Power BI dashboard is 15% lower than what the finance team calculates in Excel. Both use the fct_orders dbt model. How do you debug this?',
+        a: 'Three likely causes: (1) Filter difference — check if fct_orders excludes certain order statuses that the Excel model includes. (2) Currency/rounding — check if the dbt model converts to a specific currency or rounds differently. (3) Date boundary — check if the dbt model uses created_at vs closed_at and the Excel uses a different date field. Debug: run the fct_orders SQL manually with no filters and compare total to Excel total. Add filters one by one until you find the discrepancy source. Then update the model description to document the business rule explicitly.',
+        detailedAnswer: 'Systematic debugging: (1) Get the exact time period and filters from both sources. (2) Run SELECT SUM(amount), COUNT(*) FROM fct_orders WHERE [same filters as dashboard] and compare. (3) Check dbt model for implicit filters: WHERE status != "cancelled" — does Excel model also exclude cancelled? (4) Check model for LEFT JOIN → NULL rows in amount that Excel might include as zero. (5) Check for double-counting: if fct_orders has a JOIN that produces fan-out, COUNT(*) will be higher than expected. After finding the root cause, add a dbt test or a data contract comment documenting the exact revenue definition. This prevents the same question from recurring.',
+        followUps: ['How do you document the business definition of "revenue" in a dbt model to prevent future confusion?', 'What dbt test would catch a double-counting issue caused by a bad JOIN?'],
+        tags: ['Enterprise', 'Production'],
+      },
+    ],
+  },
   fabric: {
     intermediate: [
       {

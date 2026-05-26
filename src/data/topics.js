@@ -1,4 +1,5 @@
 import { sqlModule }        from './modules/sql.js';
+import { dbtModule }        from './modules/dbt.js';
 import { pythonModule }     from './modules/python.js';
 import { pysparkModule }    from './modules/pyspark.js';
 import { adfModule }        from './modules/azure-data-factory.js';
@@ -92,11 +93,54 @@ const coreTopics = [
       projectLink: 'Incremental ETL Pipeline and API Ingestion Workflow — both are built entirely in Python.',
     },
     nextStep: {
-      id: 'pyspark',
-      title: 'PySpark',
-      reason: 'Python handles gigabytes; PySpark handles terabytes — when your data outgrows a single machine, Spark is the tool every senior DE reaches for.',
+      id: 'dbt',
+      title: 'dbt (data build tool)',
+      reason: 'Once you can write SQL and Python, dbt teaches you how to structure transformations as testable, documented, version-controlled models — the analytics engineering standard.',
     },
     docs: ['python-docs', 'pandas-docs'],
+  },
+  {
+    id: 'dbt',
+    title: 'dbt (data build tool)',
+    label: 'Transform',
+    category: 'Analytics Engineering',
+    difficulty: 'Intermediate',
+    progress: '0%',
+    body: 'Write SQL models that dbt compiles, tests, documents, and deploys to your data warehouse automatically.',
+    overview: [
+      { title: 'What is this?', body: 'dbt is a transformation framework that lets you write SELECT statements as models — dbt handles CREATE TABLE/VIEW, dependency ordering, testing, documentation, and lineage automatically, all in version-controlled SQL files.' },
+      { title: 'Why do we use it?', body: 'A data engineer uses dbt to replace scattered stored procedures and SQL scripts with a tested, documented, version-controlled transformation layer that builds every table in the correct dependency order.' },
+      { title: 'Simple example', body: 'CREATE TABLE analytics.fct_orders AS SELECT ... — dbt generates this from a model file called fct_orders.sql and runs it after all upstream models complete.' },
+      { title: 'Practice task', body: 'Describe the staging → intermediate → mart layer pattern and explain what belongs in each layer.' },
+    ],
+    questions: [
+      { question: 'What is dbt?', answer: 'A transformation tool that runs SQL SELECT statements inside the warehouse, handling table creation, testing, and documentation automatically.' },
+      { question: 'What is a dbt model?', answer: 'A SQL file containing a SELECT statement. dbt wraps it in CREATE TABLE AS or CREATE VIEW AS and runs models in dependency order.' },
+      { question: 'What does ref() do?', answer: 'Creates a DAG dependency between models. dbt resolves ref("stg_orders") to the correct schema automatically in dev and prod.' },
+    ],
+    module: dbtModule,
+    step: 3,
+    prerequisites: ['sql', 'python'],
+    timeEstimate: '2–3 weeks',
+    interviewImportance: 'high',
+    commonMistakes: [
+      'Putting business logic in staging models — staging should only clean and standardise source data, never apply business rules.',
+      'Using SELECT * in models — always name columns explicitly so upstream schema changes are caught by tests.',
+      'Forgetting to write tests — every primary key column needs unique + not_null as a baseline minimum.',
+    ],
+    resumeRelevance: 'Mention dbt project structure (staging/intermediate/marts), test coverage, and any incremental models or snapshots — these signal production dbt experience rather than just tool familiarity.',
+    careerContext: {
+      whyItMatters: 'dbt has become the standard transformation layer at companies using Snowflake, Databricks, BigQuery, and Redshift. It appears in ~60% of modern DE and analytics engineering job descriptions. A data engineer without dbt experience is increasingly at a disadvantage in the market.',
+      realWorldUseCase: 'A DE at a SaaS company replaces 40 handwritten SQL stored procedures with a dbt project: 8 staging models for Fivetran sources, 12 intermediate models for business logic, 5 mart models consumed by Power BI. dbt tests catch 3 data quality issues per week that previously produced wrong dashboards.',
+      interviewTip: 'Know the three-layer architecture, how ref() enables dependency resolution, the difference between view and table materialisation, and how incremental models work. Be ready to explain why you would use a snapshot for SCD2 vs manually writing the SCD2 MERGE logic.',
+      projectLink: 'Any medallion architecture project maps directly to dbt — Silver layer models are intermediate models, Gold layer aggregations are mart models.',
+    },
+    nextStep: {
+      id: 'pyspark',
+      title: 'PySpark',
+      reason: 'dbt handles SQL-native transformations inside the warehouse — PySpark handles transformations at Spark scale when data is too large for a single SQL warehouse query.',
+    },
+    docs: ['dbt-docs'],
   },
   {
     id: 'pyspark',
