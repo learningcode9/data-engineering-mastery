@@ -18739,6 +18739,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .sqll-eng-block--perf .sqll-eng-label  { color: #38bdf8; }
 .sqll-eng-block--interview { background: #1a0a2e20; border: 1px solid #6b21a830; }
 .sqll-eng-block--interview .sqll-eng-label { color: #e879f9; }
+.sqll-eng-block--junior   { background: #0c1a0820; border: 1px solid #16650a30; }
+.sqll-eng-block--junior .sqll-eng-label   { color: #4ade80; }
+.sqll-eng-block--tradeoff { background: #1a0a1e20; border: 1px solid #6b21a830; }
+.sqll-eng-block--tradeoff .sqll-eng-label { color: #c084fc; }
 
 /* Debug mode */
 .sqll-debug-meta { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px; }

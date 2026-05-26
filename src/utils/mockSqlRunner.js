@@ -42,6 +42,84 @@ function evalRowCaseExpr(row, caseExpr) {
   return cond ? Number(thenV) : Number(elseV);
 }
 
+function evalSingleCondition(cond, row, betweens) {
+  cond = cond.trim();
+
+  const bm = cond.match(/^__btw(\d+)__$/);
+  if (bm) {
+    const { col, lo, hi } = betweens[+bm[1]];
+    const v = Number(row[col]);
+    return v >= lo && v <= hi;
+  }
+
+  let m;
+
+  // NOT IN
+  m = cond.match(/^(?:\w+\.)?(\w+)\s+not\s+in\s+\(([^)]+)\)$/);
+  if (m) {
+    const vals = m[2].split(',').map(v => v.trim().replace(/^'|'$/g, '').toLowerCase());
+    return !vals.includes(String(row[m[1]] ?? '').toLowerCase());
+  }
+
+  // IN
+  m = cond.match(/^(?:\w+\.)?(\w+)\s+in\s+\(([^)]+)\)$/);
+  if (m) {
+    const vals = m[2].split(',').map(v => v.trim().replace(/^'|'$/g, '').toLowerCase());
+    return vals.includes(String(row[m[1]] ?? '').toLowerCase());
+  }
+
+  // table.col = 'val' or col = 'val'
+  m = cond.match(/^(?:\w+\.)?(\w+)\s*=\s*'([^']*)'$/);
+  if (m) return String(row[m[1]] ?? '').toLowerCase() === m[2].toLowerCase();
+
+  // Numeric equals
+  m = cond.match(/^(?:\w+\.)?(\w+)\s*=\s*(-?\d+\.?\d*)$/);
+  if (m) return Number(row[m[1]]) === Number(m[2]);
+
+  // Numeric comparisons
+  m = cond.match(/^(?:\w+\.)?(\w+)\s*>\s*(-?\d+\.?\d*)$/);
+  if (m) return Number(row[m[1]]) > Number(m[2]);
+
+  m = cond.match(/^(?:\w+\.)?(\w+)\s*<\s*(-?\d+\.?\d*)$/);
+  if (m) return Number(row[m[1]]) < Number(m[2]);
+
+  m = cond.match(/^(?:\w+\.)?(\w+)\s*>=\s*(-?\d+\.?\d*)$/);
+  if (m) return Number(row[m[1]]) >= Number(m[2]);
+
+  m = cond.match(/^(?:\w+\.)?(\w+)\s*<=\s*(-?\d+\.?\d*)$/);
+  if (m) return Number(row[m[1]]) <= Number(m[2]);
+
+  // String inequality
+  m = cond.match(/^(?:\w+\.)?(\w+)\s*!=\s*'([^']*)'$/);
+  if (m) return String(row[m[1]] ?? '').toLowerCase() !== m[2].toLowerCase();
+
+  // String comparisons — handles date columns like created_at > '2024-01-17'
+  m = cond.match(/^(?:\w+\.)?(\w+)\s*(>|<|>=|<=)\s*'([^']*)'$/);
+  if (m) {
+    const [, col, op, val] = m;
+    const rv = String(row[col] ?? '');
+    if (op === '>') return rv > val;
+    if (op === '<') return rv < val;
+    if (op === '>=') return rv >= val;
+    if (op === '<=') return rv <= val;
+  }
+
+  m = cond.match(/^(?:\w+\.)?(\w+)\s+like\s+'([^']+)'$/);
+  if (m) {
+    const re = new RegExp('^' + m[2].replace(/%/g, '.*').replace(/_/g, '.') + '$', 'i');
+    return re.test(String(row[m[1]] ?? ''));
+  }
+
+  if (/\bis\s+not\s+null\b/.test(cond)) {
+    m = cond.match(/^(?:\w+\.)?(\w+)\s+is\s+not\s+null$/);
+    if (m) return row[m[1]] != null;
+  }
+  m = cond.match(/^(?:\w+\.)?(\w+)\s+is\s+null$/);
+  if (m) return row[m[1]] == null;
+
+  return true;
+}
+
 function applyWhere(rows, clause, allCols) {
   // Protect BETWEEN...AND... from the AND-split
   const betweens = [];
@@ -52,115 +130,56 @@ function applyWhere(rows, clause, allCols) {
       return `__btw${betweens.length - 1}__`;
     }
   );
-  const conditions = safe.trim().split(/\s+and\s+/i);
+  // Split on OR first (lower precedence), then AND within each OR group
+  const orGroups = safe.trim().split(/\s+or\s+/i);
   return rows.filter(row =>
-    conditions.every(cond => {
-      cond = cond.trim();
-
-      const bm = cond.match(/^__btw(\d+)__$/);
-      if (bm) {
-        const { col, lo, hi } = betweens[+bm[1]];
-        const v = Number(row[col]);
-        return v >= lo && v <= hi;
-      }
-
-      let m;
-
-      // table.col = 'val' or col = 'val'
-      m = cond.match(/^(?:\w+\.)?(\w+)\s*=\s*'([^']*)'$/);
-      if (m) return String(row[m[1]] ?? '').toLowerCase() === m[2].toLowerCase();
-
-      // Numeric equals
-      m = cond.match(/^(?:\w+\.)?(\w+)\s*=\s*(-?\d+\.?\d*)$/);
-      if (m) return Number(row[m[1]]) === Number(m[2]);
-
-      // Numeric comparisons
-      m = cond.match(/^(?:\w+\.)?(\w+)\s*>\s*(-?\d+\.?\d*)$/);
-      if (m) return Number(row[m[1]]) > Number(m[2]);
-
-      m = cond.match(/^(?:\w+\.)?(\w+)\s*<\s*(-?\d+\.?\d*)$/);
-      if (m) return Number(row[m[1]]) < Number(m[2]);
-
-      m = cond.match(/^(?:\w+\.)?(\w+)\s*>=\s*(-?\d+\.?\d*)$/);
-      if (m) return Number(row[m[1]]) >= Number(m[2]);
-
-      m = cond.match(/^(?:\w+\.)?(\w+)\s*<=\s*(-?\d+\.?\d*)$/);
-      if (m) return Number(row[m[1]]) <= Number(m[2]);
-
-      // String inequality
-      m = cond.match(/^(?:\w+\.)?(\w+)\s*!=\s*'([^']*)'$/);
-      if (m) return String(row[m[1]] ?? '').toLowerCase() !== m[2].toLowerCase();
-
-      // String comparisons — handles date columns like created_at > '2024-01-17'
-      m = cond.match(/^(?:\w+\.)?(\w+)\s*(>|<|>=|<=)\s*'([^']*)'$/);
-      if (m) {
-        const [, col, op, val] = m;
-        const rv = String(row[col] ?? '');
-        if (op === '>') return rv > val;
-        if (op === '<') return rv < val;
-        if (op === '>=') return rv >= val;
-        if (op === '<=') return rv <= val;
-      }
-
-      m = cond.match(/^(?:\w+\.)?(\w+)\s+like\s+'([^']+)'$/);
-      if (m) {
-        const re = new RegExp('^' + m[2].replace(/%/g, '.*').replace(/_/g, '.') + '$', 'i');
-        return re.test(String(row[m[1]] ?? ''));
-      }
-
-      if (/\bis\s+not\s+null\b/.test(cond)) {
-        m = cond.match(/^(?:\w+\.)?(\w+)\s+is\s+not\s+null$/);
-        if (m) return row[m[1]] != null;
-      }
-      m = cond.match(/^(?:\w+\.)?(\w+)\s+is\s+null$/);
-      if (m) return row[m[1]] == null;
-
-      m = cond.match(/^(?:\w+\.)?(\w+)\s+in\s+\(([^)]+)\)$/);
-      if (m) {
-        const vals = m[2].split(',').map(v => v.trim().replace(/^'|'$/g, '').toLowerCase());
-        return vals.includes(String(row[m[1]] ?? '').toLowerCase());
-      }
-
-      return true;
+    orGroups.some(orGroup => {
+      const andConds = orGroup.trim().split(/\s+and\s+/i);
+      return andConds.every(cond => evalSingleCondition(cond, row, betweens));
     })
   );
 }
 
-// Apply HAVING clause to already-grouped rows
+function evalSingleHavingCond(cond, row) {
+  cond = cond.trim();
+  let m = cond.match(/^\w+\s*\(\s*[\w*]+\s*\)\s*(?:as\s+\w+\s*)?(>|<|>=|<=|=|!=)\s*(-?\d+\.?\d*)$/i);
+  if (m) {
+    const aggKey = Object.keys(row).find(k => typeof row[k] === 'number' && k !== 'count(*)');
+    const aggVal = aggKey ? row[aggKey] : (row['count(*)'] ?? 0);
+    const rhs = Number(m[2]);
+    const op = m[1];
+    if (op === '>') return aggVal > rhs;
+    if (op === '<') return aggVal < rhs;
+    if (op === '>=') return aggVal >= rhs;
+    if (op === '<=') return aggVal <= rhs;
+    if (op === '=') return aggVal === rhs;
+    if (op === '!=') return aggVal !== rhs;
+  }
+  // HAVING alias > N (e.g., HAVING run_count > 2)
+  m = cond.match(/^(\w+)\s*(>|<|>=|<=|=|!=)\s*(-?\d+\.?\d*)$/);
+  if (m) {
+    const [, alias, op, rhs] = m;
+    const val = row[alias];
+    if (val !== undefined) {
+      const n = Number(val), r = Number(rhs);
+      if (op === '>') return n > r;
+      if (op === '<') return n < r;
+      if (op === '>=') return n >= r;
+      if (op === '<=') return n <= r;
+      if (op === '=') return n === r;
+      if (op === '!=') return n !== r;
+    }
+  }
+  return true;
+}
+
+// Apply HAVING clause to already-grouped rows (supports AND and OR)
 function applyHaving(rows, clause) {
-  const conditions = clause.trim().split(/\s+and\s+/i);
+  const orGroups = clause.trim().split(/\s+or\s+/i);
   return rows.filter(row =>
-    conditions.every(cond => {
-      cond = cond.trim();
-      let m = cond.match(/^\w+\s*\(\s*[\w*]+\s*\)\s*(?:as\s+\w+\s*)?(>|<|>=|<=|=|!=)\s*(-?\d+\.?\d*)$/i);
-      if (m) {
-        const aggKey = Object.keys(row).find(k => typeof row[k] === 'number' && k !== 'count(*)');
-        const aggVal = aggKey ? row[aggKey] : (row['count(*)'] ?? 0);
-        const rhs = Number(m[2]);
-        const op = m[1];
-        if (op === '>') return aggVal > rhs;
-        if (op === '<') return aggVal < rhs;
-        if (op === '>=') return aggVal >= rhs;
-        if (op === '<=') return aggVal <= rhs;
-        if (op === '=') return aggVal === rhs;
-        if (op === '!=') return aggVal !== rhs;
-      }
-      // HAVING alias > N (e.g., HAVING run_count > 2)
-      m = cond.match(/^(\w+)\s*(>|<|>=|<=|=|!=)\s*(-?\d+\.?\d*)$/);
-      if (m) {
-        const [, alias, op, rhs] = m;
-        const val = row[alias];
-        if (val !== undefined) {
-          const n = Number(val), r = Number(rhs);
-          if (op === '>') return n > r;
-          if (op === '<') return n < r;
-          if (op === '>=') return n >= r;
-          if (op === '<=') return n <= r;
-          if (op === '=') return n === r;
-          if (op === '!=') return n !== r;
-        }
-      }
-      return true;
+    orGroups.some(orGroup => {
+      const andConds = orGroup.trim().split(/\s+and\s+/i);
+      return andConds.every(cond => evalSingleHavingCond(cond, row));
     })
   );
 }
@@ -196,6 +215,26 @@ function applyAggregates(selectRaw, groupCol, groupKey, grp) {
     else if (fn === 'avg') out[label] = +(vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2);
     else if (fn === 'max') out[label] = Math.max(...vals);
     else if (fn === 'min') out[label] = Math.min(...vals);
+  }
+
+  // ROUND(aggregate, precision): e.g. ROUND(AVG(salary), 2) AS avg_salary
+  const roundAggRe = /\bround\s*\(\s*((?:count|sum|avg|max|min)\s*\([^)]+\))\s*,\s*(\d+)\s*\)(?:\s+as\s+(\w+))?/gi;
+  for (const [, innerAgg, precStr, alias] of selectRaw.matchAll(roundAggRe)) {
+    const innerMatch = innerAgg.match(/^(count|sum|avg|max|min)\s*\(\s*(\*|\w+(?:\.\w+)?)\s*\)$/i);
+    if (!innerMatch) continue;
+    const [, fn, col] = innerMatch;
+    const c = col === '*' ? col : col.replace(/^\w+\./, '');
+    const label = alias ?? `round(${innerAgg},${precStr})`;
+    const prec = Number(precStr);
+    const nums = grp.map(r => Number(r[c] ?? 0));
+    let raw;
+    if (fn === 'count') raw = grp.length;
+    else if (fn === 'sum') raw = nums.reduce((a, b) => a + b, 0);
+    else if (fn === 'avg') raw = nums.reduce((a, b) => a + b, 0) / nums.length;
+    else if (fn === 'max') raw = Math.max(...nums);
+    else if (fn === 'min') raw = Math.min(...nums);
+    const factor = Math.pow(10, prec);
+    out[label] = Math.round(raw * factor) / factor;
   }
 
   return out;

@@ -467,6 +467,8 @@ Tables: customers, orders`,
     engineeringContext: 'Multi-CTE chains are the core pattern in every dbt project. The 3-stage structure above maps directly to: Bronze (raw) → Silver (clean + join) → Gold (aggregated). Databricks Photon collapses CTE chains into a single physical plan when possible — you write readable stages, Photon executes efficiently.',
     performanceNote: 'Avoid referencing the same CTE more than once — Catalyst may re-evaluate it each time. For chains longer than 5 CTEs, explicitly cache intermediate DataFrames in PySpark or use temp views. The ROUND() call on avg_spend adds negligible CPU but prevents floating-point noise in dashboard comparisons.',
     interviewExpectation: 'Seniors explain each CTE\'s purpose before writing code: "Stage 1 aggregates, Stage 2 enriches and classifies, Stage 3 summarizes." They mention testability (each CTE queryable in isolation), Catalyst optimization, and how this maps to dbt model layers. Interviewers look for structured thinking — not just correct syntax.',
+    juniorMistake: 'Juniors write one monolithic query with deeply nested subqueries rather than a CTE chain. The nested version is logically equivalent but impossible to debug — you cannot inspect intermediate results. They also reference CTE aliases before defining them, which fails in most SQL engines.',
+    productionTradeoff: 'CTEs are readable and testable but Catalyst may re-evaluate a CTE that is referenced multiple times in the same query. For chains with expensive joins (> 1M rows at any stage), materialize intermediate results as temp views or cache DataFrames in PySpark. Readability has a real compute cost at scale.',
   },
   {
     id: 'q31', difficulty: 'advanced', title: 'Recursive CTE: Employee Org Tree',
@@ -497,6 +499,8 @@ Tables: employees (employee_id, name, department, salary, manager_id)`,
     engineeringContext: 'Recursive CTEs appear in dimension modeling for multi-level hierarchies: product taxonomy (category → subcategory → SKU), geography rollups (country → region → city), account trees in financial systems. Common in Snowflake and BigQuery interview rounds — Spark candidates should know the PySpark equivalent (GraphFrames BFS).',
     performanceNote: 'Each recursion level is a separate join pass — depth-10 hierarchy = 10 join operations. For very deep or wide trees, the recursive CTE can be slow. Add a LIMIT or depth cap. In BigQuery, recursive CTEs support LIMIT per level. In production, pre-compute the hierarchy as a materialized flattened table (customer_id, ancestor_id, depth) for fast lookup.',
     interviewExpectation: 'Interviewers expect: (1) identify the anchor and recursive member; (2) UNION ALL not UNION (preserve duplicates for performance); (3) cycle prevention with depth limit; (4) know that Spark does not support RECURSIVE — alternative is iterative Spark or GraphFrames; (5) explain BFS vs DFS traversal order.',
+    juniorMistake: 'Juniors write fixed-depth self-joins instead of a recursive CTE: LEFT JOIN employees mgr1 ON ..., LEFT JOIN employees mgr2 ON ... for 3 levels. This hardcodes the hierarchy depth — adding a fourth management tier requires a full query rewrite. They also forget the depth cap and create infinite loops when circular manager_id references exist in dirty data.',
+    productionTradeoff: 'Recursive CTEs are elegant for arbitrary-depth traversal but execute as iterative join passes — one Spark job per depth level. For a 10-level hierarchy, that is 10 joins. For deep hierarchies or very wide trees, pre-compute the flattened hierarchy (ancestor_id, descendant_id, depth) as a materialized table and refresh it daily. Query-time recursion is correct; pre-materialization is fast.',
   },
   {
     id: 'q32', difficulty: 'advanced', title: 'SCD2: Detect Changed Records',
@@ -523,6 +527,8 @@ Use IS DISTINCT FROM for NULL-safe comparison where possible.`,
     engineeringContext: 'SCD2 merge logic is the most common senior DE interview question at data warehouse companies. Every Snowflake, Redshift, BigQuery, and Synapse data engineer must know the 3-step lifecycle. Databricks MERGE handles all three steps atomically — the change detection query above feeds the MATCHED condition.',
     performanceNote: 'SCD2 tables grow unbounded. Partition by is_current so WHERE is_current = true prunes ~99% of historical records. In Databricks, Z-ORDER on customer_id + is_current enables sub-second point lookups on billion-row dimension tables. Monitor the active record count monthly — sudden jumps indicate missing is_current=false expirations.',
     interviewExpectation: "Seniors describe the full 3-step lifecycle unprompted: detect → expire → insert. They mention NULL-safe comparison (IS DISTINCT FROM), surrogate key vs natural key, the AND is_current = true in the ON clause (critical — missing it creates phantom records), and Delta Lake MERGE as the production implementation.",
+    juniorMistake: "Juniors forget AND is_current = true in the MERGE ON clause. Without it, the MERGE matches both current and historical records — triggering phantom inserts for every historical row. They also use != for NULL-safe comparison, which evaluates to NULL (not TRUE) when either side is NULL, silently missing changes where a column transitions to or from NULL.",
+    productionTradeoff: 'SCD2 preserves full history (critical for compliance and time-travel analysis) but unboundedly grows the dimension table. A 7M-customer dimension with 10 years of history can reach 50M+ rows. Partition by is_current for fast current-record lookups, but historical queries become expensive without date partitioning. Some teams cap SCD2 history at 2 years and archive older records to cold storage.',
   },
   {
     id: 'q33', difficulty: 'advanced', title: 'Incremental Load: Watermark Filter',
@@ -544,6 +550,8 @@ This is a real, executable query against the orders table.`,
     engineeringContext: 'This is the Bronze-layer query in every medallion architecture pipeline. In ADF/Databricks jobs, the watermark is a pipeline parameter populated from a control table. After a successful load, MAX(created_at) of the new batch is written back to the control table for the next run. Airflow uses XCom to pass watermarks between tasks.',
     performanceNote: 'Without date partitioning, created_at > \'2024-01-17\' scans the full table. With daily partitioning, it reads 1/N partitions. On a 3-year table (1095 partitions), a single-day incremental load scans 0.09% of the data vs 100% for a full scan. Partition pruning is the single biggest performance win in incremental pipelines.',
     interviewExpectation: 'Seniors immediately ask: "Is this idempotent?" and "What happens on failure and retry?" They discuss: watermark storage (control table vs pipeline parameter), late-arriving data (events that arrive after cutoff), > vs >= boundary semantics, and MERGE to make reruns safe. Missing the idempotency discussion is a gap at the senior level.',
+    juniorMistake: "Juniors use INSERT INTO instead of MERGE for incremental loads. If the pipeline fails mid-run and is retried, INSERT adds duplicate records. They also store the watermark as a hardcoded date in the SQL rather than reading it from a control table — making every watermark update a code change instead of a table update.",
+    productionTradeoff: 'Watermark-based incremental loading is fast (scans only new data) but fragile — the watermark must be updated atomically with the load. If the load succeeds but the watermark update fails, the next run reloads the same data. Combine with MERGE (not INSERT) to make reruns safe. For higher reliability, use two-phase commit: record the run in a transactions table before loading, mark it complete after.',
   },
   {
     id: 'q34', difficulty: 'advanced', title: 'Composite-Key Dedup: API Retry Storm',
@@ -570,6 +578,8 @@ Tables: orders`,
     engineeringContext: 'This pattern is at the Bronze→Silver boundary of every CDC pipeline. API retries, Kafka at-least-once delivery, and Lambda fan-out all create duplicate records. ROW_NUMBER + composite key is the universal dedup solution. Databricks Autoloader + Delta MERGE can do this automatically with schema inference.',
     performanceNote: 'ROW_NUMBER() triggers a full shuffle in Spark — all rows sharing the composite key must colocate on one executor. For very wide tables, project only the dedup key + ordering column in the CTE before the window to reduce shuffle size. Z-ORDER on the composite key in Delta Lake speeds future dedup queries by co-locating related rows.',
     interviewExpectation: 'Seniors define the composite business key before writing any SQL: "What makes two rows truly the same business event — not just sharing a customer_id?" They mention idempotency (same dedup query on same data = same result), late-arriving duplicates (what if the duplicate arrives tomorrow?), and the Delta MERGE pattern as the production-scale implementation.',
+    juniorMistake: "Juniors use SELECT DISTINCT to deduplicate but DISTINCT only works when ALL columns are identical. Two rows with the same customer_id and amount but different order_ids are both kept by DISTINCT. They also partition by a single column (customer_id) when the correct dedup unit is the composite business key — silently treating two different orders from the same customer as duplicates.",
+    productionTradeoff: 'ROW_NUMBER deduplication is correct but expensive — it triggers a full shuffle in Spark to colocate all rows sharing the composite key. For high-cardinality keys on large tables (> 100M rows), this shuffle dominates the pipeline runtime. Consider Delta Lake MERGE with a composite ON clause instead — it is O(changed_rows) not O(all_rows) and avoids the full-table window sort.',
   },
   {
     id: 'q35', difficulty: 'advanced', title: 'Sessionization: 30-Minute Gap Detection',
@@ -835,6 +845,56 @@ Tables: orders (skewed), customers (small dimension)`,
     engineeringContext: 'Skewed join handling is a top-3 Spark performance interview question at Uber, Lyft, DoorDash, Airbnb, and any company running large-scale Spark. The broadcast hint is the first solution for small dimensions; salting is the production solution for large-table skew. AQE in Databricks Runtime 10+ handles most cases automatically.',
     performanceNote: 'Salting multiplies the small table N times (memory cost) and adds a composite JOIN key (CPU cost). Choose N based on skew ratio — 80% of data in one key → N=10 distributes it sufficiently. In Databricks Runtime 10+, AQE skew join is enabled by default and handles most skew cases without manual intervention.',
     interviewExpectation: "Seniors recognize skew from symptoms: 'one executor 10× longer than others' or 'OOM on single executor during JOIN.' They present 3 solutions in order: broadcast → salting → AQE. They explain tradeoffs: broadcast is fastest but limited to small tables; salting has replication overhead; AQE is automatic but requires Spark 3.x. Missing the AQE option in Spark 3.x discussions is a gap.",
+    juniorMistake: 'Juniors increase spark.sql.shuffle.partitions thinking more partitions = faster. It has no effect on skew — the hot key maps to the same partition regardless. They also try to fix skew at the storage layer (repartition the source table) rather than at query time with hints or AQE.',
+    productionTradeoff: 'Broadcast vs salt join: broadcast is zero-overhead but limited to tables < 10MB (configurable via spark.sql.autoBroadcastJoinThreshold). Salt join handles arbitrarily large tables but replicates the small table N times in memory and adds a composite join key. In practice, enable AQE first — it handles most skew automatically at runtime without code changes.',
+  },
+  {
+    id: 'q45', difficulty: 'advanced', title: 'DENSE_RANK: Salary Competition Ranking',
+    prompt: 'Rank all employees by salary globally using DENSE_RANK — so tied salaries share a rank and the next rank is sequential with no gaps. Return name, salary, and salary_rank (1 = highest). This uses window functions — compare your logic against the expected output.',
+    hint1: 'DENSE_RANK() OVER (ORDER BY salary DESC)',
+    hint2: 'ORDER BY salary_rank, name',
+    hint3: "SELECT name, salary,\n  DENSE_RANK() OVER (ORDER BY salary DESC) AS salary_rank\nFROM employees\nORDER BY salary_rank, name",
+    validate: r => !r.error,
+    expectedOutput: [
+      { name: 'Sarah Wong',   salary: 120000, salary_rank: 1 },
+      { name: 'Priya Patel',  salary: 115000, salary_rank: 2 },
+      { name: 'Maria Santos', salary: 110000, salary_rank: 3 },
+      { name: 'Lisa Chen',    salary: 105000, salary_rank: 4 },
+    ],
+    answer: "SELECT name, salary,\n  DENSE_RANK() OVER (\n    ORDER BY salary DESC\n  ) AS salary_rank\nFROM employees\nORDER BY salary_rank, name;",
+    whyMatters: 'DENSE_RANK is the correct ranking function when downstream logic depends on consecutive rank numbers — compensation band assignment, percentile tier labels, and leaderboard positions all break if ranks skip. A pay band system that says "Band 3 = employees at rank 3" silently mislabels employees if RANK() skips 3 after a tie at 2.',
+    wrongApproach: "RANK() skips rank numbers after a tie: if two employees tie at rank 2, the next employee is rank 4 — there is no rank 3. DENSE_RANK() does not skip: the next rank is always previous_rank + 1. Use RANK() for competition scoring where ties genuinely displace subsequent positions. Use DENSE_RANK() for bucketing and tier assignment.",
+    optimizationNote: 'DENSE_RANK globally (no PARTITION BY) requires a full sort of the dataset. For very large tables, pre-filter to the relevant subset before ranking. If you only need top-N, combine with a WHERE salary_rank <= N in an outer CTE rather than fetching all ranks and discarding most.',
+    engineeringContext: 'RANK vs DENSE_RANK vs ROW_NUMBER is a guaranteed interview question in almost every data engineering and analytics engineer interview. Interviewers use it to test precise understanding of window function semantics. The key distinction: ROW_NUMBER (always unique), RANK (gaps after ties), DENSE_RANK (no gaps after ties).',
+    performanceNote: 'All three ranking functions (ROW_NUMBER, RANK, DENSE_RANK) have identical performance characteristics — a single window sort pass. Choose based on business logic, not performance. In Spark, DENSE_RANK with PARTITION BY triggers a shuffle per partition; without PARTITION BY it triggers a global sort — ensure the result fits in memory if there is no partition.',
+    interviewExpectation: 'Interviewers expect candidates to recite the three-way distinction immediately: ROW_NUMBER (unique sequential), RANK (gaps), DENSE_RANK (no gaps). Seniors provide a concrete example: "if two employees tie for rank 2, RANK gives the next employee rank 4; DENSE_RANK gives rank 3." They also explain which function to use for each business case without needing to be prompted.',
+    juniorMistake: 'Juniors default to RANK() for all ranking tasks without considering whether downstream logic depends on consecutive rank values. They discover the gap bug only when a tier-3 employee appears in the tier-4 salary band report. The safe default is DENSE_RANK() for tier/band assignment; only use RANK() when you explicitly need competition-style gap semantics.',
+    productionTradeoff: 'DENSE_RANK gives deterministic tier assignment but can produce ties — two employees at salary_rank = 1 both claim the top position. If the business requires a single winner (e.g., one "best pipeline" per day), use ROW_NUMBER with a deterministic tiebreaker (ORDER BY salary DESC, employee_id ASC). Mixing up the three functions in a revenue-impacting compensation model is a serious data quality incident.',
+  },
+  {
+    id: 'q46', difficulty: 'advanced', title: 'Reconciliation: Source vs Silver Counts',
+    prompt: `Business scenario: After every pipeline run, reconcile row counts by status category to verify the load was complete. Use conditional aggregation on the orders table to produce a single reconciliation summary row.
+
+Return: total_count, shipped_count, pending_count, cancelled_count
+Use SUM(CASE WHEN status = 'X' THEN 1 ELSE 0 END) for each category.
+
+Tables: orders`,
+    hint1: "SUM(CASE WHEN status = 'shipped' THEN 1 ELSE 0 END) AS shipped_count",
+    hint2: "SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_count",
+    hint3: "SELECT COUNT(*) AS total_count,\n  SUM(CASE WHEN status = 'shipped' THEN 1 ELSE 0 END) AS shipped_count,\n  SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_count,\n  SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_count\nFROM orders",
+    validate: r => !r.error,
+    expectedOutput: [
+      { total_count: 10, shipped_count: 6, pending_count: 3, cancelled_count: 1 },
+    ],
+    answer: "SELECT\n  COUNT(*) AS total_count,\n  SUM(CASE WHEN status = 'shipped'   THEN 1 ELSE 0 END) AS shipped_count,\n  SUM(CASE WHEN status = 'pending'   THEN 1 ELSE 0 END) AS pending_count,\n  SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_count\nFROM orders;",
+    whyMatters: 'Post-load reconciliation is the last line of defense before data reaches dashboards. A reconciliation query that compares loaded row counts by category against the source system total catches silent data loss — late arrivals, watermark errors, NULL drops — before finance or product teams notice incorrect metrics.',
+    wrongApproach: "Running separate COUNT queries per status (one query for shipped, one for pending) works but is inefficient — it reads the table N times and makes cross-category comparison harder. The single-pass SUM(CASE WHEN) pattern reads the table once and returns all counts in one row, making it trivial to compare to the source system's summary.",
+    optimizationNote: 'In production, run this reconciliation query against both the source system (Bronze) and the target (Silver/Gold) and compare the results programmatically. Store reconciliation results in a pipeline_audit table with run_id, layer, status, count — this creates an audit trail for compliance and debugging.',
+    engineeringContext: 'Reconciliation queries are mandatory in financial data pipelines — revenue, transaction, and order counts must match source systems within a defined tolerance (typically < 0.01%). Great Expectations and Monte Carlo both implement reconciliation checks. The SUM(CASE WHEN) pattern is used inside data quality frameworks to produce the summary rows they compare.',
+    performanceNote: 'SUM(CASE WHEN) is a single-pass aggregation — O(n) on table size. It is always more efficient than multiple COUNT queries with WHERE clauses. In Databricks, this runs as a single Spark job with one table scan. For partitioned tables, combine with a WHERE clause to scope reconciliation to a single date partition.',
+    interviewExpectation: "Interviewers ask 'how do you know the pipeline loaded correctly?' Seniors immediately describe three checks: (1) row count matches source; (2) SUM of key metrics matches source; (3) null rate on required columns is zero. They write the reconciliation query without prompting and explain how it fits into a data quality monitoring framework alongside alerting.",
+    juniorMistake: 'Juniors assume a SUCCESS pipeline status means the data is correct. They skip reconciliation entirely and only discover issues when stakeholders report wrong dashboard numbers — sometimes days later. Reconciliation is not optional; it is the pipeline health check that makes SUCCESS meaningful.',
+    productionTradeoff: 'Strict reconciliation (0% tolerance) is correct for financial systems but blocks pipelines for minor late-arrival discrepancies. Many teams use a 0.1% tolerance threshold — fail the pipeline if count mismatch > 0.1%, alert but continue if < 0.1%. The tolerance must be defined by the business, not by the data team, because it directly determines acceptable data quality risk.',
   },
 ];
 
@@ -891,6 +951,56 @@ const DEBUG_QUESTIONS = [
     hint: 'Should the filter use > (exclusive) or >= (inclusive) to avoid losing boundary-date records?',
     interviewNote: 'Watermark boundary bugs are silent — the pipeline succeeds but rows are lost. In production: use >= with MERGE to make reruns idempotent. Always cross-check source row count vs target row count per partition after every incremental load.',
   },
+  {
+    id: 'dbg6', title: 'RANK Gaps Confuse Competitors: Use DENSE_RANK',
+    bugType: 'RANK vs DENSE_RANK',
+    scenario: 'This query ranks employees by salary for a performance review leaderboard. When two employees tie for rank 2, the next rank shows as 4 instead of 3 — breaking the leaderboard logic. Find and fix the bug.',
+    brokenSql: "-- Expected: no gaps in ranking (ties share rank, next rank is sequential)\n-- Actual: rank jumps 1→2→4 when two employees tie at rank 2\nSELECT\n  name,\n  salary,\n  RANK() OVER (ORDER BY salary DESC) AS salary_rank\nFROM employees\nORDER BY salary_rank;",
+    bugDescription: "RANK() assigns the same rank to tied rows but then skips ranks equal to the number of tied rows — two employees at rank 2 causes the next rank to be 4, not 3. DENSE_RANK() assigns the same rank to ties but never skips the next rank number, producing sequential ranks: 1, 2, 2, 3, 4.",
+    fixedSql: "SELECT\n  name,\n  salary,\n  DENSE_RANK() OVER (ORDER BY salary DESC) AS salary_rank  -- ← DENSE_RANK prevents gaps\nFROM employees\nORDER BY salary_rank;",
+    hint: 'Which window function produces consecutive rank numbers after a tie — RANK or DENSE_RANK?',
+    interviewNote: "RANK vs DENSE_RANK is a classic interview distinction. In production, RANK is used for competition scoring (correct that positions skip after ties), DENSE_RANK is used for bucketing and tier assignment (where gaps would break downstream tier logic). The wrong choice silently produces wrong output — there's no error.",
+  },
+  {
+    id: 'dbg7', title: 'NULL Comparison With = Returns 0 Rows',
+    bugType: '= NULL vs IS NULL',
+    scenario: 'This query should return all employees with no manager (the root of the org chart). It returns 0 rows even though 1 employee has a NULL manager_id. Find and fix the bug.',
+    brokenSql: "-- Expected: 1 row (the root manager with no manager_id)\n-- Actual: 0 rows — why?\nSELECT\n  employee_id,\n  name,\n  department\nFROM employees\nWHERE manager_id = NULL;",
+    bugDescription: "In SQL, NULL represents an unknown value. Comparing NULL with = always returns NULL (not TRUE and not FALSE) — the comparison is itself unknown. So WHERE manager_id = NULL evaluates to NULL for every row, which is treated as FALSE, filtering out all rows. The correct syntax is IS NULL, which is a special predicate designed for NULL testing.",
+    fixedSql: "SELECT\n  employee_id,\n  name,\n  department\nFROM employees\nWHERE manager_id IS NULL;  -- ← IS NULL is the correct NULL test predicate",
+    hint: 'NULL cannot be compared with = — it is an unknown value. What SQL keyword tests for NULL?',
+    interviewNote: 'NULL = NULL returns NULL, not TRUE — this is the most common beginner mistake in SQL and appears in 80% of introductory SQL interviews. In production pipelines, = NULL filters instead of IS NULL can silently drop all rows from a CDC filter, making the pipeline load 0 records without error.',
+  },
+  {
+    id: 'dbg8', title: 'COUNT Inflated by One-to-Many JOIN',
+    bugType: 'COUNT inflation from JOIN fan-out',
+    scenario: 'This query counts distinct customers who have placed orders. It returns 10 instead of 7 because the orders JOIN fans out the customer rows. Find and fix the bug.',
+    brokenSql: "-- Expected: 7 customers (the full customer base)\n-- Actual: 10 — because each customer appears once per order\nSELECT\n  COUNT(customers.customer_id) AS customer_count\nFROM customers\nINNER JOIN orders ON customers.customer_id = orders.customer_id;",
+    bugDescription: "INNER JOIN customers to orders creates one row per order, not one row per customer. A customer with 3 orders appears 3 times — COUNT(customers.customer_id) counts all occurrences, not distinct customers. The 7-customer table joined to 10 orders produces 10 rows, so COUNT returns 10 instead of 7.",
+    fixedSql: "SELECT\n  COUNT(DISTINCT customers.customer_id) AS customer_count  -- ← DISTINCT deduplicates after JOIN fan-out\nFROM customers\nINNER JOIN orders ON customers.customer_id = orders.customer_id;",
+    hint: 'After a one-to-many JOIN, COUNT(col) counts all rows including duplicates. What keyword counts each value only once?',
+    interviewNote: 'JOIN fan-out inflating aggregate counts is a top-5 production data quality bug. Revenue dashboards show inflated customer counts and overcounted totals when JOINs multiply rows. Always verify: COUNT(*) after a JOIN should equal the expected fact-table cardinality, not the cross-product. Use COUNT(DISTINCT key) when counting dimension entities after a fact JOIN.',
+  },
+  {
+    id: 'dbg9', title: 'Wrong Watermark Direction Loads Old Data',
+    bugType: 'Watermark < instead of >',
+    scenario: 'An incremental pipeline watermark filter should load only NEW orders (created after the watermark). Instead it loads historical data every run. The pipeline has been double-loading old records for 5 days. Find and fix the bug.',
+    brokenSql: "-- Watermark: '2024-01-17' (last processed date)\n-- Expected: rows WHERE created_at > '2024-01-17' (new data only)\n-- Actual: ALL rows WHERE created_at < '2024-01-17' (old data loaded every run)\nSELECT order_id, customer_id, amount, status, created_at\nFROM orders\nWHERE created_at < '2024-01-17'\nORDER BY created_at ASC;",
+    bugDescription: "The filter uses < (less than) instead of > (greater than). WHERE created_at < watermark selects all HISTORICAL records instead of NEW ones. Every pipeline run re-loads all old data — causing duplicate counts in Silver and inflating all downstream metrics. The direction of the watermark filter is inverted.",
+    fixedSql: "SELECT order_id, customer_id, amount, status, created_at\nFROM orders\nWHERE created_at > '2024-01-17'  -- ← > loads NEWER rows, not older\nORDER BY created_at ASC;",
+    hint: 'Should the watermark filter select records BEFORE the watermark (old data) or AFTER it (new data)?',
+    interviewNote: 'Inverted watermark direction is a silent correctness bug — the pipeline runs successfully and loads data, but it loads the wrong data. In production this causes Silver double-loading and inflated dashboard metrics. The fix is trivial once detected, but detection requires explicit row-count assertions comparing loaded records to the expected window.',
+  },
+  {
+    id: 'dbg10', title: 'GROUP BY customer_name Merges Distinct Customers',
+    bugType: 'GROUP BY on non-unique column',
+    scenario: 'This query aggregates total spend per customer. Two customers named "Maria" have their orders merged into one row because GROUP BY uses customer_name instead of the unique key. Find and fix the bug.',
+    brokenSql: "-- Expected: one row per distinct customer (7 rows)\n-- Actual: 6 rows — two customers named 'Maria' merged into one\nSELECT\n  customer_name,\n  SUM(amount) AS total_spent,\n  COUNT(order_id) AS order_count\nFROM customers\nINNER JOIN orders ON customers.customer_id = orders.customer_id\nGROUP BY customer_name\nORDER BY total_spent DESC;",
+    bugDescription: "GROUP BY customer_name treats all rows with the same name as the same group. Two different customers with the same name — for example two people named 'Maria' — are merged into a single aggregation row. Their combined spend, order counts, and IDs all collapse together, producing wrong totals and fewer rows than expected.",
+    fixedSql: "SELECT\n  customers.customer_id,  -- ← include the unique key\n  customer_name,\n  SUM(amount) AS total_spent,\n  COUNT(orders.order_id) AS order_count\nFROM customers\nINNER JOIN orders ON customers.customer_id = orders.customer_id\nGROUP BY customers.customer_id, customer_name  -- ← GROUP BY unique ID to prevent name-collision merges\nORDER BY total_spent DESC;",
+    hint: 'Names are not unique identifiers. What column guarantees each customer is a distinct group?',
+    interviewNote: 'GROUP BY on a non-unique column is a production correctness bug that worsens over time as the customer base grows and name collisions increase. Always GROUP BY the primary key. If the display name is needed in SELECT, include it alongside the key — GROUP BY customer_id, customer_name. This guarantees uniqueness even when names collide.',
+  },
 ];
 
 // ─── Production incident scenarios ───────────────────────────────────────────
@@ -945,6 +1055,56 @@ const PRODUCTION_INCIDENTS = [
     fixQuery: "-- Step 1: Remove phantom records (keep latest per customer)\nWITH ranked AS (\n  SELECT *,\n    ROW_NUMBER() OVER (\n      PARTITION BY customer_id ORDER BY effective_date DESC\n    ) AS rn\n  FROM dim_customers\n  WHERE is_current = true\n)\nDELETE FROM dim_customers\nWHERE record_id IN (SELECT record_id FROM ranked WHERE rn > 1);\n\n-- Step 2: Fix the MERGE ON clause\nMERGE INTO dim_customers AS target\nUSING stg_customers AS source\n  ON target.customer_id = source.customer_id\n  AND target.is_current = true  -- ← the critical missing filter\nWHEN MATCHED AND (target.city != source.city OR target.status != source.status)\n  THEN UPDATE SET is_current = false, end_date = CURRENT_DATE\nWHEN NOT MATCHED\n  THEN INSERT (customer_id, city, status, is_current, effective_date)\n  VALUES (source.customer_id, source.city, source.status, true, CURRENT_DATE);",
     prevention: '1. Add uniqueness assertion: COUNT(*) WHERE is_current = true = COUNT(DISTINCT customer_id). 2. Monitor dimension table growth rate — > 5% daily growth with no source changes is anomalous. 3. In dbt: add unique test on customer_id WHERE is_current = true.',
     lesson: 'SCD2 MERGE without AND is_current = true in the ON clause is a silent correctness bug. Always include a post-merge assertion that COUNT(DISTINCT customer_id) WHERE is_current = true equals the source system customer count.',
+  },
+  {
+    id: 'inc6', title: 'Late-Arriving Events Understate Yesterday\'s Revenue by 8%',
+    severity: 'P2',
+    symptom: 'Finance team reports at 09:30 that yesterday\'s revenue total in the Gold dashboard is $147,200 — 8% below the $160,000 figure from the upstream order management system. Pipeline ran at 01:00 and showed SUCCESS with 14,820 rows. Discrepancy confirmed on 2024-01-20.',
+    diagnosisQuery: "-- Step 1: Compare Silver vs source row count for the affected date\nSELECT\n  'silver' AS layer,\n  COUNT(*) AS row_count,\n  SUM(amount) AS total_revenue\nFROM orders\nWHERE created_at = '2024-01-19'\n\nUNION ALL\n\nSELECT\n  'source_expected' AS layer,\n  16100 AS row_count,\n  160000 AS total_revenue;\n\n-- Step 2: Find orders that arrived late (ingested after pipeline cutoff)\nSELECT COUNT(*) AS late_arrivals\nFROM orders\nWHERE created_at = '2024-01-19'\n  AND order_id > 105;  -- simulates rows ingested after pipeline ran",
+    rootCause: 'Mobile app orders from users in Pacific timezone (UTC-8) were stamped at event time, not server receipt time. Orders placed at 11:30 PM PST on Jan 19 arrived in the Bronze table at 07:30 AM UTC on Jan 20 — after the 01:00 UTC pipeline cutoff. The pipeline watermark was correct but did not account for the 8-hour timezone lag.',
+    fixQuery: "-- Fix 1: Reprocess yesterday's partition to capture late arrivals\nMERGE INTO silver.orders AS target\nUSING (\n  SELECT order_id, customer_id, amount, status, created_at\n  FROM bronze.orders\n  WHERE created_at = '2024-01-19'\n) AS late_batch\n  ON target.order_id = late_batch.order_id\nWHEN MATCHED     THEN UPDATE SET *\nWHEN NOT MATCHED THEN INSERT *;\n\n-- Fix 2: Verify post-merge revenue matches source\nSELECT\n  SUM(amount) AS corrected_revenue,\n  COUNT(*)    AS corrected_row_count\nFROM orders\nWHERE created_at = '2024-01-19';",
+    prevention: '1. Extend pipeline lookback window: load WHERE created_at BETWEEN watermark - 1 AND watermark + 1 to capture cross-midnight late arrivals. 2. Add post-load revenue assertion: Silver SUM(amount) must be within 1% of upstream system total. 3. Instrument late arrival rate daily — alert if > 0.5% of yesterday\'s records arrive today.',
+    lesson: 'A pipeline reporting SUCCESS with a row count does not mean the data is complete — late-arriving events can silently undercount revenue. Post-load cross-system reconciliation is mandatory for financial metrics.',
+  },
+  {
+    id: 'inc7', title: 'Wrong Watermark Causes 30-Day Double-Load',
+    severity: 'P1',
+    symptom: 'At 06:15 the orders_etl pipeline finishes in 6 hours instead of 4 minutes (normal). Silver row count jumped from 1.2M to 2.8M overnight. Revenue dashboard shows 2× inflated totals. Alert triggered on Silver row count anomaly monitor at 06:20.',
+    diagnosisQuery: "-- Step 1: Check rows_processed spike — should be ~15K not ~1.5M\nSELECT run_date, rows_processed, duration_secs, status\nFROM pipeline_runs\nWHERE pipeline_name = 'orders_etl'\nORDER BY run_id DESC\nLIMIT 5;\n\n-- Step 2: Detect the erroneous watermark\n-- What date range was loaded? (should be 1 day, not 30 days)\nSELECT\n  MIN(created_at) AS load_window_start,\n  MAX(created_at) AS load_window_end,\n  COUNT(*) AS rows_loaded\nFROM orders;\n\n-- Step 3: Count duplicates created in Silver\nSELECT order_id, COUNT(*) AS cnt\nFROM orders\nGROUP BY order_id\nHAVING COUNT(*) > 1\nLIMIT 10;",
+    rootCause: "A developer reset the pipeline watermark to '2023-12-20' (30 days ago) in the pipeline_control table during a local test and forgot to restore it before pushing to production. The pipeline ran with WHERE created_at > '2023-12-20', loading 30 days of historical orders on top of already-loaded Silver data — doubling all rows.",
+    fixQuery: "-- Fix 1: Identify and remove duplicate rows from Silver\nWITH ranked AS (\n  SELECT *,\n    ROW_NUMBER() OVER (\n      PARTITION BY order_id\n      ORDER BY order_id DESC\n    ) AS rn\n  FROM orders\n)\nDELETE FROM orders\nWHERE order_id IN (\n  SELECT order_id FROM ranked WHERE rn > 1\n);\n\n-- Fix 2: Restore the correct watermark\n-- UPDATE pipeline_control\n-- SET watermark = '2024-01-19'\n-- WHERE pipeline_name = 'orders_etl';\n\n-- Fix 3: Validate Silver row count is back to expected\nSELECT COUNT(*) AS silver_count FROM orders;",
+    prevention: '1. Never allow direct edits to pipeline_control table in production — require a PR with code review and approval. 2. Add a sanity check: if rows_to_load > 2× daily_average, abort with FAILED status and page on-call. 3. Monitor Silver row count daily — alert if growth > 20% over yesterday.',
+    lesson: 'A single watermark value misconfiguration can cause a 30-day double-load in seconds. Watermark parameters must be version-controlled, change-tracked, and validated before pipeline execution.',
+  },
+  {
+    id: 'inc8', title: 'New NULL Column Silently Drops 40% of Rows in INNER JOIN',
+    severity: 'P1',
+    symptom: 'At 08:00 the Gold layer customer_orders dashboard shows 40% fewer rows than yesterday — 6,200 instead of the expected 10,400. Revenue total dropped from $124,000 to $74,800. No pipeline errors. A schema change was deployed upstream at 02:00.',
+    diagnosisQuery: "-- Step 1: Check null rate on the new upstream column\nSELECT\n  COUNT(*) AS total_rows,\n  COUNT(status) AS non_null_status,\n  ROUND((COUNT(*) - COUNT(status)) * 100.0 / COUNT(*), 1) AS null_pct\nFROM orders;\n\n-- Step 2: Find orders that would be dropped by an INNER JOIN on the new column\n-- (simulating a join on a column with NULL default)\nSELECT\n  o.order_id,\n  o.customer_id,\n  o.amount,\n  o.status\nFROM orders o\nINNER JOIN customers c ON o.customer_id = c.customer_id\nWHERE o.status IS NULL;\n\n-- Step 3: Compare Gold row count vs Silver\nSELECT COUNT(*) AS silver_orders FROM orders;\n-- vs SELECT COUNT(*) FROM gold.customer_orders;",
+    rootCause: 'The upstream microservice team added a new region_code column to the orders table with a NULL default for existing records. A downstream dbt model had an INNER JOIN that inadvertently referenced region_code in a WHERE condition — silently converting a LEFT JOIN to an effective INNER JOIN and dropping all rows where region_code IS NULL (40% of the table, representing orders before the schema change).',
+    fixQuery: "-- Fix 1: Identify affected rows\nSELECT COUNT(*) AS dropped_rows\nFROM orders\nWHERE status IS NULL;\n\n-- Fix 2: Use COALESCE to handle NULL in downstream joins\nSELECT\n  o.order_id,\n  o.customer_id,\n  o.amount,\n  COALESCE(o.status, 'unknown') AS status,  -- handle NULL default\n  c.customer_name\nFROM orders o\nINNER JOIN customers c ON o.customer_id = c.customer_id;\n\n-- Fix 3: Add not_null alerting in dbt\n-- tests:\n--   - not_null:\n--       column_name: order_id",
+    prevention: '1. Require schema change reviews that include impact analysis on all downstream consumers. 2. Run null rate checks on all columns after upstream deployments — alert if null_pct on any required field > 0. 3. Add dbt not_null tests on all join keys and financial metric columns. 4. Use LEFT JOIN by default for enrichment models, INNER JOIN only when the join key is guaranteed non-null.',
+    lesson: 'Schema changes upstream that introduce NULL defaults are invisible to pipeline owners unless null rate monitoring is in place. A new nullable column combined with an INNER JOIN is a silent 40% data loss waiting to happen.',
+  },
+  {
+    id: 'inc9', title: 'Pipeline OOM from Missing Predicate Pushdown on 500M-Row Table',
+    severity: 'P1',
+    symptom: 'products_load Spark job has been running for 4.5 hours (normally 3 minutes). Executor OOM errors appearing in Spark UI at 09:00. Cluster autoscaling hit the cap of 20 nodes. A new analytics query was added to the pipeline at yesterday\'s deployment.',
+    diagnosisQuery: "-- Step 1: Find the query doing a full table scan\n-- (In production: Spark UI → SQL tab → Stage Details → scan metrics)\n\n-- Step 2: Simulate the problematic pattern (no predicate pushdown)\n-- The old query applied the filter AFTER reading all 500M rows:\n-- SELECT * FROM products WHERE category = 'Electronics'\n-- On a 500M-row non-partitioned table, this reads every row.\n\n-- Step 3: Check partition structure and filter selectivity\nSELECT\n  category,\n  COUNT(*) AS product_count,\n  ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER (), 1) AS pct_of_total\nFROM products\nGROUP BY category\nORDER BY product_count DESC;",
+    rootCause: "A new query was added that selected all columns (SELECT *) from the 500M-row products table in a non-partitioned Parquet store, then filtered by category in a downstream Python transform instead of in the SQL WHERE clause. Without a predicate pushdown, Spark read all 500M rows into memory before discarding 90% of them — triggering OOM when the executor's 8GB heap was exceeded.",
+    fixQuery: "-- Fix: Push the filter into the SQL WHERE clause (predicate pushdown)\n-- BEFORE (OOM-causing pattern):\n-- df = spark.sql('SELECT * FROM products')\n-- df_filtered = df.filter(df.category == 'Electronics')  -- filter in Python\n\n-- AFTER (predicate pushdown — reads only matching rows):\nSELECT\n  product_id,\n  product_name,\n  price,\n  stock\nFROM products\nWHERE category = 'Electronics';  -- ← predicate pushed to storage scan\n\n-- Verify: EXPLAIN this query and check for 'PushedFilters' in scan node\n-- Expected: PushedFilters: [IsNotNull(category), EqualTo(category,Electronics)]",
+    prevention: '1. Enforce SELECT column lists — never SELECT * in production pipelines. 2. Apply all filters in SQL WHERE clauses, not in downstream Python/Scala code. 3. Partition high-cardinality tables by category or date to enable partition pruning. 4. Add EXPLAIN plan review to pipeline code review checklist — verify PushedFilters are present for all large table scans.',
+    lesson: 'Reading data into memory then filtering is the most common cause of Spark OOM. Always push predicates to the data source. A 500M-row table with a 10% selectivity filter should read 50M rows, not 500M.',
+  },
+  {
+    id: 'inc10', title: 'CDC Out-of-Order: DELETE Before INSERT Vanishes Records',
+    severity: 'P1',
+    symptom: 'Silver customers table missing 1,200 records at 07:45. Customers who signed up within the last 6 hours cannot log in — their records don\'t exist in the auth system\'s source of truth. CDC pipeline shows SUCCESS. Records exist in Bronze but not Silver.',
+    diagnosisQuery: "-- Step 1: Find customer_ids in Bronze but absent from Silver\nSELECT\n  b.customer_id,\n  b.customer_name\nFROM customers b\nWHERE b.customer_id NOT IN (\n  SELECT customer_id FROM customers\n);\n\n-- Step 2: Check CDC event ordering for affected customers\n-- (In production: query bronze.customers_cdc)\n-- Look for DELETE events with timestamp BEFORE the INSERT event\nSELECT\n  customer_id,\n  status AS cdc_op_type,\n  created_at AS cdc_ts\nFROM orders\nWHERE customer_id IN (1, 2, 3)\nORDER BY customer_id, created_at;\n\n-- Step 3: Count customers with multiple CDC events in wrong order\nSELECT pipeline_name, status, rows_processed, run_date\nFROM pipeline_runs\nWHERE run_date >= '2024-01-18'\nORDER BY run_id DESC;",
+    rootCause: "Debezium CDC events for a database with row-level locking published a DELETE event (from a concurrent cleanup job) before the corresponding INSERT event for the same customer_id arrived — because the cleanup job's transaction committed first. The Silver MERGE processed the DELETE (no matching row → no-op or DELETE), then processed the INSERT out of order, but since the MERGE was not replayed after ordering, the records were effectively deleted.",
+    fixQuery: "-- Fix 1: Recover missing records from Bronze\n-- In production: replay Bronze CDC events for affected customer_ids\n-- Simulated recovery using available customers data:\nMERGE INTO silver.customers AS target\nUSING (\n  SELECT customer_id, customer_name, city, status\n  FROM customers\n  WHERE customer_id IN (\n    SELECT customer_id FROM customers\n    WHERE signup_date >= '2024-01-19'\n  )\n) AS recovery_batch\n  ON target.customer_id = recovery_batch.customer_id\nWHEN NOT MATCHED THEN INSERT *;\n\n-- Fix 2: Add CDC ordering before MERGE\n-- In production pipeline: deduplicate and order CDC events\n-- WITH ordered_cdc AS (\n--   SELECT *, ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY cdc_ts DESC) AS rn\n--   FROM bronze.customers_cdc\n--   WHERE batch_date = '2024-01-20'\n-- )\n-- SELECT * FROM ordered_cdc WHERE rn = 1",
+    prevention: '1. Sort CDC events by (customer_id, cdc_ts) before MERGE — never process out-of-order events without deduplication. 2. Apply a deduplication CTE: for each customer_id, take only the latest event by cdc_ts before MERGE. 3. Add a post-MERGE assertion: Silver row count must be >= Silver row count from prior run (deletions require explicit approval). 4. Use Kafka compaction on CDC topics to enforce last-write-wins before events reach the pipeline.',
+    lesson: 'CDC pipelines must explicitly sort and deduplicate by event timestamp before applying to the target. Out-of-order events processed naively by MERGE will silently delete valid records. Event ordering is a first-class concern in CDC system design.',
   },
 ];
 
@@ -1304,7 +1464,7 @@ function QuestionPanel({ question, hintsShown, onShowHint, result, onScore, scor
         </div>
       )}
 
-      {(question.whyMatters || question.wrongApproach || question.optimizationNote) && (
+      {(question.whyMatters || question.wrongApproach || question.optimizationNote || question.juniorMistake || question.productionTradeoff) && (
         <div className="sqll-eng-context">
           <button
             type="button"
@@ -1328,10 +1488,22 @@ function QuestionPanel({ question, hintsShown, onShowHint, result, onScore, scor
                   <p>{question.wrongApproach}</p>
                 </div>
               )}
+              {question.juniorMistake && (
+                <div className="sqll-eng-block sqll-eng-block--junior">
+                  <span className="sqll-eng-label">What juniors miss</span>
+                  <p>{question.juniorMistake}</p>
+                </div>
+              )}
               {question.optimizationNote && (
                 <div className="sqll-eng-block sqll-eng-block--opt">
                   <span className="sqll-eng-label">Production optimization</span>
                   <p>{question.optimizationNote}</p>
+                </div>
+              )}
+              {question.productionTradeoff && (
+                <div className="sqll-eng-block sqll-eng-block--tradeoff">
+                  <span className="sqll-eng-label">Production tradeoff</span>
+                  <p>{question.productionTradeoff}</p>
                 </div>
               )}
               {question.engineeringContext && (
@@ -1342,13 +1514,13 @@ function QuestionPanel({ question, hintsShown, onShowHint, result, onScore, scor
               )}
               {question.performanceNote && (
                 <div className="sqll-eng-block sqll-eng-block--perf">
-                  <span className="sqll-eng-label">Performance note</span>
+                  <span className="sqll-eng-label">What breaks at scale</span>
                   <p>{question.performanceNote}</p>
                 </div>
               )}
               {question.interviewExpectation && (
                 <div className="sqll-eng-block sqll-eng-block--interview">
-                  <span className="sqll-eng-label">What interviewers expect</span>
+                  <span className="sqll-eng-label">Interviewer expectations</span>
                   <p>{question.interviewExpectation}</p>
                 </div>
               )}
