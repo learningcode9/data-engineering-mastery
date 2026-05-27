@@ -6,7 +6,7 @@ const LAB_CATEGORIES = [
   {
     id: 'build',
     label: 'Build Labs',
-    description: 'Real implementation work: pipelines, transformations, merges, tables, Spark, and CI/CD.',
+    description: 'Implement real pipelines, transformations, merges, tables, Spark, and CI/CD.',
     count: buildLabs.length,
     variant: 'success',
   },
@@ -33,7 +33,8 @@ const LAB_SETS = {
 };
 
 function countLabel(categoryId) {
-  return `${LAB_SETS[categoryId]?.length ?? 0} items`;
+  const total = LAB_SETS[categoryId]?.length ?? 0;
+  return `${total} ${total === 1 ? 'item' : 'items'}`;
 }
 
 function ServiceGrid({ services }) {
@@ -259,8 +260,10 @@ const HandsOnLabsPanel = memo(function HandsOnLabsPanel() {
       </div>
 
       <div className="hol-intro-copy">
-        <p>{activeMeta?.description}</p>
-        <span>{countLabel(activeCategory)}</span>
+        <p>
+          {activeMeta?.description}{' '}
+          <strong>{countLabel(activeCategory)}</strong>
+        </p>
       </div>
 
       <div className="hol-layout">
@@ -294,7 +297,13 @@ const HandsOnLabsPanel = memo(function HandsOnLabsPanel() {
                   </Badge>
                 </div>
                 <div className="hol-list-item-footer">
-                  <span>{activeCategory === 'build' ? `${item.steps.length} steps` : activeCategory === 'debug' ? `${item.investigation.length} investigation steps` : `${item.items.length} checks`}</span>
+                  <span>
+                    {activeCategory === 'build'
+                      ? `${item.steps.length} steps`
+                      : activeCategory === 'debug'
+                        ? `${item.investigation.length} steps`
+                        : `${item.items.length} checks`}
+                  </span>
                   <span>Open detail →</span>
                 </div>
               </AppCard>
