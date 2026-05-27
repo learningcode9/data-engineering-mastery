@@ -15,6 +15,26 @@ function lsSet(key: string, val: unknown) {
   try { localStorage.setItem(key, JSON.stringify(val)) } catch {}
 }
 
+function normalizeAchievementLocal(value: unknown): (InsertAchievement & { unlocked_at: string })[] {
+  if (Array.isArray(value)) {
+    return value
+      .filter((item): item is InsertAchievement & { unlocked_at: string } => !!item && typeof item === 'object' && 'achievement_key' in item)
+      .map(item => ({
+        ...item,
+        unlocked_at: item.unlocked_at ?? new Date().toISOString(),
+      }));
+  }
+  if (value && typeof value === 'object') {
+    return Object.entries(value as Record<string, unknown>).map(([achievement_key, unlocked_at]) => ({
+      user_id: 'local',
+      achievement_key,
+      title: achievement_key,
+      unlocked_at: typeof unlocked_at === 'string' ? unlocked_at : new Date().toISOString(),
+    }));
+  }
+  return [];
+}
+
 // ─── XP ──────────────────────────────────────────────────────────────────────
 
 export async function awardXP(
@@ -75,7 +95,7 @@ export async function grantAchievement(
 ): Promise<boolean> {
   const entry: InsertAchievement = { user_id: userId, achievement_key: achievementKey, title }
 
-  const local = lsGet<(InsertAchievement & { unlocked_at: string })[]>(LS_ACHIEVEMENTS_KEY, [])
+  const local = normalizeAchievementLocal(lsGet(LS_ACHIEVEMENTS_KEY, []))
   const alreadyLocal = local.some(a => a.user_id === userId && a.achievement_key === achievementKey)
   if (!alreadyLocal) {
     lsSet(LS_ACHIEVEMENTS_KEY, [{ ...entry, unlocked_at: new Date().toISOString() }, ...local])
@@ -94,8 +114,8 @@ export async function grantAchievement(
 
 export async function getAchievements(userId: string): Promise<Achievement[]> {
   if (!isBackendEnabled()) {
-    const local = lsGet<Achievement[]>(LS_ACHIEVEMENTS_KEY, [])
-    return local.filter(a => a.user_id === userId)
+    const local = normalizeAchievementLocal(lsGet(LS_ACHIEVEMENTS_KEY, []))
+    return local.filter(a => a.user_id === userId || a.user_id === 'local')
   }
   const { data, error } = await requireSupabase()
     .from('achievements')

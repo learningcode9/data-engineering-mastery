@@ -24,6 +24,19 @@ function safeRead(key, fallback) {
   }
 }
 
+function normalizeAchievementMap(value) {
+  if (!value) return {};
+  if (Array.isArray(value)) {
+    return Object.fromEntries(
+      value
+        .filter(entry => entry?.achievement_key)
+        .map(entry => [entry.achievement_key, entry.unlocked_at ?? entry.earned_at ?? new Date().toISOString()])
+    );
+  }
+  if (typeof value === 'object') return value;
+  return {};
+}
+
 function nextStreak(count, lastDate) {
   const today = todayKey();
   if (lastDate === today) return { count, lastDate };
@@ -49,7 +62,7 @@ const useLearningStore = create(
       ),
       completedProjects: safeRead('dem-completed-projects', {}),
       dailyTasks: safeRead('dem-daily-plan', {}),
-      achievements: safeRead('dem-achievements', {}),
+      achievements: normalizeAchievementMap(safeRead('dem-achievements', {})),
       achievementQueue: safeRead('dem-achievement-queue', []),
       incidentsResolved: 0,
       interviewReadiness: 0,
@@ -119,6 +132,12 @@ const useLearningStore = create(
           achievements: { ...s.achievements, [id]: now },
           achievementQueue: [...s.achievementQueue, id],
         }));
+        try {
+          localStorage.setItem('dem-achievements', JSON.stringify({
+            ...get().achievements,
+            [id]: now,
+          }));
+        } catch {}
       },
 
       unlockAchievements(ids) {
@@ -128,6 +147,9 @@ const useLearningStore = create(
         set(s => {
           const achievements = { ...s.achievements };
           nextIds.forEach(id => { achievements[id] = now; });
+          try {
+            localStorage.setItem('dem-achievements', JSON.stringify(achievements));
+          } catch {}
           return {
             achievements,
             achievementQueue: [...s.achievementQueue, ...nextIds],

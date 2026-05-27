@@ -2,11 +2,17 @@ import { memo, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { phases } from '../../data/phases.js';
 import { SummaryCard } from '../ui/Card.jsx';
 import { ProgressBar } from '../ui/ProgressBar.jsx';
+import { Badge, StatPill } from '../ui/design-system.jsx';
 import { summaryCards } from '../../data/appData.js';
-import { getRecommendedNext } from '../../data/skillGraph.js';
 import { beginnerJourney, getInterviewReadinessEstimate, getPhaseMentorship } from '../../data/careerGuidance.js';
 import { useLocalStorage } from '../../hooks/useLocalStorage.js';
 import { getStrengths, getWeakAreas } from '../../utils/learningState.js';
+import {
+  estimateRemainingLearningTime,
+  getRecentCompletedLessons,
+  getWeeklyActivitySummary,
+} from '../../utils/learningAnalytics.js';
+import { getDashboardNextLessonAction } from '../../utils/dashboardInsights.js';
 
 function useCountUp(target, duration = 900) {
   const [display, setDisplay] = useState(0);
@@ -30,15 +36,25 @@ function useCountUp(target, duration = 900) {
 
 // ─── Smart contextual banner at top of dashboard ─────────────────────────────
 
-export const SmartBanner = memo(function SmartBanner({ allTopicsProgress, streak, onNavigate, personalizedRec }) {
+export const SmartBanner = memo(function SmartBanner({
+  allCompletedTopics,
+  topicStates,
+  topics,
+  streak,
+  onNavigate,
+  personalizedRec,
+}) {
   const [dismissed, setDismissed] = useLocalStorage('dem-smart-banner-dismissed', null);
 
   const msg = useMemo(() => {
     const h = new Date().getHours();
     const greet = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
-    const totalDone = Object.values(allTopicsProgress ?? {}).filter(p => p > 0).length;
-    const recommended = getRecommendedNext(allTopicsProgress ?? {});
-    const rec = Array.isArray(recommended) ? recommended[0] : recommended;
+    const startedTopics = Math.max(
+      Object.values(allCompletedTopics ?? {}).filter(Boolean).length,
+      (topics ?? []).filter(t =>
+        ['in-progress', 'completed', 'mastered'].includes(topicStates?.[t.id]?.state)
+      ).length
+    );
 
     // Streak milestones always take priority
     if (streak === 3 || streak === 7 || streak === 14 || streak === 30) {
@@ -52,7 +68,7 @@ export const SmartBanner = memo(function SmartBanner({ allTopicsProgress, streak
     }
 
     // Personalised start — user has preferences and hasn't started anything yet
-    if (totalDone === 0 && personalizedRec) return {
+    if (startedTopics === 0 && personalizedRec) return {
       icon: '◎',
       color: '#2f756e',
       text: `${greet}! ${personalizedRec.reason} — start here to build your foundation.`,
@@ -62,7 +78,7 @@ export const SmartBanner = memo(function SmartBanner({ allTopicsProgress, streak
     };
 
     // Generic start
-    if (totalDone === 0) return {
+    if (startedTopics === 0) return {
       icon: '◎',
       color: '#2f756e',
       text: `${greet}! SQL is the foundation every data engineer builds on — start here and everything else clicks faster.`,
@@ -90,13 +106,14 @@ export const SmartBanner = memo(function SmartBanner({ allTopicsProgress, streak
       id: `personalized-${personalizedRec.topicId}`,
     };
 
-    if (rec?.id && rec?.label) return {
+    const nextLesson = getDashboardNextLessonAction({ topics, topicStates });
+    if (nextLesson?.topicId && nextLesson?.title) return {
       icon: '→',
       color: '#6b7cdb',
-      text: `${rec.description ?? 'Based on your progress'} — ${rec.label} is your recommended next step.`,
-      action: `Open ${rec.label}`,
+      text: `${nextLesson.detail} — ${nextLesson.title} is your recommended next step.`,
+      action: nextLesson.action.startsWith('Continue') ? nextLesson.action : `Open ${nextLesson.title}`,
       section: 'topics',
-      id: `next-${rec.id}`,
+      id: `next-${nextLesson.topicId}`,
     };
 
     return {
@@ -107,7 +124,7 @@ export const SmartBanner = memo(function SmartBanner({ allTopicsProgress, streak
       section: 'topics',
       id: 'fallback-sql',
     };
-  }, [allTopicsProgress, streak, personalizedRec]);
+  }, [allCompletedTopics, topicStates, topics, streak, personalizedRec]);
 
   if (!msg || dismissed === msg.id) return null;
 
@@ -131,6 +148,50 @@ export const SmartBanner = memo(function SmartBanner({ allTopicsProgress, streak
         </button>
       </div>
     </div>
+  );
+});
+
+export const AchievementShelf = memo(function AchievementShelf({
+  achievements = [],
+  totalCount = 0,
+}) {
+  const visible = (achievements ?? []).slice(0, 4);
+  const lockedCount = Math.max(0, (totalCount ?? 0) - (achievements ?? []).length);
+
+  return (
+    <section className="card achievement-shelf-card">
+      <div className="achievement-shelf-header">
+        <div>
+          <p className="eyebrow">Achievements</p>
+          <h2>Badges unlocked</h2>
+        </div>
+        <Badge variant="muted" size="lg">{(achievements ?? []).length}/{totalCount}</Badge>
+      </div>
+      <div className="achievement-shelf-row">
+        {visible.length > 0 ? visible.map(a => (
+          <span key={a.id} className={`achievement-chip achievement-chip--${a.rarity}`}>
+            <span className="achievement-chip-icon" aria-hidden="true">{a.icon}</span>
+            <span className="achievement-chip-text">
+              <strong>{a.name}</strong>
+              <span>{a.desc}</span>
+            </span>
+          </span>
+        )) : (
+          <span className="achievement-chip achievement-chip--empty">
+            <span className="achievement-chip-icon" aria-hidden="true">◎</span>
+            <span className="achievement-chip-text">
+              <strong>First badge</strong>
+              <span>Keep learning to unlock your first milestone.</span>
+            </span>
+          </span>
+        )}
+      </div>
+      <p className="achievement-shelf-note">
+        {lockedCount > 0
+          ? `${lockedCount} more badge${lockedCount === 1 ? '' : 's'} still locked behind your next milestones.`
+          : 'Keep going to unlock the next milestone badge.'}
+      </p>
+    </section>
   );
 });
 
@@ -1120,9 +1181,26 @@ const CORE_PHASES = phases.filter(p =>
 
 export const ProgressOverviewCard = memo(function ProgressOverviewCard({
   completedCount, totalTopics, inProgressCount, learnedCount,
-  practiceProgress, topicStates,
+  practiceProgress, topicStates, topics = [], activityLog = [], streak = 0, overallReadiness = 0, onSelectTopic,
 }) {
   const ts = topicStates ?? {};
+  const strongest = getStrengths(topics ?? [], ts)[0] ?? null;
+  const weakAreas = getWeakAreas(topics ?? [], ts);
+  const weakest = weakAreas[0] ?? null;
+  const nextAction = useMemo(
+    () => getDashboardNextLessonAction({ topics, topicStates: ts }),
+    [topics, ts]
+  );
+  const recentLessons = useMemo(() => getRecentCompletedLessons(activityLog, 3), [activityLog]);
+  const weeklySummary = useMemo(() => getWeeklyActivitySummary(activityLog), [activityLog]);
+  const remainingEstimate = useMemo(
+    () => estimateRemainingLearningTime({ topics, topicStates: ts, activityLog }),
+    [topics, ts, activityLog]
+  );
+  const interviewEstimate = getInterviewReadinessEstimate(overallReadiness ?? 0);
+  const peakDayLabel = weeklySummary.peakDay
+    ? new Date(`${weeklySummary.peakDay}T00:00:00`).toLocaleDateString(undefined, { weekday: 'long' })
+    : 'Monday';
 
   // Determine current core phase (1-indexed)
   const currentPhaseIdx = useMemo(() => {
@@ -1135,10 +1213,10 @@ export const ProgressOverviewCard = memo(function ProgressOverviewCard({
   const overallPct = totalTopics > 0 ? Math.round((completedCount / totalTopics) * 100) : 0;
 
   const stats = [
-    { label: 'Phase',        value: `${currentPhaseIdx}/${CORE_PHASES.length}`, sub: 'In Progress' },
-    { label: 'Topics',       value: `${completedCount}/${totalTopics}`,          sub: 'Completed'   },
-    { label: 'Projects',     value: `0/7`,                                        sub: 'Completed'   },
-    { label: 'Interview Qs', value: `${learnedCount}/40`,                         sub: 'Practiced'   },
+    { label: 'Phase',        value: `${currentPhaseIdx}/${CORE_PHASES.length}`, sub: 'In progress' },
+    { label: 'Readiness',    value: `${overallReadiness ?? 0}%`,                sub: `${interviewEstimate} · ${learnedCount} questions learned` },
+    { label: 'Streak',       value: `${streak}d`,                                sub: weeklySummary.activeDays ? `${weeklySummary.activeDays}/7 active days` : 'Build momentum' },
+    { label: 'Topics',       value: `${completedCount}/${totalTopics}`,         sub: inProgressCount > 0 ? `${inProgressCount} in progress` : 'Completed' },
   ];
 
   return (
@@ -1152,6 +1230,57 @@ export const ProgressOverviewCard = memo(function ProgressOverviewCard({
             <span className="dash-stat-sub">{s.sub}</span>
           </div>
         ))}
+      </div>
+      <div className="dash-progress-intel">
+        <StatPill label="Strongest" value={strongest?.title ?? 'SQL'} icon="▣" variant="success" />
+        <StatPill label="Weakest" value={weakest?.title ?? 'Next lesson'} icon="⚠" variant="warning" />
+        <StatPill label="Weekly" value={`${weeklySummary.activeDays}/7 days`} icon="▤" variant="info" />
+        <StatPill label="ETA" value={`~${remainingEstimate.hours}h`} icon="⏱" variant="accent" />
+      </div>
+      <div className="ps-highlights">
+        <div className="ps-highlight">
+          <span className="ps-hl-label">Recommended next lesson</span>
+          <div className="ps-hl-content">
+            <span className="ps-hl-name">{nextAction.title}</span>
+            <span className="ps-hl-sub">{nextAction.detail}</span>
+            {nextAction.topicId && (
+              <button
+                type="button"
+                className="ps-open-btn"
+                onClick={() => onSelectTopic?.(nextAction.topicId)}
+              >
+                Open →
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="ps-highlight">
+          <span className="ps-hl-label">Weekly summary</span>
+          <div className="ps-hl-content ps-weekly-content">
+            <span className="ps-hl-name">{weeklySummary.activeDays} active days</span>
+            <span className="ps-hl-sub">{weeklySummary.totalEvents} learning events</span>
+            <span className="ps-hl-sub">Peak activity: {peakDayLabel}</span>
+            <span className="ps-hl-sub">{remainingEstimate.text}</span>
+          </div>
+        </div>
+      </div>
+      <div className="ps-recent-feed">
+        <span className="ps-hl-label">Recently completed</span>
+        {recentLessons.length > 0 ? (
+          <div className="ps-recent-list">
+            {recentLessons.map(item => (
+              <div key={`${item.title}-${item.date}`} className="ps-recent-item">
+                <span className="ps-recent-dot" aria-hidden="true">✓</span>
+                <div className="ps-recent-copy">
+                  <strong>{item.title}</strong>
+                  <span>{formatTimeAgo(item.date)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="ps-hl-sub">Complete one lesson or topic to start a live completion feed.</p>
+        )}
       </div>
       <div className="dash-progress-overall-row">
         <div className="dash-overall-track">

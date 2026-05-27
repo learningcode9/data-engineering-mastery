@@ -6,7 +6,7 @@ import {
   SummaryGrid, ContinueCard, SmartBanner, OnboardingCTA,
   JobReadinessChecklist, StartHereCard, DailyGoalCard,
   WeeklyProgress, NextActionCard, SectionPreviewGrid,
-  DashboardHero, ProgressOverviewCard, TodaysFocusSimple,
+  DashboardHero, ProgressOverviewCard, TodaysFocusSimple, AchievementShelf,
   UpcomingMilestoneCard, MotivationCard, LearningConsistencyCard,
   CareerReadinessCard, QuickLinksCard,
 } from './components/sections/Dashboard.jsx';
@@ -105,7 +105,14 @@ const App = memo(function App() {
   const { toasts }      = useToast();
   const { xp, level, addXP } = useXP();
   const { streak, recordActivity } = useStreak();
-  const { check: checkAchievements, pendingAchievement, shiftQueue, unlockedCount: unlockedAchCount } = useAchievements();
+  const {
+    check: checkAchievements,
+    pendingAchievement,
+    shiftQueue,
+    unlockedCount: unlockedAchCount,
+    unlockedList,
+    totalCount: totalAchCount,
+  } = useAchievements();
 
   // ─── Learning data ─────────────────────────────────────────────────────────────
   const [selectedTopicId, setSelectedTopicId] = useLocalStorage('dem-selected-topic', topics[0].id);
@@ -392,7 +399,14 @@ const App = memo(function App() {
         {/* ── DASHBOARD PAGE ─────────────────────────────────────────────── */}
         {activePage === 'dashboard' && (
           <div className="page page--dashboard">
-            <SmartBanner allTopicsProgress={allTopicsProgress} streak={streak} onNavigate={navigate} personalizedRec={personalizedRec} />
+            <SmartBanner
+              allCompletedTopics={allCompletedTopics}
+              topicStates={topicStates}
+              topics={topics}
+              streak={streak}
+              onNavigate={navigate}
+              personalizedRec={personalizedRec}
+            />
             {!onboardingCompleted && <OnboardingCTA onOpen={openOnboardingPage} />}
 
             <div className="dash-layout">
@@ -403,6 +417,10 @@ const App = memo(function App() {
                   onResume={handleResume}
                   onNavigate={navigate}
                 />
+                <AchievementShelf
+                  achievements={unlockedList}
+                  totalCount={totalAchCount}
+                />
 
                 <div className="dash-row-2">
                   <ProgressOverviewCard
@@ -412,6 +430,16 @@ const App = memo(function App() {
                     learnedCount={learnedCount}
                     practiceProgress={practiceProgress}
                     topicStates={topicStates}
+                    topics={topics}
+                    activityLog={activityLog}
+                    streak={streak}
+                    overallReadiness={overallReadiness}
+                    onSelectTopic={id => {
+                      if (id) {
+                        setSelectedTopicId(id);
+                        navigate('topics');
+                      }
+                    }}
                   />
                   <TodaysFocusSimple
                     enrichedTopics={enrichedTopics}

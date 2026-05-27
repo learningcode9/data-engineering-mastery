@@ -1,8 +1,9 @@
 import { memo, useState, useMemo, useEffect, useRef } from 'react';
 import { sqlInterviewQuestions, deInterviewCategories, categoryQuestions } from '../../data/interviewQuestions.js';
 import { EmptyState } from '../ui/EmptyState.jsx';
-import { SearchInput } from '../ui/design-system.jsx';
+import { SearchInput, StatPill } from '../ui/design-system.jsx';
 import { useLocalStorage } from '../../hooks/useLocalStorage.js';
+import { getInterviewPrepAnalytics } from '../../utils/interviewPrepAnalytics.js';
 
 // ─── Level metadata ───────────────────────────────────────────────────────────
 const LEVEL_META = {
@@ -261,6 +262,10 @@ function QuestionCard({ item, isExpanded, onToggle, isReviewed, onToggleReviewed
   const [deepDiveOpen, setDeepDiveOpen] = useState(false);
   const level  = LEVEL_META[item.level] ?? { label: item.level, color: '#64748b' };
   const docSrc = DOC_SOURCES[item.categoryId];
+  const highlights = [];
+  if (['advanced', 'realWorld'].includes(item.level)) highlights.push('Most important for senior roles');
+  if (['cloud', 'databricks', 'fabric', 'orchestration'].includes(item.categoryId)) highlights.push('Frequently asked in Azure interviews');
+  if (item.categoryId === 'sql' && ['intermediate', 'advanced'].includes(item.level)) highlights.push('Interview critical');
 
   return (
     <div className={`iqc-card${isExpanded ? ' iqc-card--open' : ''}${isReviewed ? ' iqc-card--reviewed' : ''}`}>
@@ -280,6 +285,14 @@ function QuestionCard({ item, isExpanded, onToggle, isReviewed, onToggleReviewed
             {level.label}
           </span>
         </div>
+
+        {highlights.length > 0 && (
+          <div className="iqc-tags">
+            {highlights.map(label => (
+              <span key={label} className="iqc-tag">{label}</span>
+            ))}
+          </div>
+        )}
 
         {/* Tags (company context chips) */}
         {item.tags && item.tags.length > 0 && (
@@ -423,12 +436,18 @@ const InterviewPrep = memo(function InterviewPrep() {
   }, [filterChip, search]);
 
   // Progress summary counts across ALL questions (not just filtered)
-  const reviewedCount = useMemo(
-    () => ALL_QUESTIONS.filter(q => learnedSet[q.id]).length,
+  const {
+    reviewedCount,
+    totalCount,
+    reviewedPct,
+    categoryStats,
+    strongestCategory,
+    seniorReviewed,
+    azureReviewed,
+  } = useMemo(
+    () => getInterviewPrepAnalytics(ALL_QUESTIONS, learnedSet, deInterviewCategories),
     [learnedSet]
   );
-  const totalCount = ALL_QUESTIONS.length;
-  const reviewedPct = totalCount > 0 ? Math.round((reviewedCount / totalCount) * 100) : 0;
 
   function handleToggleReviewed(id) {
     setLearnedSet(prev => ({ ...prev, [id]: !prev[id] }));
@@ -492,6 +511,16 @@ const InterviewPrep = memo(function InterviewPrep() {
             </button>
           </div>
         </div>
+
+        <div className="ipv2-insights-row">
+          <StatPill label="Reviewed" value={`${reviewedCount}/${totalCount}`} icon="✓" variant="success" />
+          <StatPill label="Readiness" value={`${reviewedPct}%`} icon="◌" variant="accent" />
+          <StatPill label="Senior focus" value={`${seniorReviewed}`} icon="⭐" variant="warning" />
+          <StatPill label="Azure asked" value={`${azureReviewed}`} icon="☁" variant="info" />
+        </div>
+        <p className="ipv2-readiness-note">
+          Strongest category: <strong>{strongestCategory?.name ?? 'SQL'}</strong> · {strongestCategory ? `${strongestCategory.pct}% complete` : 'Start with SQL to build momentum'}
+        </p>
 
         {/* ── Progress summary ───────────────────────────────────────────── */}
         <div className="ipv2-progress-summary">
