@@ -14,10 +14,10 @@ const SQL_KW = new Set([
 // Evaluate CASE WHEN col op val THEN n ELSE m END against a single row
 function evalRowCaseExpr(row, caseExpr) {
   const m = caseExpr.match(
-    /case\s+when\s+(?:\w+\.)?(\w+)\s*(=|!=|<>|>|<|>=|<=)\s*(?:'([^']*)'|([-\d.]+))\s+then\s+([-\d.]+)(?:\s+else\s+([-\d.]+))?\s+end/i
+    /case\s+when\s+(?:\w+\.)?(\w+)\s*(>=|<=|!=|<>|=|>|<)\s*(?:'([^']*)'|([-\d.]+))\s+then\s+(?:'([^']*)'|([-\d.]+))(?:\s+else\s+(?:'([^']*)'|([-\d.]+)))?\s+end/i
   );
   if (!m) return 0;
-  const [, col, op, strVal, numVal, thenV, elseV = '0'] = m;
+  const [, col, op, strVal, numVal, thenStr, thenNum, elseStr, elseNum] = m;
   const rowVal = row[col];
   let cond = false;
   if (strVal !== undefined) {
@@ -39,7 +39,10 @@ function evalRowCaseExpr(row, caseExpr) {
     else if (op === '>=') cond = nv >= cv;
     else if (op === '<=') cond = nv <= cv;
   }
-  return cond ? Number(thenV) : Number(elseV);
+  const thenV = thenStr ?? thenNum;
+  const elseV = elseStr ?? elseNum ?? '0';
+  const out = cond ? thenV : elseV;
+  return /^-?\d+(\.\d+)?$/.test(String(out)) ? Number(out) : out;
 }
 
 function evalSingleCondition(cond, row, betweens) {
@@ -142,12 +145,16 @@ function applyWhere(rows, clause, allCols) {
 
 function evalSingleHavingCond(cond, row) {
   cond = cond.trim();
-  let m = cond.match(/^\w+\s*\(\s*[\w*]+\s*\)\s*(?:as\s+\w+\s*)?(>|<|>=|<=|=|!=)\s*(-?\d+\.?\d*)$/i);
+  let m = cond.match(/^\w+\s*\(\s*[\w*]+\s*\)\s*(?:as\s+\w+\s*)?(>=|<=|!=|>|<|=)\s*(-?\d+\.?\d*)$/i);
   if (m) {
-    const aggKey = Object.keys(row).find(k => typeof row[k] === 'number' && k !== 'count(*)');
-    const aggVal = aggKey ? row[aggKey] : (row['count(*)'] ?? 0);
-    const rhs = Number(m[2]);
+    const numericKeys = Object.keys(row).filter(k => typeof row[k] === 'number');
+    const aggKey = 'count(*)' in row
+      ? 'count(*)'
+      : numericKeys.find(k => /(count|sum|avg|min|max|total|revenue|rows|amount)/i.test(k))
+        ?? numericKeys[numericKeys.length - 1];
+    const aggVal = aggKey ? row[aggKey] : 0;
     const op = m[1];
+    const rhs = Number(m[2]);
     if (op === '>') return aggVal > rhs;
     if (op === '<') return aggVal < rhs;
     if (op === '>=') return aggVal >= rhs;
@@ -156,7 +163,7 @@ function evalSingleHavingCond(cond, row) {
     if (op === '!=') return aggVal !== rhs;
   }
   // HAVING alias > N (e.g., HAVING run_count > 2)
-  m = cond.match(/^(\w+)\s*(>|<|>=|<=|=|!=)\s*(-?\d+\.?\d*)$/);
+  m = cond.match(/^(\w+)\s*(>=|<=|!=|>|<|=)\s*(-?\d+\.?\d*)$/);
   if (m) {
     const [, alias, op, rhs] = m;
     const val = row[alias];
@@ -187,6 +194,150 @@ function applyHaving(rows, clause) {
 function resolveCol(row, expr) {
   const col = expr.replace(/^\w+\./, '').trim();
   return row[col];
+}
+
+function splitSelectExpressions(selectRaw) {
+  const parts = [];
+  let depth = 0;
+  let quote = false;
+  let current = '';
+  for (const ch of selectRaw) {
+    if (ch === "'") quote = !quote;
+    if (!quote && ch === '(') depth += 1;
+    if (!quote && ch === ')') depth -= 1;
+    if (!quote && depth === 0 && ch === ',') {
+      parts.push(current.trim());
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  if (current.trim()) parts.push(current.trim());
+  return parts;
+}
+
+function evaluateProjection(row, expression) {
+  const aliasMatch = expression.match(/^(.+?)\s+as\s+(\w+)$/i);
+  const expr = (aliasMatch ? aliasMatch[1] : expression).trim();
+  const alias = aliasMatch?.[2] ?? expr.replace(/^\w+\./, '');
+
+  const coalesce = expr.match(/^coalesce\s*\(\s*(?:\w+\.)?(\w+)\s*,\s*(?:'([^']*)'|(-?\d+\.?\d*))\s*\)$/i);
+  if (coalesce) {
+    const [, col, strDefault, numDefault] = coalesce;
+    const fallback = strDefault ?? (numDefault != null ? Number(numDefault) : null);
+    return { key: alias, value: row[col] ?? fallback };
+  }
+
+  if (/^case\s+when\b/i.test(expr)) {
+    return { key: alias, value: evalRowCaseExpr(row, expr) };
+  }
+
+  if (/^\w+\s*\(/.test(expr)) return null;
+  const col = expr.replace(/^\w+\./, '');
+  return { key: alias, value: row[col] ?? null };
+}
+
+function executeWindowRank(n) {
+  const cte = n.match(
+    /^with\s+(\w+)\s+as\s*\(\s*select\s+\*,\s*(row_number|rank|dense_rank)\s*\(\s*\)\s+over\s*\(\s*partition\s+by\s+(\w+)\s+order\s+by\s+(\w+)(?:\s+(asc|desc))?\s*\)\s+as\s+(\w+)\s+from\s+(\w+)\s*\)\s*select\s+(.+?)\s+from\s+\1(?:\s+where\s+(.+))?$/i
+  );
+  const direct = n.match(
+    /^select\s+\*,\s*(row_number|rank|dense_rank)\s*\(\s*\)\s+over\s*\(\s*partition\s+by\s+(\w+)\s+order\s+by\s+(\w+)(?:\s+(asc|desc))?\s*\)\s+as\s+(\w+)\s+from\s+(\w+)(?:\s+where\s+(.+))?$/i
+  );
+
+  let fn, partitionCol, orderCol, direction, alias, tableName, outerSelect, outerWhere;
+  if (cte) {
+    [, , fn, partitionCol, orderCol, direction = 'asc', alias, tableName, outerSelect, outerWhere] = cte;
+  } else if (direct) {
+    [, fn, partitionCol, orderCol, direction = 'asc', alias, tableName, outerWhere] = direct;
+    outerSelect = '*';
+  } else {
+    return null;
+  }
+
+  const table = MOCK_DB[tableName];
+  if (!table) return { error: `Table '${tableName}' not found.` };
+
+  const grouped = new Map();
+  for (const row of table.rows) {
+    const key = String(row[partitionCol] ?? 'null');
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push({ ...row });
+  }
+
+  let rows = [];
+  for (const groupRows of grouped.values()) {
+    const sorted = applyOrderBy(groupRows, `${orderCol} ${direction}`);
+    let previousValue;
+    let previousRank = 0;
+    sorted.forEach((row, idx) => {
+      const currentValue = row[orderCol];
+      let value = idx + 1;
+      if (fn === 'rank') {
+        value = idx === 0 || currentValue !== previousValue ? idx + 1 : previousRank;
+        previousRank = value;
+      }
+      if (fn === 'dense_rank') {
+        value = idx === 0 ? 1 : currentValue === previousValue ? previousRank : previousRank + 1;
+        previousRank = value;
+      }
+      previousValue = currentValue;
+      rows.push({ ...row, [alias]: value });
+    });
+  }
+
+  if (outerWhere) rows = applyWhere(rows, outerWhere, [...table.columns, alias]);
+
+  if (outerSelect && outerSelect !== '*') {
+    const selected = splitSelectExpressions(outerSelect);
+    rows = rows.map(row => {
+      const out = {};
+      selected.forEach(expr => {
+        const projected = evaluateProjection(row, expr);
+        if (projected) out[projected.key] = projected.value;
+      });
+      return out;
+    });
+  }
+
+  return { rows, columns: rows.length ? Object.keys(rows[0]) : [...table.columns, alias], rowCount: rows.length, feature: 'window_rank' };
+}
+
+function executeExistsFilter(n) {
+  const match = n.match(
+    /^select\s+(.+?)\s+from\s+(\w+)(?:\s+(\w+))?\s+where\s+(not\s+)?exists\s*\(\s*select\s+1\s+from\s+(\w+)(?:\s+(\w+))?\s+where\s+(?:\w+\.)?(\w+)\s*=\s*(?:\w+\.)?(\w+)\s*\)$/i
+  );
+  if (!match) return null;
+  const [, selectRaw, leftTable, leftAliasRaw, notKeyword, rightTable, rightAliasRaw, rightCol, leftCol] = match;
+  const left = MOCK_DB[leftTable];
+  const right = MOCK_DB[rightTable];
+  if (!left) return { error: `Table '${leftTable}' not found.` };
+  if (!right) return { error: `Table '${rightTable}' not found.` };
+  const leftAlias = leftAliasRaw ?? leftTable;
+  const rightAlias = rightAliasRaw ?? rightTable;
+  void leftAlias;
+  void rightAlias;
+
+  let rows = left.rows
+    .map(row => ({ ...row }))
+    .filter(row => {
+      const exists = right.rows.some(r => String(r[rightCol]) === String(row[leftCol]));
+      return notKeyword ? !exists : exists;
+    });
+
+  if (selectRaw !== '*') {
+    const selected = splitSelectExpressions(selectRaw);
+    rows = rows.map(row => {
+      const out = {};
+      selected.forEach(expr => {
+        const projected = evaluateProjection(row, expr);
+        if (projected) out[projected.key] = projected.value;
+      });
+      return out;
+    });
+  }
+
+  return { rows, columns: rows.length ? Object.keys(rows[0]) : left.columns, rowCount: rows.length, feature: notKeyword ? 'not_exists' : 'exists' };
 }
 
 // Apply aggregates to a group of rows, returning one result row
@@ -366,16 +517,39 @@ function executeJoin(n, joinInfo) {
 export function runMockSQL(sql) {
   const n = norm(sql);
 
-  // CTE and window functions → complex mode
+  const mergePattern = n.match(/^merge\s+into\s+(\w+)\s+(?:as\s+)?(\w+)?/i);
+  if (mergePattern) {
+    const isScd2 = /\bis_current\b|\beffective_start_date\b|\beffective_end_date\b|\bwhen\s+matched\b.*\bthen\s+update\b.*\bwhen\s+not\s+matched\b.*\bthen\s+insert\b/i.test(n);
+    return {
+      complex: true,
+      feature: isScd2 ? 'scd2_merge_pattern' : 'merge_pattern',
+      rows: [{
+        pattern: isScd2 ? 'SCD Type 2 MERGE pattern recognized' : 'MERGE pattern recognized',
+        validation: 'Educational simulation only',
+        note: 'The lab checks the MERGE shape without mutating mock tables.',
+      }],
+      columns: ['pattern', 'validation', 'note'],
+      rowCount: 1,
+    };
+  }
+
+  const windowResult = executeWindowRank(n);
+  if (windowResult) return windowResult;
+
+  const existsResult = executeExistsFilter(n);
+  if (existsResult) return existsResult;
+
+  // CTE and unsupported window functions → complex mode
   if (/\bwith\s+\w+\s+as\s*\(|\bover\s*\(|\brow_number\b|\brank\b|\bdense_rank\b|\bntile\b|\bpartition\s+by\b|\blag\b|\blead\b/.test(n)) {
     return { complex: true, feature: 'cte_window' };
   }
 
-  // CASE WHEN: only mark complex if it appears OUTSIDE an aggregate function context
+  // CASE WHEN: only mark unsupported complex if it appears outside a supported SELECT projection or aggregate context
   if (/\bcase\s+when\b/i.test(n)) {
     const totalCW = (n.match(/\bcase\s+when\b/gi) ?? []).length;
     const aggCW   = (n.match(/\b(?:sum|count|avg|max|min)\s*\(\s*case\s+when\b/gi) ?? []).length;
-    if (totalCW !== aggCW) return { complex: true, feature: 'cte_window' };
+    const projectionCW = n.match(/^select\s+.+case\s+when\s+.+\s+from\s+\w+/i);
+    if (totalCW !== aggCW && !projectionCW) return { complex: true, feature: 'cte_window' };
   }
 
   // JOIN handling
@@ -430,15 +604,14 @@ export function runMockSQL(sql) {
   if (limitMatch) rows = rows.slice(0, parseInt(limitMatch[1], 10));
 
   if (selectRaw !== '*' && !groupMatch && !/\b(count|sum|avg|max|min)\s*\(/.test(selectRaw)) {
-    const cols = selectRaw.split(',').map(c => {
-      const t  = c.trim();
-      const asM = t.match(/^(\w+)\s+as\s+(\w+)$/i);
-      return asM ? { from: asM[1], to: asM[2] } : { from: t, to: t };
-    }).filter(({ from }) => from !== 'distinct');
-
+    const cols = splitSelectExpressions(selectRaw)
+      .filter(expr => expr.toLowerCase() !== 'distinct');
     rows = rows.map(row => {
       const r = {};
-      cols.forEach(({ from, to }) => { if (from in row) r[to] = row[from]; });
+      cols.forEach(expr => {
+        const projected = evaluateProjection(row, expr);
+        if (projected) r[projected.key] = projected.value;
+      });
       return r;
     });
   }

@@ -4,37 +4,35 @@ import { learningPathPhases } from '../../data/learningPath.js';
 
 // ─── Phase visual metadata ────────────────────────────────────────────────────
 const PHASE_META = {
-  'lp-orientation':             { label: 'Orientation',   color: '#8b5cf6', icon: '◎' },
-  'lp-sql':                     { label: 'SQL',           color: '#10b981', icon: '◈' },
-  'lp-engineering-foundations': { label: 'Engineering',   color: '#3b82f6', icon: '⟨⟩' },
-  'lp-intermediate':            { label: 'Intermediate',  color: '#f59e0b', icon: '⚡' },
-  'lp-cloud':                   { label: 'Azure & Cloud', color: '#0078d4', icon: '☁' },
-  'lp-streaming':               { label: 'Streaming',     color: '#e44c36', icon: '⟿' },
-  'lp-career':                  { label: 'Career',        color: '#64748b', icon: '▣' },
+  'lp-foundations':             { label: 'Foundations', color: '#2f756e', icon: '▦' },
+  'lp-de-core':                 { label: 'DE Core',     color: '#476b84', icon: '▧' },
+  'lp-azure-foundations':       { label: 'Azure',       color: '#0078d4', icon: '☁' },
+  'lp-spark-lakehouse':         { label: 'Lakehouse',   color: '#d97706', icon: '⚡' },
+  'lp-enterprise-analytics':    { label: 'Analytics',   color: '#6b7cdb', icon: '◫' },
+  'lp-production-engineering':  { label: 'Production',  color: '#0f766e', icon: '▣' },
+  'lp-career-system-design':    { label: 'Career',      color: '#c2410c', icon: '◇' },
 };
 
 // ─── Filter chips ─────────────────────────────────────────────────────────────
 const FILTER_CHIPS = [
-  { id: 'all',          label: 'All' },
-  { id: 'foundations',  label: 'Foundations' },
-  { id: 'intermediate', label: 'Intermediate' },
-  { id: 'azure',        label: 'Azure' },
-  { id: 'databricks',   label: 'Databricks' },
-  { id: 'fabric',       label: 'Fabric' },
-  { id: 'streaming',    label: 'Streaming' },
-  { id: 'advanced',     label: 'Advanced' },
+  { id: 'all',        label: 'All' },
+  { id: 'foundation', label: 'Foundations' },
+  { id: 'azure',      label: 'Azure' },
+  { id: 'lakehouse',  label: 'Lakehouse' },
+  { id: 'analytics',  label: 'Analytics' },
+  { id: 'production', label: 'Production' },
+  { id: 'career',     label: 'Career' },
 ];
 
 function moduleMatchesFilter(mod, filterId) {
   if (filterId === 'all') return true;
   const p = mod.phaseId;
-  if (filterId === 'foundations')  return ['lp-orientation','lp-sql','lp-engineering-foundations'].includes(p);
-  if (filterId === 'intermediate') return p === 'lp-intermediate';
-  if (filterId === 'azure')        return p === 'lp-cloud';
-  if (filterId === 'databricks')   return mod.lessons.some(l => l.topicId === 'azure-databricks' || l.label === 'Databricks');
-  if (filterId === 'fabric')       return mod.lessons.some(l => l.topicId === 'microsoft-fabric' || l.label === 'Fabric');
-  if (filterId === 'streaming')    return p === 'lp-streaming';
-  if (filterId === 'advanced')     return ['lp-intermediate','lp-career'].includes(p);
+  if (filterId === 'foundation') return ['lp-foundations', 'lp-de-core'].includes(p);
+  if (filterId === 'azure')      return p === 'lp-azure-foundations';
+  if (filterId === 'lakehouse')  return p === 'lp-spark-lakehouse';
+  if (filterId === 'analytics')  return p === 'lp-enterprise-analytics';
+  if (filterId === 'production') return p === 'lp-production-engineering';
+  if (filterId === 'career')     return p === 'lp-career-system-design';
   return true;
 }
 
@@ -359,7 +357,7 @@ const Topics = memo(function Topics({
           <p className="eyebrow">Guided Bootcamp</p>
           <h2 className="lp-header-title">Learning Path</h2>
           <p className="lp-header-sub">
-            Concepts before tools — each phase builds on the last.
+            Follow the Senior Azure Data Engineer path from SQL foundations to production systems and interviews.
           </p>
         </div>
         <div className="lp-header-right">

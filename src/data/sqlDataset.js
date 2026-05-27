@@ -31,6 +31,178 @@ CREATE TABLE IF NOT EXISTS orders (
   created_at  TEXT
 );
 
+CREATE TABLE IF NOT EXISTS bronze_orders (
+  order_id        INTEGER,
+  customer_id     INTEGER,
+  product_id      INTEGER,
+  amount          REAL,
+  status          TEXT,
+  source_system   TEXT,
+  created_at      TEXT,
+  updated_at      TEXT,
+  ingestion_ts    TEXT,
+  pipeline_run_id TEXT
+);
+
+CREATE TABLE IF NOT EXISTS silver_orders (
+  order_id        INTEGER PRIMARY KEY,
+  customer_id     INTEGER,
+  product_id      INTEGER,
+  amount          REAL,
+  status          TEXT,
+  created_at      TEXT,
+  updated_at      TEXT,
+  pipeline_run_id TEXT
+);
+
+CREATE TABLE IF NOT EXISTS dim_customer (
+  customer_key          INTEGER PRIMARY KEY,
+  customer_id           INTEGER,
+  customer_name         TEXT,
+  email                 TEXT,
+  city                  TEXT,
+  state                 TEXT,
+  segment               TEXT,
+  effective_start_date  TEXT,
+  effective_end_date    TEXT,
+  is_current            INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS dim_product (
+  product_key        INTEGER PRIMARY KEY,
+  product_id         INTEGER,
+  product_name       TEXT,
+  category           TEXT,
+  brand              TEXT,
+  parent_product_key INTEGER,
+  is_current         INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS dim_date (
+  date_key      TEXT PRIMARY KEY,
+  calendar_date TEXT,
+  fiscal_month  TEXT,
+  fiscal_quarter TEXT,
+  is_weekend    INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS fact_sales (
+  sales_id        INTEGER PRIMARY KEY,
+  order_id        INTEGER,
+  date_key        TEXT REFERENCES dim_date(date_key),
+  customer_key    INTEGER REFERENCES dim_customer(customer_key),
+  product_key     INTEGER REFERENCES dim_product(product_key),
+  quantity        INTEGER,
+  gross_sales     REAL,
+  discount_amount REAL,
+  net_sales       REAL,
+  pipeline_run_id TEXT
+);
+
+CREATE TABLE IF NOT EXISTS pipeline_audit (
+  run_id         TEXT PRIMARY KEY,
+  pipeline_name  TEXT,
+  status         TEXT,
+  source_count   INTEGER,
+  target_count   INTEGER,
+  error_count    INTEGER,
+  run_date       TEXT
+);
+
+CREATE TABLE IF NOT EXISTS cdc_events (
+  event_id      INTEGER PRIMARY KEY,
+  order_id      INTEGER,
+  customer_id   INTEGER,
+  amount        REAL,
+  status        TEXT,
+  op_type       TEXT,
+  event_ts      TEXT,
+  source_lsn    INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS dim_region (
+  region_key  INTEGER PRIMARY KEY,
+  region_id   INTEGER,
+  region_name TEXT,
+  country     TEXT,
+  territory   TEXT
+);
+
+CREATE TABLE IF NOT EXISTS dim_store (
+  store_key  INTEGER PRIMARY KEY,
+  store_id   INTEGER,
+  store_name TEXT,
+  store_type TEXT,
+  region_key INTEGER REFERENCES dim_region(region_key),
+  is_current INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS dim_employee (
+  employee_key  INTEGER PRIMARY KEY,
+  employee_id   INTEGER,
+  employee_name TEXT,
+  role          TEXT,
+  manager_key   INTEGER,
+  region_key    INTEGER REFERENCES dim_region(region_key),
+  is_current    INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS bridge_customer_segment (
+  customer_key         INTEGER REFERENCES dim_customer(customer_key),
+  segment_key          INTEGER,
+  segment_name         TEXT,
+  effective_start_date TEXT,
+  effective_end_date   TEXT,
+  priority             TEXT
+);
+
+CREATE TABLE IF NOT EXISTS fact_inventory (
+  inventory_id    INTEGER PRIMARY KEY,
+  snapshot_date   TEXT,
+  store_key       INTEGER REFERENCES dim_store(store_key),
+  product_key     INTEGER REFERENCES dim_product(product_key),
+  on_hand_qty     INTEGER,
+  reserved_qty    INTEGER,
+  available_qty   INTEGER,
+  pipeline_run_id TEXT
+);
+
+CREATE TABLE IF NOT EXISTS fact_payments (
+  payment_id        INTEGER PRIMARY KEY,
+  order_id          INTEGER,
+  customer_key      INTEGER REFERENCES dim_customer(customer_key),
+  payment_date      TEXT,
+  payment_method    TEXT,
+  payment_status    TEXT,
+  authorized_amount REAL,
+  captured_amount   REAL,
+  pipeline_run_id   TEXT
+);
+
+CREATE TABLE IF NOT EXISTS audit_pipeline_execution (
+  execution_id     TEXT PRIMARY KEY,
+  pipeline_name    TEXT,
+  status           TEXT,
+  started_at       TEXT,
+  ended_at         TEXT,
+  duration_seconds INTEGER,
+  rows_read        INTEGER,
+  rows_written     INTEGER,
+  error_count      INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS error_deadletter_queue (
+  error_id        INTEGER PRIMARY KEY,
+  pipeline_run_id TEXT,
+  source_table    TEXT,
+  business_key    TEXT,
+  error_type      TEXT,
+  error_message   TEXT,
+  payload         TEXT,
+  retry_count     INTEGER,
+  created_at      TEXT
+);
+
 CREATE TABLE IF NOT EXISTS employees (
   employee_id   INTEGER PRIMARY KEY,
   employee_name TEXT NOT NULL,
@@ -144,6 +316,131 @@ INSERT INTO orders VALUES
  (128, 9,  4,  2, 78.00,  'delivered',  '2024-07-15'),
  (129, 12, 7,  1, 199.00, 'pending',    '2024-07-22'),
  (130, 15, 3,  1, 149.00, 'delivered',  '2024-07-30');
+
+-- warehouse-oriented SQL track tables
+INSERT INTO bronze_orders VALUES
+ (101, 1, 1,  99.00,  'delivered', 'shopify', '2024-01-10', '2024-01-10 09:10:00', '2024-01-10 09:12:00', 'run_2024_01_10'),
+ (102, 1, 3, 149.00,  'delivered', 'shopify', '2024-01-22', '2024-01-22 10:30:00', '2024-01-22 10:31:00', 'run_2024_01_22'),
+ (102, 1, 3, 149.00,  'delivered', 'shopify', '2024-01-22', '2024-01-22 10:31:00', '2024-01-22 10:33:00', 'run_2024_01_22_retry'),
+ (103, 2, 2,  79.00,  'shipped',   'shopify', '2024-01-28', '2024-01-28 08:20:00', '2024-01-28 08:21:00', 'run_2024_01_28'),
+ (104, 3, 4,  39.00,  'cancelled', 'shopify', '2024-02-10', '2024-02-10 12:00:00', '2024-02-10 12:05:00', 'run_2024_02_10'),
+ (105, 4, 6, 129.00,  'delivered', 'pos',     '2024-02-15', '2024-02-15 13:00:00', '2024-02-15 13:02:00', 'run_2024_02_15'),
+ (106, 5, 1,  99.00,  'delivered', 'pos',     '2024-02-28', '2024-02-28 15:20:00', '2024-02-28 15:24:00', 'run_2024_02_28'),
+ (107, 6, 7, 199.00,  'shipped',   'shopify', '2024-03-12', '2024-03-12 11:11:00', '2024-03-12 11:12:00', 'run_2024_03_12'),
+ (108, 7, 8,  89.00,  'pending',   'shopify', '2024-03-25', '2024-03-25 16:10:00', '2024-03-25 16:12:00', 'run_2024_03_25'),
+ (109, 9, 3, 149.00,  'delivered', 'pos',     '2024-04-08', '2024-04-08 09:00:00', '2024-04-08 09:03:00', 'run_2024_04_08');
+
+INSERT INTO silver_orders VALUES
+ (101, 1, 1,  99.00,  'delivered', '2024-01-10', '2024-01-10 09:10:00', 'run_2024_01_10'),
+ (102, 1, 3, 149.00,  'delivered', '2024-01-22', '2024-01-22 10:31:00', 'run_2024_01_22_retry'),
+ (103, 2, 2,  79.00,  'shipped',   '2024-01-28', '2024-01-28 08:20:00', 'run_2024_01_28'),
+ (104, 3, 4,  39.00,  'cancelled', '2024-02-10', '2024-02-10 12:00:00', 'run_2024_02_10'),
+ (105, 4, 6, 129.00,  'delivered', '2024-02-15', '2024-02-15 13:00:00', 'run_2024_02_15'),
+ (106, 5, 1,  99.00,  'delivered', '2024-02-28', '2024-02-28 15:20:00', 'run_2024_02_28'),
+ (107, 6, 7, 199.00,  'shipped',   '2024-03-12', '2024-03-12 11:11:00', 'run_2024_03_12'),
+ (108, 7, 8,  89.00,  'pending',   '2024-03-25', '2024-03-25 16:10:00', 'run_2024_03_25');
+
+INSERT INTO dim_customer VALUES
+ (1001, 1, 'Alice Johnson', 'alice@email.com', 'Austin',  'TX', 'Consumer', '2023-01-01', '9999-12-31', 1),
+ (1002, 2, 'Bob Smith',     'bob@email.com',   'Dallas',  'TX', 'SMB',      '2023-01-01', '9999-12-31', 1),
+ (1003, 3, 'Carol Davis',   'carol@email.com', 'Austin',  'TX', 'Consumer', '2023-01-01', '2024-02-01', 0),
+ (1004, 3, 'Carol Davis',   'carol@email.com', 'Houston', 'TX', 'Consumer', '2024-02-02', '9999-12-31', 1),
+ (1005, 4, 'David Lee',     'david@email.com', 'Houston', 'TX', 'Enterprise','2023-01-01','9999-12-31', 1),
+ (1006, 5, 'Eva Martinez',  'eva@email.com',   'Dallas',  'TX', 'SMB',      '2023-01-01', '9999-12-31', 1),
+ (1007, 6, 'Frank Wilson',  NULL,              'Seattle', 'WA', 'Consumer', '2023-01-01', '9999-12-31', 1),
+ (1008, 7, 'Grace Chen',    'grace@email.com', 'Denver',  'CO', 'Consumer', '2023-01-01', '9999-12-31', 1),
+ (1009, 9, 'Isabella White','isabella@email.com','Seattle','WA','Enterprise','2023-01-01','9999-12-31', 1);
+
+INSERT INTO dim_product VALUES
+ (2001, 1, 'SQL Fundamentals', 'Education', 'Academy', NULL, 1),
+ (2002, 2, 'Python for Data',  'Education', 'Academy', NULL, 1),
+ (2003, 3, 'Cloud Lab Pro',    'Lab',       'CloudOps', NULL, 1),
+ (2004, 4, 'Data Notebook',    'Tools',     'Workspace', NULL, 1),
+ (2005, 6, 'Machine Learning 101', 'Education', 'Academy', NULL, 1),
+ (2006, 7, 'Spark Cluster Lab', 'Lab',      'CloudOps', NULL, 1),
+ (2007, 8, 'dbt Accelerator',  'Tools',     'Workspace', NULL, 1);
+
+INSERT INTO dim_date VALUES
+ ('2024-01-10', '2024-01-10', 'FY24-M01', 'FY24-Q1', 0),
+ ('2024-01-22', '2024-01-22', 'FY24-M01', 'FY24-Q1', 0),
+ ('2024-01-28', '2024-01-28', 'FY24-M01', 'FY24-Q1', 1),
+ ('2024-02-10', '2024-02-10', 'FY24-M02', 'FY24-Q1', 1),
+ ('2024-02-15', '2024-02-15', 'FY24-M02', 'FY24-Q1', 0),
+ ('2024-02-28', '2024-02-28', 'FY24-M02', 'FY24-Q1', 0),
+ ('2024-03-12', '2024-03-12', 'FY24-M03', 'FY24-Q1', 0),
+ ('2024-03-25', '2024-03-25', 'FY24-M03', 'FY24-Q1', 0);
+
+INSERT INTO fact_sales VALUES
+ (1, 101, '2024-01-10', 1001, 2001, 1,  99.00,  0.00,  99.00, 'run_2024_01_10'),
+ (2, 102, '2024-01-22', 1001, 2003, 1, 149.00,  0.00, 149.00, 'run_2024_01_22_retry'),
+ (3, 103, '2024-01-28', 1002, 2002, 1,  79.00,  0.00,  79.00, 'run_2024_01_28'),
+ (4, 104, '2024-02-10', 1004, 2004, 1,  39.00,  0.00,  39.00, 'run_2024_02_10'),
+ (5, 105, '2024-02-15', 1005, 2005, 1, 129.00, 10.00, 119.00, 'run_2024_02_15'),
+ (6, 106, '2024-02-28', 1006, 2001, 1,  99.00,  0.00,  99.00, 'run_2024_02_28'),
+ (7, 107, '2024-03-12', 1007, 2006, 1, 199.00, 20.00, 179.00, 'run_2024_03_12'),
+ (8, 108, '2024-03-25', 1008, 2007, 1,  89.00,  0.00,  89.00, 'run_2024_03_25');
+
+INSERT INTO pipeline_audit VALUES
+ ('run_2024_01_10', 'orders_bronze_to_silver', 'success', 1, 1, 0, '2024-01-10'),
+ ('run_2024_01_22', 'orders_bronze_to_silver', 'failed',  1, 0, 1, '2024-01-22'),
+ ('run_2024_01_22_retry', 'orders_bronze_to_silver', 'success', 2, 1, 0, '2024-01-22'),
+ ('run_2024_02_10', 'orders_bronze_to_silver', 'success', 1, 1, 0, '2024-02-10'),
+ ('run_2024_03_25', 'orders_bronze_to_silver', 'success', 1, 1, 0, '2024-03-25');
+
+INSERT INTO cdc_events VALUES
+ (1, 102, 1, 149.00, 'pending',   'I', '2024-01-22 10:30:00', 10001),
+ (2, 102, 1, 149.00, 'delivered', 'U', '2024-01-22 10:31:00', 10002),
+ (3, 103, 2,  79.00, 'shipped',   'I', '2024-01-28 08:20:00', 10003),
+ (4, 104, 3,  39.00, 'cancelled', 'I', '2024-02-10 12:00:00', 10004),
+ (5, 108, 7,  89.00, 'deleted',   'D', '2024-03-26 01:00:00', 10005);
+
+INSERT INTO dim_region VALUES
+ (301, 10, 'Texas', 'US', 'South'),
+ (302, 20, 'Pacific Northwest', 'US', 'West'),
+ (303, 30, 'Mountain', 'US', 'West');
+
+INSERT INTO dim_store VALUES
+ (401, 100, 'Austin Flagship', 'Retail', 301, 1),
+ (402, 101, 'Dallas Outlet', 'Outlet', 301, 1),
+ (403, 102, 'Seattle Digital', 'Online', 302, 1),
+ (404, 103, 'Denver Lab Store', 'Retail', 303, 1);
+
+INSERT INTO dim_employee VALUES
+ (501, 9001, 'Nora Patel', 'Store Manager', NULL, 301, 1),
+ (502, 9002, 'Luis Romero', 'Sales Associate', 501, 301, 1),
+ (503, 9003, 'Mina Ito', 'Ops Lead', NULL, 302, 1),
+ (504, 9004, 'Andre Fox', 'Inventory Analyst', 503, 303, 1);
+
+INSERT INTO bridge_customer_segment VALUES
+ (1001, 1, 'Consumer', '2024-01-01', '9999-12-31', 'primary'),
+ (1002, 2, 'SMB', '2024-01-01', '9999-12-31', 'primary'),
+ (1005, 3, 'Enterprise', '2024-01-01', '9999-12-31', 'primary'),
+ (1005, 4, 'Strategic', '2024-02-01', '9999-12-31', 'secondary');
+
+INSERT INTO fact_inventory VALUES
+ (1, '2024-03-25', 401, 2001, 75, 12, 63, 'inv_2024_03_25'),
+ (2, '2024-03-25', 401, 2003, 18, 6, 12, 'inv_2024_03_25'),
+ (3, '2024-03-25', 402, 2001, 40, 3, 37, 'inv_2024_03_25'),
+ (4, '2024-03-25', 403, 2007, 10, 8, 2, 'inv_2024_03_25'),
+ (5, '2024-03-26', 401, 2001, 71, 10, 61, 'inv_2024_03_26');
+
+INSERT INTO fact_payments VALUES
+ (7001, 101, 1001, '2024-01-10', 'card', 'captured', 99.00, 99.00, 'pay_2024_01_10'),
+ (7002, 102, 1001, '2024-01-22', 'card', 'captured', 149.00, 149.00, 'pay_2024_01_22'),
+ (7003, 104, 1004, '2024-02-10', 'wallet', 'refunded', 39.00, 0.00, 'pay_2024_02_10'),
+ (7004, 105, 1005, '2024-02-15', 'invoice', 'captured', 129.00, 119.00, 'pay_2024_02_15'),
+ (7005, 999, 1009, '2024-04-08', 'card', 'captured', 149.00, 149.00, 'pay_orphan_2024_04_08');
+
+INSERT INTO audit_pipeline_execution VALUES
+ ('exec_001', 'bronze_orders_ingest', 'success', '2024-03-25 01:00:00', '2024-03-25 01:04:00', 240, 10, 10, 0),
+ ('exec_002', 'silver_orders_merge', 'success', '2024-03-25 01:05:00', '2024-03-25 01:08:00', 180, 10, 8, 0),
+ ('exec_003', 'gold_sales_publish', 'warning', '2024-03-25 01:10:00', '2024-03-25 01:18:00', 480, 8, 8, 1),
+ ('exec_004', 'payments_reconciliation', 'failed', '2024-04-08 02:00:00', '2024-04-08 02:02:00', 120, 5, 4, 1);
+
+INSERT INTO error_deadletter_queue VALUES
+ (1, 'run_2024_01_22', 'bronze_orders', '102', 'duplicate_key', 'Duplicate order_id in retry batch', '{"order_id":102}', 1, '2024-01-22 10:35:00'),
+ (2, 'pay_orphan_2024_04_08', 'fact_payments', '999', 'orphan_fact', 'Payment references missing order_id', '{"order_id":999}', 0, '2024-04-08 02:02:00'),
+ (3, 'gold_sales_publish', 'fact_sales', 'customer_key:null', 'null_business_key', 'Customer key missing after dimension lookup', '{"customer_id":9}', 2, '2024-04-08 09:05:00');
 
 -- employees (manager_id is NULL for top-level managers)
 INSERT INTO employees VALUES
@@ -311,6 +608,122 @@ export const TABLE_SCHEMAS = {
     pk:      'product_id',
     rowCount: 12,
     note:    '12 products in 4 categories (Education, Lab, Tools, Cloud) — prices $39–$249',
+  },
+  bronze_orders: {
+    columns: ['order_id', 'customer_id', 'product_id', 'amount', 'status', 'source_system', 'created_at', 'updated_at', 'ingestion_ts', 'pipeline_run_id'],
+    types:   ['INTEGER',  'INTEGER',     'INTEGER',    'REAL',   'TEXT',   'TEXT',          'TEXT',       'TEXT',       'TEXT',         'TEXT'],
+    rowCount: 10,
+    note:    'Raw order landing table with duplicate retry rows, source metadata, and ingestion timestamps',
+  },
+  silver_orders: {
+    columns: ['order_id', 'customer_id', 'product_id', 'amount', 'status', 'created_at', 'updated_at', 'pipeline_run_id'],
+    types:   ['INTEGER',  'INTEGER',     'INTEGER',    'REAL',   'TEXT',   'TEXT',       'TEXT',       'TEXT'],
+    pk:      'order_id',
+    rowCount: 8,
+    note:    'Deduplicated Silver orders after Bronze cleanup and incremental merge',
+  },
+  dim_customer: {
+    columns: ['customer_key', 'customer_id', 'customer_name', 'email', 'city', 'state', 'segment', 'effective_start_date', 'effective_end_date', 'is_current'],
+    types:   ['INTEGER',      'INTEGER',     'TEXT',          'TEXT',  'TEXT', 'TEXT',  'TEXT',    'TEXT',                 'TEXT',               'INTEGER'],
+    pk:      'customer_key',
+    rowCount: 9,
+    note:    'SCD Type 2 customer dimension with surrogate keys and current-row flag',
+  },
+  dim_product: {
+    columns: ['product_key', 'product_id', 'product_name', 'category', 'brand', 'parent_product_key', 'is_current'],
+    types:   ['INTEGER',     'INTEGER',    'TEXT',         'TEXT',     'TEXT',  'INTEGER',            'INTEGER'],
+    pk:      'product_key',
+    rowCount: 7,
+    note:    'Conformed product dimension used by the sales fact and BI marts',
+  },
+  dim_date: {
+    columns: ['date_key', 'calendar_date', 'fiscal_month', 'fiscal_quarter', 'is_weekend'],
+    types:   ['TEXT',     'TEXT',          'TEXT',         'TEXT',           'INTEGER'],
+    pk:      'date_key',
+    rowCount: 8,
+    note:    'Conformed date dimension with fiscal calendar attributes',
+  },
+  fact_sales: {
+    columns: ['sales_id', 'order_id', 'date_key', 'customer_key', 'product_key', 'quantity', 'gross_sales', 'discount_amount', 'net_sales', 'pipeline_run_id'],
+    types:   ['INTEGER',  'INTEGER',  'TEXT',     'INTEGER',      'INTEGER',     'INTEGER',  'REAL',        'REAL',            'REAL',      'TEXT'],
+    pk:      'sales_id',
+    fks:     { date_key: 'dim_date.date_key', customer_key: 'dim_customer.customer_key', product_key: 'dim_product.product_key' },
+    rowCount: 8,
+    note:    'Gold sales fact at order-product grain with additive revenue measures',
+  },
+  pipeline_audit: {
+    columns: ['run_id', 'pipeline_name', 'status', 'source_count', 'target_count', 'error_count', 'run_date'],
+    types:   ['TEXT',   'TEXT',          'TEXT',   'INTEGER',      'INTEGER',      'INTEGER',     'TEXT'],
+    pk:      'run_id',
+    rowCount: 5,
+    note:    'Pipeline control table for run status, reconciliation counts, and operational debugging',
+  },
+  cdc_events: {
+    columns: ['event_id', 'order_id', 'customer_id', 'amount', 'status', 'op_type', 'event_ts', 'source_lsn'],
+    types:   ['INTEGER',  'INTEGER',  'INTEGER',     'REAL',   'TEXT',   'TEXT',    'TEXT',     'INTEGER'],
+    pk:      'event_id',
+    rowCount: 5,
+    note:    'CDC event stream with insert/update/delete operations and source ordering',
+  },
+  dim_region: {
+    columns: ['region_key', 'region_id', 'region_name', 'country', 'territory'],
+    types:   ['INTEGER',    'INTEGER',   'TEXT',        'TEXT',    'TEXT'],
+    pk:      'region_key',
+    rowCount: 3,
+    note:    'Conformed geography dimension used by stores, employees, and regional marts',
+  },
+  dim_store: {
+    columns: ['store_key', 'store_id', 'store_name', 'store_type', 'region_key', 'is_current'],
+    types:   ['INTEGER',   'INTEGER',  'TEXT',       'TEXT',       'INTEGER',    'INTEGER'],
+    pk:      'store_key',
+    fks:     { region_key: 'dim_region.region_key' },
+    rowCount: 4,
+    note:    'Store dimension for inventory and retail performance reporting',
+  },
+  dim_employee: {
+    columns: ['employee_key', 'employee_id', 'employee_name', 'role', 'manager_key', 'region_key', 'is_current'],
+    types:   ['INTEGER',      'INTEGER',     'TEXT',          'TEXT', 'INTEGER',     'INTEGER',    'INTEGER'],
+    pk:      'employee_key',
+    fks:     { manager_key: 'dim_employee.employee_key', region_key: 'dim_region.region_key' },
+    rowCount: 4,
+    note:    'Employee dimension with manager hierarchy and regional ownership',
+  },
+  bridge_customer_segment: {
+    columns: ['customer_key', 'segment_key', 'segment_name', 'effective_start_date', 'effective_end_date', 'priority'],
+    types:   ['INTEGER',      'INTEGER',     'TEXT',         'TEXT',                 'TEXT',               'TEXT'],
+    fks:     { customer_key: 'dim_customer.customer_key' },
+    rowCount: 4,
+    note:    'Bridge table for multi-segment customer membership without duplicating facts',
+  },
+  fact_inventory: {
+    columns: ['inventory_id', 'snapshot_date', 'store_key', 'product_key', 'on_hand_qty', 'reserved_qty', 'available_qty', 'pipeline_run_id'],
+    types:   ['INTEGER',      'TEXT',          'INTEGER',   'INTEGER',     'INTEGER',     'INTEGER',      'INTEGER',       'TEXT'],
+    pk:      'inventory_id',
+    fks:     { store_key: 'dim_store.store_key', product_key: 'dim_product.product_key' },
+    rowCount: 5,
+    note:    'Daily inventory snapshot fact for availability, stockout, and replenishment analysis',
+  },
+  fact_payments: {
+    columns: ['payment_id', 'order_id', 'customer_key', 'payment_date', 'payment_method', 'payment_status', 'authorized_amount', 'captured_amount', 'pipeline_run_id'],
+    types:   ['INTEGER',    'INTEGER',  'INTEGER',      'TEXT',         'TEXT',           'TEXT',           'REAL',              'REAL',            'TEXT'],
+    pk:      'payment_id',
+    fks:     { customer_key: 'dim_customer.customer_key' },
+    rowCount: 5,
+    note:    'Payment fact with one intentional orphan order for production debugging practice',
+  },
+  audit_pipeline_execution: {
+    columns: ['execution_id', 'pipeline_name', 'status', 'started_at', 'ended_at', 'duration_seconds', 'rows_read', 'rows_written', 'error_count'],
+    types:   ['TEXT',         'TEXT',          'TEXT',   'TEXT',       'TEXT',     'INTEGER',          'INTEGER',   'INTEGER',      'INTEGER'],
+    pk:      'execution_id',
+    rowCount: 4,
+    note:    'Enterprise pipeline execution audit with timing, throughput, and error metrics',
+  },
+  error_deadletter_queue: {
+    columns: ['error_id', 'pipeline_run_id', 'source_table', 'business_key', 'error_type', 'error_message', 'payload', 'retry_count', 'created_at'],
+    types:   ['INTEGER',  'TEXT',            'TEXT',         'TEXT',         'TEXT',       'TEXT',          'TEXT',    'INTEGER',     'TEXT'],
+    pk:      'error_id',
+    rowCount: 3,
+    note:    'Dead-letter queue for bad records, retry strategy, and incident root-cause analysis',
   },
   orders: {
     columns: ['order_id', 'customer_id', 'product_id', 'quantity', 'amount', 'status', 'created_at'],

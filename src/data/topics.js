@@ -1,4 +1,5 @@
 import { sqlModule }        from './modules/sql.js';
+import { dataModelingModule } from './modules/data-modeling.js';
 import { dbtModule }        from './modules/dbt.js';
 import { pythonModule }     from './modules/python.js';
 import { pysparkModule }    from './modules/pyspark.js';
@@ -12,6 +13,12 @@ import { systemDesignModule }    from './modules/system-design.js';
 import { azureSecurityModule }   from './modules/azure-security.js';
 import { newTopics }             from './newTopics.js';
 import { phases }           from './phases.js';
+import {
+  getSeniorAzureNextStep,
+  getSeniorAzureTopicMeta,
+  seniorAzureAdditionalTopics,
+  seniorAzureTopicOrder,
+} from './seniorAzurePath.js';
 
 const coreTopics = [
   {
@@ -506,7 +513,6 @@ const coreTopics = [
       { question: 'How does Key Vault integration work in ADF Linked Services?', answer: 'Instead of storing a connection string in the Linked Service directly, reference the Key Vault secret by URL. ADF fetches the secret at runtime using its Managed Identity, which must have Key Vault Secrets User role on the vault. The secret value never leaves Key Vault and is not visible in ADF configuration.' },
       { question: 'What is the difference between Azure RBAC and Key Vault Access Policies?', answer: 'Azure RBAC is the modern control plane — roles are assigned at subscription/resource group/resource scope and work uniformly. Access Policies are the legacy Key Vault mechanism, applied per-vault, with no inheritance and no audit trail in Azure Policy. Microsoft recommends RBAC for all new deployments.' },
     ],
-    module: azureSecurityModule,
     careerContext: {
       whyItMatters: 'Security is the final barrier between passing a senior interview and failing it. FAANG-tier and enterprise Azure roles explicitly test whether candidates can design secure-by-default data platforms — not just build functional ones.',
       realWorldUseCase: 'A senior DE is asked to onboard a new data source from a vendor. Secure pattern: create a user-assigned Managed Identity for the ingestion pipeline, assign Storage Blob Data Contributor on the landing container only, store the vendor\'s API key in Key Vault, reference via KV-backed Linked Service, deploy using a GitHub Actions workflow with OIDC federation — no secrets in code or config.',
@@ -601,35 +607,53 @@ function miniProjectFor(topic, practiceTasks) {
 }
 
 function normalizeTopic(topic) {
-  const title = REQUIRED_TITLE_OVERRIDES[topic.id] ?? topic.title;
-  const estimatedTime = topic.estimatedTime ?? topic.timeEstimate ?? '1–2 weeks';
-  const practiceTasks = practiceTasksFor({ ...topic, title });
+  const pathMeta = getSeniorAzureTopicMeta(topic.id) ?? {};
+  const title = pathMeta.title ?? REQUIRED_TITLE_OVERRIDES[topic.id] ?? topic.title;
+  const estimatedTime = pathMeta.estimatedTime ?? topic.estimatedTime ?? topic.timeEstimate ?? '1–2 weeks';
+  const module = topic.id === 'data-modeling'
+    ? dataModelingModule
+    : topic.module;
+  const normalizedBase = { ...topic, ...pathMeta, title, estimatedTime, module };
+  const practiceTasks = practiceTasksFor(normalizedBase);
 
   return {
-    ...topic,
+    ...normalizedBase,
     title,
-    phase: topic.phase ?? phaseByTopicId[topic.id] ?? 'foundation',
-    category: topic.category ?? 'General',
-    difficulty: topic.difficulty ?? 'Beginner',
+    phase: pathMeta.phase ?? topic.phase ?? phaseByTopicId[topic.id] ?? 'foundation',
+    category: pathMeta.category ?? topic.category ?? 'General',
+    difficulty: pathMeta.difficulty ?? topic.difficulty ?? 'Beginner',
+    step: pathMeta.step ?? topic.step,
     estimatedTime,
-    timeEstimate: topic.timeEstimate ?? estimatedTime,
-    prerequisites: topic.prerequisites ?? [],
-    whyItMatters: topic.whyItMatters ?? topic.careerContext?.whyItMatters ?? topic.overview?.find(item => item.title === 'Why do we use it?')?.body ?? '',
-    learningObjectives: learningObjectivesFor({ ...topic, title }),
+    timeEstimate: pathMeta.timeEstimate ?? topic.timeEstimate ?? estimatedTime,
+    prerequisites: pathMeta.prerequisites ?? topic.prerequisites ?? [],
+    whyItMatters: topic.whyItMatters ?? topic.careerContext?.whyItMatters ?? normalizedBase.overview?.find(item => item.title === 'Why do we use it?')?.body ?? '',
+    learningObjectives: learningObjectivesFor(normalizedBase),
     realWorldUseCase: topic.realWorldUseCase ?? topic.careerContext?.realWorldUseCase ?? '',
-    commonMistakes: topic.commonMistakes ?? [],
+    commonMistakes: normalizedBase.commonMistakes ?? [],
     practiceTasks,
-    interviewQuestions: topic.interviewQuestions ?? topic.questions ?? [],
-    miniProject: miniProjectFor({ ...topic, title }, practiceTasks),
+    interviewQuestions: normalizedBase.interviewQuestions ?? normalizedBase.questions ?? [],
+    miniProject: miniProjectFor(normalizedBase, practiceTasks),
     nextStep: topic.nextStep ?? null,
   };
 }
 
-const normalizedTopics = uniqueById([...coreTopics, ...newTopics])
+const normalizedTopics = uniqueById([...coreTopics, ...newTopics, ...seniorAzureAdditionalTopics])
   .map(normalizeTopic)
-  .sort((a, b) => (a.step ?? 999) - (b.step ?? 999));
+  .sort((a, b) => {
+    const aPathIndex = seniorAzureTopicOrder.indexOf(a.id);
+    const bPathIndex = seniorAzureTopicOrder.indexOf(b.id);
+    if (aPathIndex >= 0 || bPathIndex >= 0) {
+      if (aPathIndex < 0) return 1;
+      if (bPathIndex < 0) return -1;
+      return aPathIndex - bPathIndex;
+    }
+    return (a.step ?? 999) - (b.step ?? 999);
+  });
 
 export const topics = normalizedTopics.map((topic, index, allTopics) => {
+  const pathNextStep = getSeniorAzureNextStep(topic.id);
+  if (seniorAzureTopicOrder.includes(topic.id)) return { ...topic, nextStep: pathNextStep };
+  if (pathNextStep) return { ...topic, nextStep: pathNextStep };
   if (topic.nextStep || index === allTopics.length - 1) return topic;
   const next = allTopics[index + 1];
   return {

@@ -10,12 +10,32 @@ import { getMentorshipForTopic } from '../../data/careerGuidance.js';
 
 // ── Subtopic card ──────────────────────────────────────────────────────────────
 function SubtopicCard({ subtopic, practiceCompleted, onTogglePractice, sqlMode }) {
+  const insightGroups = [
+    { title: 'Production mistakes', items: subtopic.productionMistakes },
+    { title: 'Optimization tips', items: subtopic.optimizationTips },
+    { title: 'Cost considerations', items: subtopic.costConsiderations },
+    { title: 'Scalability concerns', items: subtopic.scalabilityConcerns },
+    { title: 'Debugging tips', items: subtopic.debuggingTips },
+  ].filter(group => group.items?.length > 0);
+
   return (
     <div className="subtopic-card">
       <div className="subtopic-card-header">
         <h5>{subtopic.title}</h5>
         <DifficultyBadge level={subtopic.difficulty} />
       </div>
+      {(subtopic.badges?.length > 0 || subtopic.medallionLayer) && (
+        <div className="subtopic-badges" aria-label={`${subtopic.title} learning tags`}>
+          {subtopic.medallionLayer && (
+            <span className={`subtopic-badge subtopic-badge--medallion subtopic-badge--${subtopic.medallionLayer.toLowerCase().replace(/\s+/g, '-')}`}>
+              {subtopic.medallionLayer}
+            </span>
+          )}
+          {subtopic.pipelineStage && <span className="subtopic-badge subtopic-badge--stage">{subtopic.pipelineStage}</span>}
+          {(subtopic.badges ?? []).map(badge => <span key={badge} className="subtopic-badge">{badge}</span>)}
+          {subtopic.dependsOn && <span className="subtopic-badge subtopic-badge--dependency">Needed before {subtopic.dependsOn}</span>}
+        </div>
+      )}
       <div className="subtopic-content">
         <div>
           <span>What it does</span>
@@ -25,6 +45,12 @@ function SubtopicCard({ subtopic, practiceCompleted, onTogglePractice, sqlMode }
           <span>Why use it</span>
           <p>{subtopic.why}</p>
         </div>
+        {subtopic.businessPurpose && (
+          <div className="subtopic-wide">
+            <span>Business purpose</span>
+            <p>{subtopic.businessPurpose}</p>
+          </div>
+        )}
         <div className="subtopic-full">
           <span>Syntax</span>
           <CodeBlock code={subtopic.syntax} />
@@ -56,16 +82,93 @@ function SubtopicCard({ subtopic, practiceCompleted, onTogglePractice, sqlMode }
             </ul>
           </div>
         )}
+        {subtopic.architectureRelevance && (
+          <div className="subtopic-wide">
+            <span>Architecture relevance</span>
+            <p>{subtopic.architectureRelevance}</p>
+          </div>
+        )}
+        {subtopic.azureRelevance && (
+          <div>
+            <span>Azure / Fabric / Synapse</span>
+            <p>{subtopic.azureRelevance}</p>
+          </div>
+        )}
+        {subtopic.databricksRelevance && (
+          <div>
+            <span>Databricks relevance</span>
+            <p>{subtopic.databricksRelevance}</p>
+          </div>
+        )}
         {subtopic.productionContext && (
           <div className="subtopic-wide">
             <span>Production context</span>
             <p className="subtopic-production">{subtopic.productionContext}</p>
           </div>
         )}
+        {subtopic.productionConcern && (
+          <div className="subtopic-wide">
+            <span>Production concern</span>
+            <p className="subtopic-production">{subtopic.productionConcern}</p>
+          </div>
+        )}
+        {subtopic.seniorEngineerNote && (
+          <div className="subtopic-wide">
+            <span>How seniors use this</span>
+            <p className="subtopic-production">{subtopic.seniorEngineerNote}</p>
+          </div>
+        )}
+        {subtopic.hint && (
+          <div>
+            <span>Hint</span>
+            <p>{subtopic.hint}</p>
+          </div>
+        )}
+        {subtopic.solution && (
+          <div className="subtopic-wide">
+            <span>Solution</span>
+            <p>{subtopic.solution}</p>
+          </div>
+        )}
         {subtopic.performanceTip && (
           <div className="subtopic-wide">
             <span>Performance tip</span>
             <p className="subtopic-perf"><span aria-hidden="true">⚡</span> {subtopic.performanceTip}</p>
+          </div>
+        )}
+        {subtopic.visualAids?.length > 0 && (
+          <div className="subtopic-wide">
+            <span>Visual thinking</span>
+            <div className="subtopic-visual-grid">
+              {subtopic.visualAids.map((aid, i) => (
+                <article key={`${aid.title}-${i}`} className="subtopic-visual-card">
+                  <strong>{aid.title}</strong>
+                  <p>{aid.body}</p>
+                  {aid.warning && <em>{aid.warning}</em>}
+                </article>
+              ))}
+            </div>
+          </div>
+        )}
+        {insightGroups.length > 0 && (
+          <div className="subtopic-wide">
+            <span>Senior engineering insights</span>
+            <div className="subtopic-insight-list">
+              {insightGroups.map(group => (
+                <details key={group.title} className="subtopic-insight-card">
+                  <summary>{group.title}</summary>
+                  <ul>
+                    {group.items.map((item, i) => <li key={i}>{item}</li>)}
+                  </ul>
+                </details>
+              ))}
+            </div>
+          </div>
+        )}
+        {subtopic.completionOutcome && (
+          <div className="subtopic-wide">
+            <span>Completion outcome</span>
+            <p className="subtopic-outcome">{subtopic.completionOutcome}</p>
           </div>
         )}
       </div>
@@ -163,6 +266,27 @@ function subtopicMatchesSearch(st, lc) {
     st.practice?.toLowerCase().includes(lc) ||
     st.hint?.toLowerCase().includes(lc) ||
     st.solution?.toLowerCase().includes(lc) ||
+    st.architectureRelevance?.toLowerCase().includes(lc) ||
+    st.azureRelevance?.toLowerCase().includes(lc) ||
+    st.databricksRelevance?.toLowerCase().includes(lc) ||
+    st.productionContext?.toLowerCase().includes(lc) ||
+    st.productionConcern?.toLowerCase().includes(lc) ||
+    st.seniorEngineerNote?.toLowerCase().includes(lc) ||
+    st.commonMistake?.toLowerCase().includes(lc) ||
+    st.medallionLayer?.toLowerCase().includes(lc) ||
+    st.pipelineStage?.toLowerCase().includes(lc) ||
+    st.businessPurpose?.toLowerCase().includes(lc) ||
+    st.productionMistakes?.some(item => item.toLowerCase().includes(lc)) ||
+    st.optimizationTips?.some(item => item.toLowerCase().includes(lc)) ||
+    st.costConsiderations?.some(item => item.toLowerCase().includes(lc)) ||
+    st.scalabilityConcerns?.some(item => item.toLowerCase().includes(lc)) ||
+    st.debuggingTips?.some(item => item.toLowerCase().includes(lc)) ||
+    st.visualAids?.some(aid =>
+      aid.title?.toLowerCase().includes(lc) ||
+      aid.body?.toLowerCase().includes(lc) ||
+      aid.warning?.toLowerCase().includes(lc)
+    ) ||
+    st.badges?.some(badge => badge.toLowerCase().includes(lc)) ||
     st.interview?.question?.toLowerCase().includes(lc) ||
     st.interview?.answer?.toLowerCase().includes(lc)
   );
@@ -220,6 +344,12 @@ function TopicSections({ sections, topicId, sqlMode, searchTerm, practiceProgres
             onOpenChange={next => setOpenIndex(next ? i : -1)}
             level="h4"
           >
+            {section.outcome && (
+              <div className="phase-outcome-card">
+                <span>You can now do:</span>
+                <p>{section.outcome}</p>
+              </div>
+            )}
             <div className="subtopic-grid">
               {matchingSubtopics.map(st => (
                 <SubtopicCard
@@ -306,6 +436,44 @@ function OverviewSection({ overview }) {
         </section>
       ))}
     </div>
+  );
+}
+
+// ── Source Mapping Panel ───────────────────────────────────────────────────────
+function SourceMappingPanel({ mappings }) {
+  const [expanded, setExpanded] = useState(false);
+  if (!mappings?.length) return null;
+  return (
+    <section className="source-mapping-panel">
+      <button
+        type="button"
+        className="source-mapping-toggle"
+        onClick={() => setExpanded(e => !e)}
+        aria-expanded={expanded}
+      >
+        <span className="source-mapping-title">How This Lesson Uses Official Docs</span>
+        <span className="source-mapping-count">{mappings.length} concept{mappings.length !== 1 ? 's' : ''} mapped</span>
+        <span className="source-mapping-chevron" aria-hidden="true">{expanded ? '▴' : '▾'}</span>
+      </button>
+      {expanded && (
+        <ul className="source-mapping-list">
+          {mappings.map((m, i) => (
+            <li key={i} className="source-mapping-item">
+              <div className="source-mapping-concept">{m.concept}</div>
+              <a
+                href={m.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="source-mapping-source"
+              >
+                {m.officialSource} ↗
+              </a>
+              <p className="source-mapping-usage">{m.howThisLessonUsesIt}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -737,6 +905,7 @@ const TopicDetails = memo(function TopicDetails({
       <NotesBox topicId={topic.id} notes={notes} onNotesChange={onNotesChange} />
       <ResumeRelevance text={topic.resumeRelevance} />
       <DocLinksPanel docIds={topic.docs} />
+      <SourceMappingPanel mappings={mod?.documentationMapping} />
       <NextStepCard
         nextStep={topic.nextStep}
         currentStep={topic.step}

@@ -1,4 +1,42 @@
 export const dbtModule = {
+  documentationMapping: [
+    {
+      concept: 'ELT and the analytics engineering model',
+      officialSource: 'dbt Documentation — What is dbt?',
+      sourceUrl: 'https://docs.getdbt.com/docs/introduction',
+      howThisLessonUsesIt: 'The "T in ELT" framing, the distinction from ETL tools, and the analytics engineering role are explained using dbt\'s own product documentation language and positioning.',
+    },
+    {
+      concept: 'Model materializations (view, table, incremental, ephemeral)',
+      officialSource: 'dbt Docs — Materializations',
+      sourceUrl: 'https://docs.getdbt.com/docs/build/materializations',
+      howThisLessonUsesIt: 'The four materialization types, their performance trade-offs, the is_incremental() macro pattern, and merge vs append strategies are taught exactly as documented in the official materializations guide.',
+    },
+    {
+      concept: 'source() and ref() functions',
+      officialSource: 'dbt Docs — Sources',
+      sourceUrl: 'https://docs.getdbt.com/docs/build/sources',
+      howThisLessonUsesIt: 'The schema.yml source declaration syntax, source() call in models, freshness checks, and ref() dependency graph resolution follow the official dbt sources and refs documentation.',
+    },
+    {
+      concept: 'dbt generic and singular tests',
+      officialSource: 'dbt Docs — Data Tests',
+      sourceUrl: 'https://docs.getdbt.com/docs/build/data-tests',
+      howThisLessonUsesIt: 'Built-in generic tests (unique, not_null, relationships, accepted_values), schema.yml test syntax, and custom singular test SQL files match the official dbt testing documentation.',
+    },
+    {
+      concept: 'Snapshots for SCD Type 2',
+      officialSource: 'dbt Docs — Snapshots',
+      sourceUrl: 'https://docs.getdbt.com/docs/build/snapshots',
+      howThisLessonUsesIt: 'Snapshot config block (strategy, unique_key, updated_at), the dbt_scd_id surrogate key, and dbt_valid_from / dbt_valid_to fields come directly from the official dbt snapshots reference.',
+    },
+    {
+      concept: 'Jinja templating and macros',
+      officialSource: 'dbt Docs — Jinja & Macros',
+      sourceUrl: 'https://docs.getdbt.com/docs/build/jinja-macros',
+      howThisLessonUsesIt: 'The {{ macro() }} call syntax, macro definition in the macros/ directory, and the use of dbt-utils package macros follow the official Jinja & Macros guide.',
+    },
+  ],
   sections: [
     {
       title: 'dbt Foundations',

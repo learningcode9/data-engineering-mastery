@@ -1,8 +1,10 @@
-// ─── Learning Path — 7 progressive phases ─────────────────────────────────────
+import { seniorAzureLearningPathTemplate } from './seniorAzurePath.js';
+
+// ─── Legacy lesson content retained for hydration ─────────────────────────────
 // Phase 1: all orientation guide lessons — never locked, always open.
 // Phases 2–7: topic-based lessons, unlock sequentially as phases complete.
 
-export const learningPathPhases = [
+const legacyLearningPathPhases = [
 
   // ═══════════════════════════════════════════════════════════════════════════
   // PHASE 1 — Understand Data Engineering
@@ -1394,6 +1396,44 @@ export const learningPathPhases = [
     ],
   },
 ];
+
+const legacyLessons = legacyLearningPathPhases.flatMap(phase =>
+  phase.modules.flatMap(module =>
+    module.lessons.map(lesson => ({ ...lesson, _legacyPhaseId: phase.id, _legacyModuleId: module.id }))
+  )
+);
+
+const legacyLessonById = new Map(legacyLessons.map(lesson => [lesson.id, lesson]));
+const legacyLessonsByTopic = legacyLessons.reduce((acc, lesson) => {
+  if (!lesson.topicId) return acc;
+  if (!acc.has(lesson.topicId)) acc.set(lesson.topicId, []);
+  acc.get(lesson.topicId).push(lesson);
+  return acc;
+}, new Map());
+
+function hydrateLesson(templateLesson) {
+  const legacyLesson = legacyLessonById.get(templateLesson.id)
+    ?? legacyLessonsByTopic.get(templateLesson.topicId)?.[0]
+    ?? null;
+
+  return {
+    ...(legacyLesson ?? {}),
+    ...templateLesson,
+    guide: templateLesson.guide ?? legacyLesson?.guide ?? null,
+    body: templateLesson.body ?? legacyLesson?.body ?? '',
+    label: templateLesson.label ?? legacyLesson?.label ?? null,
+    difficulty: templateLesson.difficulty ?? legacyLesson?.difficulty ?? null,
+    nextLesson: templateLesson.nextLesson ?? legacyLesson?.nextLesson ?? null,
+  };
+}
+
+export const learningPathPhases = seniorAzureLearningPathTemplate.map(phase => ({
+  ...phase,
+  modules: phase.modules.map(module => ({
+    ...module,
+    lessons: module.lessons.map(hydrateLesson),
+  })),
+}));
 
 export function getLearningPathLessons() {
   return learningPathPhases.flatMap(phase =>

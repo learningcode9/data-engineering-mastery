@@ -86,13 +86,14 @@ function PhaseTimeline({ phases, trackProgress }) {
 }
 
 function TrackCard({ track, onSelect, isSelected }) {
+  const difficulty = track.difficulty ?? 'All levels';
   const difficultyColor = {
     'Beginner → Intermediate': '#2f756e',
     'Beginner → Advanced': '#f59e0b',
     'Intermediate → Advanced': '#e25a1c',
     'Advanced': '#dc2626',
     'All levels': '#6b7cdb',
-  }[track.difficulty] ?? '#687a76';
+  }[difficulty] ?? '#687a76';
 
   return (
     <button
@@ -109,13 +110,16 @@ function TrackCard({ track, onSelect, isSelected }) {
         <span className="rt-track-duration">{track.duration}</span>
       </div>
       <span className="rt-track-difficulty" style={{ color: difficultyColor }}>
-        {track.difficulty.split(' → ').pop()}
+        {difficulty.split(' → ').pop()}
       </span>
     </button>
   );
 }
 
 function TrackDetail({ track }) {
+  const prerequisites = track.prerequisites ?? [];
+  const skills = track.skills ?? [];
+
   return (
     <div className="rt-track-detail">
       <div className="rt-detail-header">
@@ -133,7 +137,7 @@ function TrackDetail({ track }) {
         </div>
         <div className="rt-meta-item">
           <span className="rt-meta-label">Level</span>
-          <span className="rt-meta-value">{track.difficulty}</span>
+          <span className="rt-meta-value">{track.difficulty ?? 'All levels'}</span>
         </div>
         <div className="rt-meta-item">
           <span className="rt-meta-label">Phases</span>
@@ -141,11 +145,11 @@ function TrackDetail({ track }) {
         </div>
       </div>
 
-      {track.prerequisites.length > 0 && (
+      {prerequisites.length > 0 && (
         <div className="rt-prerequisites">
           <span className="rt-prereq-label">Prerequisites</span>
           <div className="rt-prereq-chips">
-            {track.prerequisites.map(p => (
+            {prerequisites.map(p => (
               <span key={p} className="rt-prereq-chip">{p}</span>
             ))}
           </div>
@@ -155,7 +159,7 @@ function TrackDetail({ track }) {
       <div className="rt-skills-row">
         <span className="rt-skills-label">Key skills</span>
         <div className="rt-skills-chips">
-          {track.skills.map(s => (
+          {skills.map(s => (
             <span key={s} className="rt-skill-chip">{s}</span>
           ))}
         </div>

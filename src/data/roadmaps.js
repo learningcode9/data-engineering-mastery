@@ -1,4 +1,6 @@
-export const roadmapTracks = [
+import { seniorAzureRoadmapTrack } from './seniorAzurePath.js';
+
+const legacyRoadmapTracks = [
   {
     id: 'sql-engineer',
     title: 'SQL Engineer',
@@ -941,4 +943,9 @@ export const roadmapTracks = [
       },
     ],
   },
+];
+
+export const roadmapTracks = [
+  seniorAzureRoadmapTrack,
+  ...legacyRoadmapTracks.filter(track => track.id !== seniorAzureRoadmapTrack.id),
 ];

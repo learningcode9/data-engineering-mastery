@@ -147,6 +147,30 @@ export const DOC_SOURCES = {
     url: 'https://learn.microsoft.com/en-us/azure/synapse-analytics/',
     description: 'Unified analytics for data warehousing and big data',
   },
+  'ms-fabric-dimensional-modeling': {
+    id: 'ms-fabric-dimensional-modeling',
+    vendor: 'Microsoft',
+    vendorColor: '#0078d4',
+    title: 'Dimensional Modeling in Fabric Warehouse',
+    url: 'https://learn.microsoft.com/en-us/fabric/data-warehouse/dimensional-modeling-overview',
+    description: 'Microsoft guidance for facts, dimensions, star schemas, keys, and slowly changing dimensions',
+  },
+  'fabric-load-dimensional-tables': {
+    id: 'fabric-load-dimensional-tables',
+    vendor: 'Microsoft',
+    vendorColor: '#0078d4',
+    title: 'Load Dimensional Tables in Fabric Warehouse',
+    url: 'https://learn.microsoft.com/en-us/fabric/data-warehouse/dimensional-modeling-load-tables',
+    description: 'Patterns for loading fact and dimension tables in Microsoft Fabric Warehouse',
+  },
+  'powerbi-star-schema': {
+    id: 'powerbi-star-schema',
+    vendor: 'Microsoft',
+    vendorColor: '#0078d4',
+    title: 'Star Schema Guidance for Power BI',
+    url: 'https://learn.microsoft.com/en-us/power-bi/guidance/star-schema',
+    description: 'Why star schemas improve semantic model usability, relationships, and performance',
+  },
 
   // ── Apache ─────────────────────────────────────────────────────────────────
   'apache-spark': {
@@ -198,6 +222,22 @@ export const DOC_SOURCES = {
     title: 'Unity Catalog Documentation',
     url: 'https://docs.databricks.com/en/data-governance/unity-catalog/index.html',
     description: 'Unified governance for all data assets in Databricks',
+  },
+  'databricks-medallion': {
+    id: 'databricks-medallion',
+    vendor: 'Databricks',
+    vendorColor: '#e44c36',
+    title: 'Medallion Lakehouse Architecture',
+    url: 'https://docs.databricks.com/en/lakehouse/medallion.html',
+    description: 'Bronze, Silver, and Gold layer design for lakehouse data quality',
+  },
+  'kimball-dimensional-modeling': {
+    id: 'kimball-dimensional-modeling',
+    vendor: 'Kimball Group',
+    vendorColor: '#687a76',
+    title: 'Kimball Dimensional Modeling Techniques',
+    url: 'https://www.kimballgroup.com/data-warehouse-business-intelligence-resources/kimball-techniques/dimensional-modeling-techniques/',
+    description: 'Canonical dimensional modeling patterns: grain, facts, dimensions, and conformance',
   },
 
   // ── AWS ────────────────────────────────────────────────────────────────────

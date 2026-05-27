@@ -2,6 +2,32 @@
 // Delta Live Tables, CDC, exactly-once semantics, watermarking.
 
 export const kafkaStreamingModule = {
+  documentationMapping: [
+    {
+      concept: 'Kafka topics, partitions, and consumer groups',
+      officialSource: 'Apache Kafka Documentation — Introduction',
+      sourceUrl: 'https://kafka.apache.org/documentation/#introduction',
+      howThisLessonUsesIt: 'The partition-based parallelism model, consumer group offset management, producer acknowledgment levels (acks=0/1/all), and the log-structured storage format are taught using the official Kafka documentation.',
+    },
+    {
+      concept: 'Spark Structured Streaming programming model',
+      officialSource: 'Apache Spark Documentation — Structured Streaming Programming Guide',
+      sourceUrl: 'https://spark.apache.org/docs/latest/structured-streaming-programming-guide.html',
+      howThisLessonUsesIt: 'The unbounded table abstraction, input/output modes (append, complete, update), the trigger types (once, availableNow, processing time), and the checkpointing mechanism for fault tolerance follow the official Structured Streaming guide.',
+    },
+    {
+      concept: 'Watermarks and late data handling',
+      officialSource: 'Apache Spark Documentation — Structured Streaming: Handling Late Data and Watermarking',
+      sourceUrl: 'https://spark.apache.org/docs/latest/structured-streaming-programming-guide.html#handling-late-data-and-watermarking',
+      howThisLessonUsesIt: 'The withWatermark() API, how event-time watermarks define the state retention boundary, and the trade-off between lateness tolerance and result completeness are explained using the official watermarking section.',
+    },
+    {
+      concept: 'Delta Lake as a streaming sink',
+      officialSource: 'Databricks Documentation — Delta Lake Streaming',
+      sourceUrl: 'https://docs.databricks.com/en/structured-streaming/delta-lake.html',
+      howThisLessonUsesIt: 'Using Delta as both a streaming source and sink, idempotent writes via transaction log, and the trigger(availableNow=True) pattern for batch-style incremental processing follow the official Databricks structured streaming + Delta documentation.',
+    },
+  ],
   sections: [
     {
       title: 'Kafka Fundamentals',

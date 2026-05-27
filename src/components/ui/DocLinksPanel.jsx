@@ -24,10 +24,10 @@ export function DocLinksPanel({ docIds }) {
         aria-expanded={expanded}
       >
         <div className="doc-links-header-left">
-          <span className="doc-links-badge">Based on Official Documentation</span>
+          <span className="doc-links-badge">Official Documentation References</span>
           <h4>Official Docs &amp; References</h4>
           <p>
-            {sourceCount} {sourceCount === 1 ? 'reference' : 'references'} across {vendorCount} {vendorCount === 1 ? 'source' : 'sources'}
+            {sourceCount} {sourceCount === 1 ? 'reference' : 'references'} across {vendorCount} {vendorCount === 1 ? 'source' : 'sources'} — links open official documentation
           </p>
         </div>
         <span className="doc-links-chevron" aria-hidden="true">

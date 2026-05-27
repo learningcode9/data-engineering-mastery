@@ -2,6 +2,32 @@
 // Each scenario: requirements → architecture → scaling → tradeoffs → interview expectations
 
 export const systemDesignModule = {
+  documentationMapping: [
+    {
+      concept: 'Lambda and Kappa architecture patterns',
+      officialSource: 'Azure Architecture Center — Big Data Architectures',
+      sourceUrl: 'https://learn.microsoft.com/en-us/azure/architecture/data-guide/big-data/',
+      howThisLessonUsesIt: 'The batch layer vs speed layer trade-off in Lambda, the unified log-first approach in Kappa, and the Azure service mapping for each layer (Event Hubs, Stream Analytics, Synapse) follow the Azure Architecture Center big data guide.',
+    },
+    {
+      concept: 'Medallion architecture (Bronze-Silver-Gold)',
+      officialSource: 'Databricks Documentation — Medallion Architecture',
+      sourceUrl: 'https://docs.databricks.com/en/lakehouse/medallion.html',
+      howThisLessonUsesIt: 'Raw ingestion in Bronze, cleansed/conformed data in Silver, business-level aggregates in Gold, and the Delta Lake transaction log as the enforcement mechanism are explained using the official Databricks medallion architecture documentation.',
+    },
+    {
+      concept: 'GDPR erasure and right-to-be-forgotten in Delta Lake',
+      officialSource: 'Databricks Documentation — Delta Lake Delete',
+      sourceUrl: 'https://docs.databricks.com/en/delta/selective-overwrite.html',
+      howThisLessonUsesIt: 'The DELETE + VACUUM workflow for physical data removal, the retention period requirement before VACUUM removes old versions, and the challenge of streaming checkpoints referencing deleted data follow the official Delta Lake documentation.',
+    },
+    {
+      concept: 'Data observability pillars',
+      officialSource: 'Azure Architecture Center — Data Management and Analytics Scenario',
+      sourceUrl: 'https://learn.microsoft.com/en-us/azure/architecture/solution-ideas/articles/analytics-start-here',
+      howThisLessonUsesIt: 'The five observability pillars (freshness, distribution, volume, schema, lineage), alerting thresholds, and the monitoring integration with Azure Monitor and Purview are framed using the Azure analytics architecture guidance.',
+    },
+  ],
   sections: [
     {
       title: 'Streaming & Real-Time Systems',

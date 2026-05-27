@@ -45,6 +45,15 @@ function OverviewTab({ project }) {
             </>
           )}
 
+          {project.dataModelingPatterns?.length > 0 && (
+            <>
+              <h3>Data Modeling Patterns</h3>
+              <ul className="proj-challenges-list proj-challenges-list--main">
+                {project.dataModelingPatterns.map((pattern, i) => <li key={i}>{pattern}</li>)}
+              </ul>
+            </>
+          )}
+
           {project.challenges?.length > 0 && (
             <>
               <h3>Key Engineering Challenges</h3>

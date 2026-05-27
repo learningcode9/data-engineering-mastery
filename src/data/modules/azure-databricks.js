@@ -1,4 +1,36 @@
 export const databricksModule = {
+  documentationMapping: [
+    {
+      concept: 'Delta Lake ACID transactions and time travel',
+      officialSource: 'Delta Lake Documentation — Table Utility Commands',
+      sourceUrl: 'https://docs.delta.io/latest/delta-utility.html',
+      howThisLessonUsesIt: 'The transaction log (_delta_log) as the source of ACID guarantees, DESCRIBE HISTORY syntax, VERSION AS OF / TIMESTAMP AS OF for time travel, and VACUUM retention are taught using the official Delta Lake documentation.',
+    },
+    {
+      concept: 'Unity Catalog 3-level namespace',
+      officialSource: 'Databricks Documentation — Unity Catalog',
+      sourceUrl: 'https://docs.databricks.com/en/data-governance/unity-catalog/index.html',
+      howThisLessonUsesIt: 'The catalog.schema.table namespace, metastore hierarchy, securable objects (catalog, schema, table, view, function), and GRANT SQL syntax follow the official Unity Catalog documentation.',
+    },
+    {
+      concept: 'Auto Loader incremental ingestion',
+      officialSource: 'Databricks Documentation — Auto Loader',
+      sourceUrl: 'https://docs.databricks.com/en/ingestion/cloud-object-storage/auto-loader/index.html',
+      howThisLessonUsesIt: 'The cloudFiles source format, directory listing vs file notification modes, schema inference and evolution options, and checkpoint directory behavior are explained using the official Auto Loader documentation.',
+    },
+    {
+      concept: 'Delta Live Tables declarative pipelines',
+      officialSource: 'Databricks Documentation — Delta Live Tables',
+      sourceUrl: 'https://docs.databricks.com/en/delta-live-tables/index.html',
+      howThisLessonUsesIt: 'The @dlt.table and @dlt.expect decorators, pipeline definition vs trigger, the difference between Complete and Append/SCD Type 1/2 modes, and the DLT event log follow the official DLT documentation.',
+    },
+    {
+      concept: 'Databricks Workflows orchestration',
+      officialSource: 'Databricks Documentation — Workflows',
+      sourceUrl: 'https://docs.databricks.com/en/workflows/index.html',
+      howThisLessonUsesIt: 'Multi-task job DAG construction, task dependencies, retry policies, cluster type selection per task, and job cluster vs all-purpose cluster trade-offs follow the official Databricks Workflows documentation.',
+    },
+  ],
   sections: [
     {
       title: 'Workspace Basics',

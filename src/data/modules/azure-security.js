@@ -1,4 +1,36 @@
 export const azureSecurityModule = {
+  documentationMapping: [
+    {
+      concept: 'Managed Identity lifecycle and assignment',
+      officialSource: 'Microsoft Entra Documentation — Managed Identities for Azure Resources',
+      sourceUrl: 'https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview',
+      howThisLessonUsesIt: 'System-assigned vs user-assigned identity trade-offs, the token acquisition flow via IMDS endpoint, and the lifecycle tie to the parent resource are explained using the official Managed Identity overview.',
+    },
+    {
+      concept: 'Key Vault secrets and ADF linked service integration',
+      officialSource: 'Microsoft Azure Documentation — Azure Key Vault Overview',
+      sourceUrl: 'https://learn.microsoft.com/en-us/azure/key-vault/general/overview',
+      howThisLessonUsesIt: 'Key Vault secret versioning, the Key Vault-backed ADF linked service pattern, Databricks secret scopes, and the RBAC vs Access Policies authorization models are taught using the official Key Vault documentation.',
+    },
+    {
+      concept: 'Azure RBAC least-privilege access control',
+      officialSource: 'Microsoft Azure Documentation — Azure Role-Based Access Control',
+      sourceUrl: 'https://learn.microsoft.com/en-us/azure/role-based-access-control/overview',
+      howThisLessonUsesIt: 'The control plane vs data plane distinction, scope hierarchy (management group → subscription → resource group → resource), built-in roles (Storage Blob Data Reader/Contributor), and deny assignments follow the official Azure RBAC documentation.',
+    },
+    {
+      concept: 'Private Endpoints and private DNS zones',
+      officialSource: 'Microsoft Azure Documentation — Private Endpoint Overview',
+      sourceUrl: 'https://learn.microsoft.com/en-us/azure/private-link/private-endpoint-overview',
+      howThisLessonUsesIt: 'Network interface injection into the VNet, private DNS zone requirements for name resolution override, and the public access disable pattern for storage accounts are explained using the official Private Link documentation.',
+    },
+    {
+      concept: 'Workload Identity Federation for OIDC-based CI/CD',
+      officialSource: 'Microsoft Entra Documentation — Workload Identity Federation',
+      sourceUrl: 'https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation',
+      howThisLessonUsesIt: 'The federated credential configuration on an app registration, the GitHub Actions subject claim format, and the keyless authentication flow replacing service principal secrets are taught using the official Workload Identity Federation documentation.',
+    },
+  ],
   sections: [
     {
       title: 'Azure Managed Identity',

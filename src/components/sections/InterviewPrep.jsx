@@ -61,6 +61,9 @@ function buildAllQuestions() {
         a: q.a,
         scenario: q.scenario ?? null,
         detailedAnswer: q.detailedAnswer ?? null,
+        productionTradeoff: q.productionTradeoff ?? null,
+        interviewerExpectation: q.interviewerExpectation ?? null,
+        commonWeakAnswer: q.commonWeakAnswer ?? null,
         followUps: q.followUps ?? null,
         tags: q.tags ?? null,
       });
@@ -80,6 +83,9 @@ function buildAllQuestions() {
           a: q.a,
           scenario: q.scenario ?? null,
           detailedAnswer: q.detailedAnswer ?? null,
+          productionTradeoff: q.productionTradeoff ?? null,
+          interviewerExpectation: q.interviewerExpectation ?? null,
+          commonWeakAnswer: q.commonWeakAnswer ?? null,
           followUps: q.followUps ?? null,
           tags: q.tags ?? null,
         });
@@ -319,6 +325,29 @@ function QuestionCard({ item, isExpanded, onToggle, isReviewed, onToggleReviewed
             <div className="iqc-answer-note">
               <span className="iqc-note-label">Real-world context</span>
               <p className="iqc-note-text">{item.scenario}</p>
+            </div>
+          )}
+
+          {(item.productionTradeoff || item.interviewerExpectation || item.commonWeakAnswer) && (
+            <div className="iqc-answer-note">
+              {item.productionTradeoff && (
+                <>
+                  <span className="iqc-note-label">Production tradeoff</span>
+                  <p className="iqc-note-text">{item.productionTradeoff}</p>
+                </>
+              )}
+              {item.interviewerExpectation && (
+                <>
+                  <span className="iqc-note-label">Interviewer expectation</span>
+                  <p className="iqc-note-text">{item.interviewerExpectation}</p>
+                </>
+              )}
+              {item.commonWeakAnswer && (
+                <>
+                  <span className="iqc-note-label">Common weak answer</span>
+                  <p className="iqc-note-text">{item.commonWeakAnswer}</p>
+                </>
+              )}
             </div>
           )}
 

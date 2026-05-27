@@ -132,8 +132,13 @@ spark.sql("ANALYZE TABLE gold.daily_sales COMPUTE STATISTICS FOR ALL COLUMNS")` 
       'Optimized Gold layer queries by 60% using Z-ORDER clustering and table statistics',
       'Orchestrated multi-notebook Databricks pipeline with ADF dependency management and alerting',
     ],
-    patterns: ['Medallion Architecture', 'Auto Loader', 'SCD Type 2', 'Incremental Loading', 'MERGE Upsert', 'Data Quality', 'Orchestration', 'CI/CD', 'RBAC Security', 'Cost Optimization'],
-    officialDocs: ['ms-databricks', 'databricks-docs', 'delta-lake', 'databricks-unity-catalog', 'ms-adf'],
+    patterns: ['Medallion Architecture', 'Star Schema', 'Fact/Dimension Modeling', 'Conformed Dimensions', 'Data Marts', 'Auto Loader', 'SCD Type 2', 'Incremental Loading', 'MERGE Upsert', 'Data Quality', 'Orchestration', 'CI/CD', 'RBAC Security', 'Cost Optimization'],
+    dataModelingPatterns: [
+      'Gold layer exposes fact_sales_line with conformed dim_date, dim_store, dim_product, and SCD2 dim_customer.',
+      'Revenue reconciliation compares Bronze/Silver source totals to Gold fact totals by business date before Power BI refresh.',
+      'Product and customer dimensions are shared across daily sales and top-product marts to prevent metric drift.',
+    ],
+    officialDocs: ['ms-databricks', 'databricks-docs', 'delta-lake', 'databricks-unity-catalog', 'ms-adf', 'ms-fabric-dimensional-modeling', 'powerbi-star-schema'],
     resumeTiers: {
       beginner: [
         'Built Bronze-Silver-Gold medallion pipeline on Databricks using PySpark and Delta Lake',
@@ -347,8 +352,13 @@ def load(df: pd.DataFrame, engine, table: str, pk: str) -> int:
       'Implemented UPSERT load pattern ensuring zero data duplication on pipeline reruns',
       'Added data quality validation layer quarantining bad records to separate table for review',
     ],
-    patterns: ['Incremental Loading', 'Watermark Pattern', 'Idempotent UPSERT', 'Data Quality', 'Retry Handling', 'Logging', 'CI/CD'],
-    officialDocs: ['python-docs', 'postgresql-docs'],
+    patterns: ['Incremental Loading', 'Watermark Pattern', 'Idempotent UPSERT', 'SCD Type 1', 'SCD Type 2', 'Reconciliation Checks', 'Data Quality', 'Retry Handling', 'Logging', 'CI/CD'],
+    dataModelingPatterns: [
+      'Use Type 1 updates for corrections and Type 2 rows for address, segment, or territory history.',
+      'Load target dimensions before facts so fact rows can resolve surrogate keys correctly.',
+      'Track source-to-target row counts and SUM(amount) by date to catch duplicate or missing loads.',
+    ],
+    officialDocs: ['python-docs', 'postgresql-docs', 'ms-fabric-dimensional-modeling'],
     resumeTiers: {
       beginner: [
         'Built Python-based incremental ETL pipeline that extracts only changed records using a high-watermark pattern',
@@ -572,8 +582,13 @@ def process_batch(batch_df, batch_id):
       'Handled insert/update/delete events with idempotent MERGE operations in Delta Lake',
       'Configured checkpointing and exactly-once semantics for fault-tolerant streaming pipeline',
     ],
-    patterns: ['CDC', 'Kafka Streaming', 'Exactly-Once Semantics', 'Idempotent MERGE', 'Schema Registry', 'Retry Handling', 'Monitoring', 'CI/CD'],
-    officialDocs: ['apache-kafka', 'spark-structured-streaming', 'delta-lake', 'kafka-streams'],
+    patterns: ['CDC', 'Kafka Streaming', 'SCD Type 2 from CDC', 'Fact/Dimension Modeling', 'Exactly-Once Semantics', 'Idempotent MERGE', 'Schema Registry', 'Retry Handling', 'Monitoring', 'CI/CD'],
+    dataModelingPatterns: [
+      'CDC updates customer/account dimensions using SCD2 when historical state matters for fraud or risk reporting.',
+      'Transaction facts remain immutable; correction events are applied through idempotent MERGE and audit checks.',
+      'Deletes are modeled explicitly through tombstones or soft-delete flags before downstream marts consume the data.',
+    ],
+    officialDocs: ['apache-kafka', 'spark-structured-streaming', 'delta-lake', 'kafka-streams', 'ms-fabric-dimensional-modeling'],
     resumeTiers: {
       beginner: [
         'Implemented CDC pipeline from PostgreSQL to Delta Lake using Debezium, Kafka, and Spark Structured Streaming',
@@ -1006,8 +1021,13 @@ ALTER TABLE healthcare.silver.silver_patient_events
       'Achieved full data lineage tracking from raw ADLS ingestion to Power BI dashboard',
       'Reduced data quality incidents by 90% by replacing ad-hoc notebooks with declarative DLT pipelines',
     ],
-    patterns: ['Medallion Architecture', 'DLT Pipelines', 'Data Quality Constraints', 'Unity Catalog RBAC', 'Column Masking', 'Row-Level Security', 'Data Lineage', 'CI/CD', 'HIPAA Compliance'],
-    officialDocs: ['databricks-docs', 'databricks-unity-catalog', 'databricks-delta-live-tables', 'delta-lake', 'ms-purview'],
+    patterns: ['Medallion Architecture', 'Fact/Dimension Gold Marts', 'Conformed Dimensions', 'DLT Pipelines', 'Data Quality Constraints', 'Unity Catalog RBAC', 'Column Masking', 'Row-Level Security', 'Data Lineage', 'CI/CD', 'HIPAA Compliance'],
+    dataModelingPatterns: [
+      'Bronze keeps raw events, Silver conforms patient/provider entities, and Gold publishes governed facts/dimensions for clinical analytics.',
+      'Gold marts are modeled around business processes such as admissions, procedures, and discharge events.',
+      'Conformed dim_date, dim_facility, and dim_provider keep clinical dashboards consistent across domains.',
+    ],
+    officialDocs: ['databricks-docs', 'databricks-unity-catalog', 'databricks-delta-live-tables', 'delta-lake', 'ms-purview', 'databricks-medallion', 'ms-fabric-dimensional-modeling'],
     resumeTiers: {
       beginner: [
         'Implemented Databricks Delta Live Tables Bronze and Silver pipeline with Auto Loader and data quality expectations',
@@ -1926,8 +1946,13 @@ blocked.writeStream.foreachBatch(publish_to_service_bus).trigger(processingTime=
       'Reduced fraud losses by 35% over rule-based system while cutting false positive rate from 3% to 0.8%',
       'Deployed A/B model testing framework enabling safe model updates without production fraud risk',
     ],
-    patterns: ['Kafka Streaming', 'Feature Store', 'ML Online Scoring', 'Real-time Decision', 'Exactly-Once', 'Model Monitoring', 'Audit Logging', 'A/B Testing', 'Graceful Degradation'],
-    officialDocs: ['apache-kafka', 'spark-structured-streaming', 'delta-lake', 'ms-databricks', 'databricks-structured-streaming'],
+    patterns: ['Kafka Streaming', 'Feature Store', 'Transaction Fact Modeling', 'Fraud Decision Data Mart', 'ML Online Scoring', 'Real-time Decision', 'Exactly-Once', 'Model Monitoring', 'Audit Logging', 'A/B Testing', 'Graceful Degradation'],
+    dataModelingPatterns: [
+      'Model immutable fact_transactions separately from fact_fraud_decisions so every model decision is auditable.',
+      'Use conformed dim_account, dim_merchant, dim_time, and dim_model_version for fraud analyst slicing.',
+      'Store feature snapshots at decision time to make false-positive investigations reproducible.',
+    ],
+    officialDocs: ['apache-kafka', 'spark-structured-streaming', 'delta-lake', 'ms-databricks', 'databricks-structured-streaming', 'ms-fabric-dimensional-modeling'],
     resumeTiers: {
       beginner: [
         'Built real-time fraud scoring pipeline integrating Kafka streaming with Azure ML managed model endpoint',
@@ -2188,8 +2213,13 @@ for query in validation_queries:
       'Reduced infrastructure operational complexity by 60% and estimated platform costs by 30% through Fabric capacity consolidation',
       'Validated migration correctness with automated row-count and checksum comparison across all tables before production cutover',
     ],
-    patterns: ['Medallion Architecture', 'OneLake Storage', 'Direct Lake', 'Zero-Copy Migration', 'CI/CD', 'Data Governance', 'Cost Optimization'],
-    officialDocs: ['ms-fabric-overview', 'ms-fabric-onelake', 'ms-fabric-lakehouse', 'ms-fabric-data-factory', 'ms-fabric-semantic-models', 'ms-fabric-deployment'],
+    patterns: ['Medallion Architecture', 'Star Schema Migration', 'Semantic Model Validation', 'OneLake Storage', 'Direct Lake', 'Zero-Copy Migration', 'CI/CD', 'Data Governance', 'Cost Optimization'],
+    dataModelingPatterns: [
+      'Validate migrated facts/dimensions against Synapse using row-count, checksum, and revenue reconciliation checks.',
+      'Preserve star-schema relationships and measure definitions before enabling Direct Lake semantic models.',
+      'Refactor overly flat Synapse reporting tables into Fabric Warehouse facts and dimensions when migration exposes BI ambiguity.',
+    ],
+    officialDocs: ['ms-fabric-overview', 'ms-fabric-onelake', 'ms-fabric-lakehouse', 'ms-fabric-data-factory', 'ms-fabric-semantic-models', 'ms-fabric-deployment', 'powerbi-star-schema', 'fabric-load-dimensional-tables'],
     resumeTiers: {
       beginner: [
         'Migrated Azure Synapse Analytics lakehouse to Microsoft Fabric using OneLake shortcuts for zero-copy data access from existing ADLS Gen2 storage',

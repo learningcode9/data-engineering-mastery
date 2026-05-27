@@ -2,6 +2,38 @@
 // Source: https://learn.microsoft.com/en-us/fabric/
 
 export const fabricModule = {
+  documentationMapping: [
+    {
+      concept: 'OneLake unified storage',
+      officialSource: 'Microsoft Fabric Documentation — OneLake',
+      sourceUrl: 'https://learn.microsoft.com/en-us/fabric/onelake/onelake-overview',
+      howThisLessonUsesIt: 'The single-tenant, hierarchically organized storage model, Delta Parquet as the universal format, and the shortcut mechanism to external data sources are explained using the official OneLake overview.',
+    },
+    {
+      concept: 'Fabric Lakehouse and medallion architecture',
+      officialSource: 'Microsoft Fabric Documentation — Lakehouse',
+      sourceUrl: 'https://learn.microsoft.com/en-us/fabric/data-engineering/lakehouse-overview',
+      howThisLessonUsesIt: 'The Lakehouse item type, Bronze-Silver-Gold layer conventions on top of OneLake, the built-in SQL analytics endpoint, and the relationship between Lakehouse and Warehouse items follow the official Fabric data engineering documentation.',
+    },
+    {
+      concept: 'Direct Lake mode',
+      officialSource: 'Microsoft Fabric Documentation — Direct Lake',
+      sourceUrl: 'https://learn.microsoft.com/en-us/fabric/get-started/direct-lake-overview',
+      howThisLessonUsesIt: 'The framing model and distinction from Import and DirectQuery modes, framing threshold fallback behavior, and the requirement for Delta tables on OneLake are taken directly from the official Direct Lake overview.',
+    },
+    {
+      concept: 'Real-Time Intelligence and KQL',
+      officialSource: 'Microsoft Fabric Documentation — Real-Time Intelligence',
+      sourceUrl: 'https://learn.microsoft.com/en-us/fabric/real-time-intelligence/overview',
+      howThisLessonUsesIt: 'The Eventhouse and KQL Database as the storage layer for streaming data, KQL query syntax for time-series and event analysis, and the integration with Eventstream follow the official Real-Time Intelligence documentation.',
+    },
+    {
+      concept: 'Fabric CI/CD and deployment pipelines',
+      officialSource: 'Microsoft Fabric Documentation — Deployment Pipelines',
+      sourceUrl: 'https://learn.microsoft.com/en-us/fabric/cicd/deployment-pipelines/intro-to-deployment-pipelines',
+      howThisLessonUsesIt: 'The Dev-Test-Prod workspace promotion model, item comparison between stages, and selective deployment capabilities are explained using the official deployment pipelines documentation.',
+    },
+  ],
   sections: [
     {
       title: 'Microsoft Fabric Overview',
