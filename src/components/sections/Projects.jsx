@@ -61,33 +61,33 @@ function ProjectCard({ project, onClick }) {
 const Projects = memo(function Projects() {
   const [selectedProject, setSelectedProject] = useState(null);
 
-  return (
-    <>
-      <section className="section" id="projects">
-        <SectionHeader
-          eyebrow="Portfolio"
-          title="Real-World Projects"
-          description="End-to-end data engineering projects with architecture, code, datasets, and resume bullet points."
-          badge={<Badge variant="muted" size="lg">{projectDetails.length} projects</Badge>}
-        />
-        <div className="projects-grid">
-          {projectDetails.map(project => (
-            <ProjectCard
-              key={project.id}
-              project={project}
-              onClick={setSelectedProject}
-            />
-          ))}
-        </div>
-      </section>
+  if (selectedProject) {
+    return (
+      <ProjectDetail
+        project={selectedProject}
+        onClose={() => setSelectedProject(null)}
+      />
+    );
+  }
 
-      {selectedProject && (
-        <ProjectDetail
-          project={selectedProject}
-          onClose={() => setSelectedProject(null)}
-        />
-      )}
-    </>
+  return (
+    <section className="section" id="projects">
+      <SectionHeader
+        eyebrow="Portfolio"
+        title="Real-World Projects"
+        description="End-to-end data engineering projects with architecture, code, datasets, and resume bullet points."
+        badge={<Badge variant="muted" size="lg">{projectDetails.length} projects</Badge>}
+      />
+      <div className="projects-grid">
+        {projectDetails.map(project => (
+          <ProjectCard
+            key={project.id}
+            project={project}
+            onClick={setSelectedProject}
+          />
+        ))}
+      </div>
+    </section>
   );
 });
 

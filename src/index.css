@@ -4091,57 +4091,95 @@ button:not(:disabled):active { transform: scale(0.97); }
 .project-card-duration { font-size: 12px; color: var(--muted); }
 .project-card-open { font-size: 12px; font-weight: 700; color: var(--strong-green); }
 
-/* ── Project Detail Modal ── */
-.proj-overlay {
-  position: fixed; inset: 0; z-index: 1000;
-  display: flex; align-items: center; justify-content: center;
-  padding: 20px;
-  overflow: hidden;
+/* ── Project detail page (inline, no modal) ── */
+.project-detail-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-bottom: 56px;
+  width: 100%;
+  overflow: visible;
 }
-.proj-overlay-backdrop {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.5);
-  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
-  cursor: pointer; border: none; box-shadow: none; min-height: 0;
+.project-detail-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
-.proj-modal {
-  position: relative; z-index: 1;
+.project-detail-back-btn {
+  flex-shrink: 0;
+}
+.project-detail-close-btn {
+  background: var(--surface);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  color: var(--text);
+  cursor: pointer;
+  min-height: 38px;
+  min-width: 38px;
+  padding: 0 12px;
+  box-shadow: none;
+  transition: background 0.14s, border-color 0.14s, color 0.14s;
+}
+.project-detail-close-btn:hover {
+  background: var(--surface-solid);
+  border-color: #2f756e50;
+  color: var(--heading);
+}
+.project-detail-shell {
+  width: 100%;
   background: var(--surface-solid);
   border: 1px solid var(--card-border);
   border-radius: 18px;
-  width: 100%;
-  max-width: 900px;
-  max-height: 90vh;
+  box-shadow: 0 20px 60px rgba(39, 71, 66, 0.08);
+  padding: 22px 24px 24px;
+}
+.project-detail-header {
   display: flex;
-  flex-direction: column;
-  box-shadow: 0 24px 80px rgba(0,0,0,0.2);
-  animation: slideInModal 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
 }
-@keyframes slideInModal {
-  from { opacity: 0; transform: translateY(20px) scale(0.97); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
+.project-detail-title-row {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
 }
-
-.proj-modal-header {
-  display: flex; align-items: flex-start; justify-content: space-between;
-  padding: 24px 24px 0; gap: 16px;
+.project-detail-icon {
+  font-size: 40px;
+  line-height: 1;
   flex-shrink: 0;
 }
-.proj-modal-title-row { display: flex; gap: 14px; align-items: flex-start; }
-.proj-modal-icon { font-size: 40px; line-height: 1; flex-shrink: 0; }
-.proj-modal-title { font-size: 22px; font-weight: 900; color: var(--heading); margin: 0 0 8px; }
-.proj-modal-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.proj-modal-duration { font-size: 12px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+.project-detail-title {
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--heading);
+  margin: 0 0 8px;
+}
+.project-detail-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.project-detail-duration {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.project-detail-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 18px;
+}
+
 .proj-tag {
   font-size: 10px; font-weight: 700; padding: 2px 8px;
   background: var(--surface); border: 1px solid var(--card-border); border-radius: 999px; color: var(--muted);
 }
-.proj-close-btn {
-  background: var(--surface); border: 1px solid var(--card-border); border-radius: 8px;
-  padding: 6px 12px; font-size: 14px; cursor: pointer; color: var(--text);
-  box-shadow: none; min-height: 0; flex-shrink: 0;
-  transition: background 0.14s;
-}
-.proj-close-btn:hover { background: var(--surface-solid); color: var(--heading); }
 .proj-difficulty {
   font-size: 11px; font-weight: 700; padding: 3px 9px;
   border: 1px solid; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.04em;
@@ -4204,7 +4242,6 @@ button:not(:disabled):active { transform: scale(0.97); }
 .proj-tab:hover { color: var(--heading); }
 .proj-tab--active { color: var(--strong-green); border-bottom-color: var(--strong-green); }
 
-.proj-modal-body { padding: 20px 24px 24px; flex: 1; min-height: 0; overflow-y: auto; }
 .proj-tab-content { display: flex; flex-direction: column; gap: 16px; }
 .proj-tab-content h3 { font-size: 15px; font-weight: 800; color: var(--heading); margin: 8px 0 6px; }
 
@@ -4419,16 +4456,20 @@ button:not(:disabled):active { transform: scale(0.97); }
   .proj-steps-nav { position: static; flex-direction: row; overflow-x: auto; flex-wrap: nowrap; }
 }
 @media (width <= 640px) {
-  .proj-modal { margin: 0; border-radius: 14px 14px 0 0; max-height: 92vh; }
-  .proj-overlay { padding: 0; align-items: flex-end; }
-  .proj-modal-header { padding: 18px 16px 0; }
+  .project-detail-page { gap: 14px; padding-bottom: 40px; }
+  .project-detail-shell { padding: 18px 16px 20px; border-radius: 14px; }
+  .project-detail-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .project-detail-title { font-size: 20px; }
   .proj-completion-bar {
-    margin: 14px 16px 0;
+    margin: 14px 0 0;
     align-items: stretch;
     flex-direction: column;
   }
   .proj-complete-btn { width: 100%; }
-  .proj-modal-body { padding: 16px 16px 20px; }
+  .proj-tabs { padding: 14px 0 0; }
 }
 
 /* ── Analytics Dashboard ── */
@@ -4765,8 +4806,6 @@ button:not(:disabled):active { transform: scale(0.97); }
 
 /* ── Dark mode additions for Phase 2 ── */
 .dark-mode .nb-output-text, .dark-mode .nb-output-stream { background: #0a0f0e; }
-.dark-mode .proj-modal { background: var(--surface-solid); }
-.dark-mode .proj-overlay-backdrop { background: rgba(0,0,0,0.7); }
 .dark-mode .arch-card:hover { box-shadow: 0 4px 20px rgba(47,117,110,0.15); }
 .dark-mode .timed-question-card { background: var(--surface); }
 .dark-mode .analytics-bar-fill { opacity: 0.85; }
@@ -11278,8 +11317,7 @@ button,
   overflow-x: clip; /* clip rather than hidden — doesn't affect sticky children */
 }
 
-/* Exempt elements that legitimately overflow (modals, tooltips, FAB) */
-.proj-overlay,
+/* Exempt elements that legitimately overflow (tooltips, FAB) */
 .coach-panel,
 .search-results,
 .toast-container {

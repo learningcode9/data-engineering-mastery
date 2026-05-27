@@ -427,36 +427,37 @@ export const ProjectDetail = memo(function ProjectDetail({ project, onClose }) {
   useEffect(() => {
     function onKeyDown(e) { if (e.key === 'Escape') onClose(); }
     window.addEventListener('keydown', onKeyDown);
-    document.body.style.overflow = 'hidden';
-    return () => {
-      window.removeEventListener('keydown', onKeyDown);
-      document.body.style.overflow = '';
-    };
+    return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
 
   const hasSeniorNotes = !!project.seniorNotes;
 
   return (
-    <div className="proj-overlay" role="dialog" aria-modal="true" aria-label={project.title}>
-      <div className="proj-overlay-backdrop" onClick={onClose} />
-      <div className="proj-modal">
-        <div className="proj-modal-header">
-          <div className="proj-modal-title-row">
-            <span className="proj-modal-icon" aria-hidden="true">{project.icon}</span>
+    <section className="section project-detail-page" id="project-detail" aria-labelledby={`project-detail-title-${project.id}`}>
+      <div className="project-detail-toolbar">
+        <button type="button" className="secondary-button project-detail-back-btn" onClick={onClose}>
+          ← Back to Projects
+        </button>
+        <button type="button" className="project-detail-close-btn" onClick={onClose} aria-label="Close project detail">
+          ✕
+        </button>
+      </div>
+
+      <div className="project-detail-shell">
+        <div className="project-detail-header">
+          <div className="project-detail-title-row">
+            <span className="project-detail-icon" aria-hidden="true">{project.icon}</span>
             <div>
-              <h2 className="proj-modal-title">{project.title}</h2>
-              <div className="proj-modal-meta">
+              <h2 className="project-detail-title" id={`project-detail-title-${project.id}`}>{project.title}</h2>
+              <div className="project-detail-meta">
                 <DifficultyBadge level={project.difficulty} />
-                <span className="proj-modal-duration">⏱ {project.duration}</span>
-                {project.tags.map(t => (
+                <span className="project-detail-duration">⏱ {project.duration}</span>
+                {project.tags?.map(t => (
                   <span key={t} className="proj-tag">{t}</span>
                 ))}
               </div>
             </div>
           </div>
-          <button type="button" className="proj-close-btn" onClick={onClose} aria-label="Close project detail">
-            ✕
-          </button>
         </div>
 
         <div className="proj-completion-bar">
@@ -492,7 +493,7 @@ export const ProjectDetail = memo(function ProjectDetail({ project, onClose }) {
           })}
         </div>
 
-        <div className="proj-modal-body">
+        <div className="project-detail-content">
           {activeTab === 0 && <OverviewTab project={project} />}
           {activeTab === 1 && <ArchitectureTab project={project} />}
           {activeTab === 2 && <StepsTab project={project} />}
@@ -501,6 +502,6 @@ export const ProjectDetail = memo(function ProjectDetail({ project, onClose }) {
           {activeTab === 5 && <SeniorNotesTab project={project} />}
         </div>
       </div>
-    </div>
+    </section>
   );
 });
