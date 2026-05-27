@@ -77,6 +77,7 @@ const IncidentSimulator = lazy(() => import('./components/sections/IncidentSimul
 const InterviewWarRoom  = lazy(() => import('./components/sections/InterviewWarRoom.jsx').then(m => ({ default: m.InterviewWarRoom })));
 const DailyStandup      = lazy(() => import('./components/sections/DailyStandup.jsx').then(m => ({ default: m.DailyStandup })));
 const HandsOnLabsPanel  = lazy(() => import('./components/sections/HandsOnLabsPanel.jsx'));
+const ResumeStoryBuilder = lazy(() => import('./components/sections/ResumeStoryBuilder.jsx'));
 
 function PageFallback() {
   return (
@@ -459,6 +460,9 @@ const App = memo(function App() {
                 <SectionPreviewGrid onNavigate={navigate} />
                 <Suspense fallback={<PageFallback />}>
                   <HandsOnLabsPanel />
+                </Suspense>
+                <Suspense fallback={<PageFallback />}>
+                  <ResumeStoryBuilder />
                 </Suspense>
               </div>
 

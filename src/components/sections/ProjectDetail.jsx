@@ -2,8 +2,9 @@ import { memo, useState, useEffect } from 'react';
 import { CodeBlock } from '../ui/CodeBlock.jsx';
 import { DocLinksPanel } from '../ui/DocLinksPanel.jsx';
 import useLearningStore from '../../store/learningStore.js';
+import { projectImplementationGuides } from '../../data/projectImplementationGuides.js';
 
-const TABS = ['Overview', 'Architecture', 'Steps', 'Interview', 'Resume', 'Senior Notes'];
+const TABS = ['Overview', 'Implementation', 'Architecture', 'Steps', 'Interview', 'Resume', 'Senior Notes'];
 
 function DifficultyBadge({ level }) {
   const map = {
@@ -92,6 +93,67 @@ function OverviewTab({ project }) {
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function GuideSection({ label, items }) {
+  if (!items?.length) return null;
+  return (
+    <div className="proj-guide-section">
+      <p className="proj-guide-label">{label}</p>
+      <ul className="proj-guide-list">
+        {items.map((item, i) => <li key={i}>{item}</li>)}
+      </ul>
+    </div>
+  );
+}
+
+function GuideBlock({ section, open = false }) {
+  return (
+    <details className="proj-guide-block" open={open}>
+      <summary className="proj-guide-summary">
+        <div>
+          <span className="proj-guide-title">{section.title}</span>
+          <span className="proj-guide-subtitle">{section.summary}</span>
+        </div>
+        <span className="proj-guide-chevron" aria-hidden="true">⌄</span>
+      </summary>
+      <div className="proj-guide-body">
+        {section.sections?.map(sub => (
+          <GuideSection key={sub.label} label={sub.label} items={sub.items} />
+        ))}
+      </div>
+    </details>
+  );
+}
+
+function ImplementationTab({ project }) {
+  const guide = projectImplementationGuides[project.id];
+
+  if (!guide) {
+    return (
+      <div className="proj-tab-content">
+        <p className="proj-overview-text">
+          A step-by-step implementation guide is not available for this project yet.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="proj-tab-content">
+      <div className="proj-guide-intro">
+        <p className="proj-overview-text">
+          Follow the expandable sections below to complete the project like a real Azure Data Engineer.
+          Each block keeps the content practical, readable, and interview-friendly.
+        </p>
+      </div>
+      <div className="proj-guide-listing">
+        {guide.groups.map((section, index) => (
+          <GuideBlock key={section.id} section={section} open={index === 0} />
+        ))}
       </div>
     </div>
   );
@@ -478,6 +540,7 @@ export const ProjectDetail = memo(function ProjectDetail({ project, onClose }) {
         <div className="proj-tabs" role="tablist">
           {TABS.map((tab, i) => {
             if (tab === 'Senior Notes' && !hasSeniorNotes) return null;
+            if (tab === 'Implementation' && !projectImplementationGuides[project.id]) return null;
             return (
               <button
                 key={tab}
@@ -495,11 +558,12 @@ export const ProjectDetail = memo(function ProjectDetail({ project, onClose }) {
 
         <div className="project-detail-content">
           {activeTab === 0 && <OverviewTab project={project} />}
-          {activeTab === 1 && <ArchitectureTab project={project} />}
-          {activeTab === 2 && <StepsTab project={project} />}
-          {activeTab === 3 && <InterviewTab project={project} />}
-          {activeTab === 4 && <ResumeTab project={project} />}
-          {activeTab === 5 && <SeniorNotesTab project={project} />}
+          {activeTab === 1 && <ImplementationTab project={project} />}
+          {activeTab === 2 && <ArchitectureTab project={project} />}
+          {activeTab === 3 && <StepsTab project={project} />}
+          {activeTab === 4 && <InterviewTab project={project} />}
+          {activeTab === 5 && <ResumeTab project={project} />}
+          {activeTab === 6 && <SeniorNotesTab project={project} />}
         </div>
       </div>
     </section>

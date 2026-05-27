@@ -1,0 +1,191 @@
+export const storyBuilderItems = [
+  {
+    id: 'cdc-pipeline',
+    title: 'CDC Pipeline',
+    badge: 'CDC',
+    summary: 'Converted source system change events into an idempotent warehouse load with replay-safe MERGE logic.',
+    resumeBullets: [
+      'Built a CDC ingestion pipeline that applied inserts, updates, and deletes into downstream warehouse tables with replay-safe MERGE logic.',
+      'Added watermark tracking, duplicate detection, and reconciliation checks to keep incremental loads idempotent and production-ready.',
+    ],
+    star: {
+      situation: 'The OLTP source was sending frequent change events and duplicate replays were corrupting the target table.',
+      task: 'Make the pipeline safe to rerun and keep the reporting layer consistent.',
+      action: 'Staged the CDC feed, applied deterministic MERGE rules, and moved checkpoint updates after successful commits.',
+      result: 'The warehouse stayed in sync, duplicate loads stopped, and the team could recover safely from retries.',
+    },
+    explanation: 'Explain the source, the change pattern, and how you prevented duplicate writes. Then describe the validation checks you used.',
+    projectTemplate: 'Explain the source changes, how the CDC window was staged, the merge rules you used, and the validation that proved replay safety.',
+    seniorWording: [
+      'idempotent incremental load',
+      'deterministic MERGE semantics',
+      'watermark-based replay control',
+    ],
+    interviewNotes: [
+      'Interviewers want to hear how you handle retries, deletes, and late-arriving events.',
+      'Mention how you proved the target stayed correct after a rerun.',
+    ],
+  },
+  {
+    id: 'scd2',
+    title: 'SCD Type 2',
+    badge: 'Modeling',
+    summary: 'Modeled customer history with surrogate keys, current flags, and effective dates for reporting accuracy.',
+    resumeBullets: [
+      'Designed an SCD Type 2 customer dimension with surrogate keys, active flags, and effective/expiry dates for historical reporting.',
+      'Protected BI reports from double counting by preserving row history while keeping the current record easy to query.',
+    ],
+    star: {
+      situation: 'Customer attributes changed over time and analysts needed historical accuracy for past reporting periods.',
+      task: 'Preserve history without breaking current-state queries.',
+      action: 'Used surrogate keys, closed out prior rows, and inserted new versions when tracked attributes changed.',
+      result: 'Reports could compare historical periods cleanly while preserving the latest customer profile.',
+    },
+    explanation: 'Start with the business key, then explain why you needed row history. Show the current-row and historical-row pattern clearly.',
+    projectTemplate: 'Describe the business key, the tracked attributes, how you versioned the row, and how current and history queries both stay easy to use.',
+    seniorWording: [
+      'historized dimension design',
+      'surrogate-key versioning',
+      'current-row semantics',
+    ],
+    interviewNotes: [
+      'Interviewers care about why SCD2 was chosen instead of Type 1.',
+      'Talk through how you avoid duplicate active rows.',
+    ],
+  },
+  {
+    id: 'medallion',
+    title: 'Medallion Architecture',
+    badge: 'Lakehouse',
+    summary: 'Structured a Bronze / Silver / Gold flow that separated raw landing, cleansing, and business-ready serving.',
+    resumeBullets: [
+      'Built a medallion-style lakehouse pipeline with raw Bronze landing, cleaned Silver transforms, and curated Gold reporting tables.',
+      'Added schema checks, reconciliation, and data quality gates so business users only saw trusted Gold data.',
+    ],
+    star: {
+      situation: 'Raw files were feeding multiple teams, but the data was inconsistent and hard to trust.',
+      task: 'Create a pipeline structure that made quality and lineage obvious.',
+      action: 'Separated ingestion, cleansing, and serving into Bronze, Silver, and Gold layers with clear ownership for each stage.',
+      result: 'Teams got cleaner reporting data, and the raw feed stayed available for reprocessing and debugging.',
+    },
+    explanation: 'Describe why each layer exists and how the design improves traceability, testability, and reuse.',
+    projectTemplate: 'Walk through Bronze, Silver, and Gold in order: raw landing, cleansing rules, then the business-ready serving model.',
+    seniorWording: [
+      'layered lakehouse pattern',
+      'curated serving model',
+      'lineage-aware transformation flow',
+    ],
+    interviewNotes: [
+      'Interviewers expect a clear explanation of why you do not transform raw data directly for reporting.',
+      'Mention how the layers help debugging and reprocessing.',
+    ],
+  },
+  {
+    id: 'synapse-optimization',
+    title: 'Synapse Optimization',
+    badge: 'Synapse',
+    summary: 'Improved warehouse performance by matching table design to the workload and reducing data movement.',
+    resumeBullets: [
+      'Optimized Synapse warehouse queries by aligning distribution keys, partitioning, and loading patterns to the reporting workload.',
+      'Reduced data movement and refresh time by adjusting table design and validating the query plan before release.',
+    ],
+    star: {
+      situation: 'Executives were waiting on slow reporting queries in a Synapse warehouse.',
+      task: 'Cut query latency without changing the business output.',
+      action: 'Reviewed the execution plan, selected a better distribution strategy, and partitioned the largest tables by time.',
+      result: 'The warehouse became more responsive and report refreshes finished well within SLA.',
+    },
+    explanation: 'Lead with the workload shape, then explain the distribution and partition choice that matched the dominant joins and filters.',
+    projectTemplate: 'Start with the query pattern, then explain how distribution, partitioning, and caching choices reduced movement and scan cost.',
+    seniorWording: [
+      'workload-driven warehouse tuning',
+      'distribution-aware design',
+      'query-plan validation',
+    ],
+    interviewNotes: [
+      'Interviewers want to know why you picked the distribution and how you measured improvement.',
+      'Call out data movement and scan reduction explicitly.',
+    ],
+  },
+  {
+    id: 'spark-tuning',
+    title: 'Databricks / Spark Tuning',
+    badge: 'Spark',
+    summary: 'Reduced a slow Spark job by addressing skew, shuffle spill, and unnecessary wide transformations.',
+    resumeBullets: [
+      'Tuned a Databricks Spark job by removing key skew, reducing shuffle spill, and applying broadcast joins where appropriate.',
+      'Improved runtime and cluster efficiency while preserving the output dataset and downstream contract.',
+    ],
+    star: {
+      situation: 'A daily Spark job was taking far too long and occasionally spilling to disk.',
+      task: 'Bring the job back inside the batch window.',
+      action: 'Used Spark UI and query plans to locate skew, then repartitioned and broadcast the smaller join side.',
+      result: 'The job completed faster with less spill and less cluster waste.',
+    },
+    explanation: 'Show that you diagnosed the plan first. Then explain the one or two changes that fixed the actual bottleneck.',
+    projectTemplate: 'Describe the Spark plan, the skew or shuffle issue you found, and the minimal tuning change that improved runtime.',
+    seniorWording: [
+      'physical-plan driven tuning',
+      'shuffle reduction strategy',
+      'cluster-efficiency improvement',
+    ],
+    interviewNotes: [
+      'Interviewers expect you to name the bottleneck, not just say “I scaled the cluster.”',
+      'Talk about the metrics you compared before and after.',
+    ],
+  },
+  {
+    id: 'cicd-deployment',
+    title: 'CI/CD Deployment',
+    badge: 'DevOps',
+    summary: 'Promoted data pipelines through dev, test, and prod with parameterization, approvals, and rollback coverage.',
+    resumeBullets: [
+      'Implemented CI/CD for ADF and Databricks assets using parameterized deployment files, Key Vault references, and approval gates.',
+      'Standardized environment promotion from dev to test to prod with smoke checks and rollback-safe release artifacts.',
+    ],
+    star: {
+      situation: 'The team was shipping data pipeline changes manually and environment drift caused repeated failures.',
+      task: 'Create a safer release flow for data engineering assets.',
+      action: 'Parameterised the deployments, used release approvals, and separated secret management from code.',
+      result: 'Deployments became repeatable, auditable, and much less risky in production.',
+    },
+    explanation: 'Describe the release stages, what changes were parameterized, and how secrets and approvals were handled.',
+    projectTemplate: 'Explain how the release was packaged, how each environment was parameterized, and where approvals and rollback were enforced.',
+    seniorWording: [
+      'parameterized release pipeline',
+      'environment promotion flow',
+      'rollback-ready deployment',
+    ],
+    interviewNotes: [
+      'Interviewers want to hear how you prevent environment drift and protect secrets.',
+      'Mention smoke tests and rollback as part of the release story.',
+    ],
+  },
+  {
+    id: 'production-incident',
+    title: 'Production Incident Handling',
+    badge: 'Incident',
+    summary: 'Led the investigation, triage, and fix for a broken pipeline or reporting issue with calm production support.',
+    resumeBullets: [
+      'Handled a production incident by triaging logs, isolating the failure point, and restoring the affected pipeline with a safe fix.',
+      'Documented the root cause, implemented a prevention step, and shared the incident summary with stakeholders.',
+    ],
+    star: {
+      situation: 'A production data job failed overnight and downstream reports were stale by morning.',
+      task: 'Restore the pipeline quickly and explain the impact clearly.',
+      action: 'Checked logs, identified the root cause, applied the smallest safe fix, and re-ran the failed window.',
+      result: 'Data freshness recovered and the team had a clear postmortem with prevention actions.',
+    },
+    explanation: 'Tell the story in order: symptoms, investigation, fix, prevention. Keep the tone calm and factual.',
+    projectTemplate: 'Use a calm incident narrative: what broke, how you investigated, the safest fix, and what you changed to prevent it happening again.',
+    seniorWording: [
+      'production triage and recovery',
+      'root-cause analysis and prevention',
+      'stakeholder-safe incident response',
+    ],
+    interviewNotes: [
+      'Interviewers care about how you think under pressure.',
+      'Show ownership, clarity, and prevention, not just the fix.',
+    ],
+  },
+];
