@@ -4,6 +4,7 @@ import { EmptyState } from '../ui/EmptyState.jsx';
 import { SearchInput, StatPill } from '../ui/design-system.jsx';
 import { useLocalStorage } from '../../hooks/useLocalStorage.js';
 import { getInterviewPrepAnalytics } from '../../utils/interviewPrepAnalytics.js';
+import MockInterviewSimulator from './MockInterviewSimulator.jsx';
 
 // ─── Level metadata ───────────────────────────────────────────────────────────
 const LEVEL_META = {
@@ -507,7 +508,7 @@ const InterviewPrep = memo(function InterviewPrep() {
               onClick={() => setMockMode(true)}
             >
               <span className="ipv2-mock-icon" aria-hidden="true">⏱</span>
-              Start Mock Interview
+              Timed Mock Interview
             </button>
           </div>
         </div>
@@ -521,6 +522,8 @@ const InterviewPrep = memo(function InterviewPrep() {
         <p className="ipv2-readiness-note">
           Strongest category: <strong>{strongestCategory?.name ?? 'SQL'}</strong> · {strongestCategory ? `${strongestCategory.pct}% complete` : 'Start with SQL to build momentum'}
         </p>
+
+        <MockInterviewSimulator />
 
         {/* ── Progress summary ───────────────────────────────────────────── */}
         <div className="ipv2-progress-summary">
