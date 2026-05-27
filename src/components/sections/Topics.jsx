@@ -1,6 +1,7 @@
 import { memo, useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { EmptyState } from '../ui/EmptyState.jsx';
 import { learningPathPhases } from '../../data/learningPath.js';
+import { computeLearningPathProgress } from '../../utils/learningPathProgress.js';
 
 // ─── Phase visual metadata ────────────────────────────────────────────────────
 const PHASE_META = {
@@ -289,10 +290,17 @@ const Topics = memo(function Topics({
     [allModules, filterChip]
   );
 
-  // Overall stats
-  const totalModules     = allModules.length;
-  const completedModules = allModules.filter(m => m.state === 'completed').length;
-  const overallPct       = totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0;
+  // Overall stats use the same lesson-based progress model as the sidebar.
+  const pathProgress = useMemo(
+    () => computeLearningPathProgress({
+      completedMap: completed,
+      topicStates,
+    }),
+    [completed, topicStates]
+  );
+  const totalModules     = pathProgress.totalModules;
+  const completedModules = pathProgress.completedModules;
+  const overallPct       = pathProgress.overallPct;
 
   // Recommended = first non-completed, non-locked module in the current phase
   const recommendedKey = useMemo(() => {

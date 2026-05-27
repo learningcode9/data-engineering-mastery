@@ -19,7 +19,15 @@ function computeOverallPct(practiceProgress) {
   return total > 0 ? Math.round((done / total) * 100) : 0;
 }
 
-const Sidebar = memo(function Sidebar({ isOpen, activeSection, onClose, onNavigate, compact, onToggleCompact }) {
+const Sidebar = memo(function Sidebar({
+  isOpen,
+  activeSection,
+  onClose,
+  onNavigate,
+  compact,
+  onToggleCompact,
+  learningPathProgress,
+}) {
   const [practiceProgress] = useLocalStorage('dem-practice-progress', {});
   const [learnedSet]       = useLocalStorage('dem-interview-learned', {});
   const completedTopics    = useLearningStore(s => s.completedTopics);
@@ -27,8 +35,9 @@ const Sidebar = memo(function Sidebar({ isOpen, activeSection, onClose, onNaviga
   const [showAch,  setShowAch]  = useState(false);
   const [showLabs, setShowLabs] = useState(false);
 
-  const overallPct   = computeOverallPct(practiceProgress);
-  const completedCnt = Object.values(completedTopics ?? {}).filter(Boolean).length;
+  const overallPct   = learningPathProgress?.overallPct ?? computeOverallPct(practiceProgress);
+  const completedCnt = learningPathProgress?.completedLessons ?? Object.values(completedTopics ?? {}).filter(Boolean).length;
+  const totalCount    = learningPathProgress?.totalLessons ?? topics.length;
   const interviewPct = Math.min(Math.round((Object.values(learnedSet ?? {}).filter(Boolean).length / 20) * 100), 100);
   const achCount     = Object.keys(unlockedAch ?? {}).length;
 
@@ -74,7 +83,7 @@ const Sidebar = memo(function Sidebar({ isOpen, activeSection, onClose, onNaviga
               <span>{overallPct}%</span>
             </div>
             <ProgressBar percent={overallPct} label="Overall learning progress" size="sm" className="sidebar-overall-progress" />
-            <span className="sidebar-overall-sub">{completedCnt}/{topics.length} topics complete</span>
+            <span className="sidebar-overall-sub">{completedCnt}/{totalCount} lessons complete</span>
           </div>
         )}
 

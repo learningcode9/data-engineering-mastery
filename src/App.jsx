@@ -25,6 +25,7 @@ import { useXP, XP_PER_TASK, XP_PER_TOPIC } from './hooks/useXP.js';
 import { useStreak } from './hooks/useStreak.js';
 import { computeSearchResults } from './utils/searchUtils.js';
 import { computeAllTopicStates, getNextRecommendedAction, computeOverallReadiness } from './utils/learningState.js';
+import { computeLearningPathProgress } from './utils/learningPathProgress.js';
 import { topics } from './data/topics.js';
 import { checklist } from './data/appData.js';
 import { projectDetails } from './data/projectDetails.js';
@@ -173,6 +174,14 @@ const App = memo(function App() {
   const topicStates = useMemo(
     () => computeAllTopicStates(topics, completedTopics, practiceProgress),
     [completedTopics, practiceProgress]
+  );
+
+  const learningPathProgress = useMemo(
+    () => computeLearningPathProgress({
+      completedMap: allCompletedTopics,
+      topicStates,
+    }),
+    [allCompletedTopics, topicStates]
   );
 
   const nextAction = useMemo(
@@ -367,6 +376,7 @@ const App = memo(function App() {
         onNavigate={navigate}
         compact={sidebarCompact}
         onToggleCompact={() => setSidebarCompact(c => !c)}
+        learningPathProgress={learningPathProgress}
       />
 
       {investigatingId && <InvestigationWorkspace />}
