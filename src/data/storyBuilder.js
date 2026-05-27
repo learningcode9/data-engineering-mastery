@@ -5,8 +5,8 @@ export const storyBuilderItems = [
     badge: 'CDC',
     summary: 'Converted source system change events into an idempotent warehouse load with replay-safe MERGE logic.',
     resumeBullets: [
-      'Built a CDC ingestion pipeline that applied inserts, updates, and deletes into downstream warehouse tables with replay-safe MERGE logic.',
-      'Added watermark tracking, duplicate detection, and reconciliation checks to keep incremental loads idempotent and production-ready.',
+      'Built a Databricks CDC ingestion pipeline for a warehouse replication workflow, applying inserts, updates, and deletes with replay-safe MERGE logic.',
+      'Added watermark tracking, duplicate detection, and reconciliation checks to keep replayed loads idempotent and production-ready.',
     ],
     star: {
       situation: 'The OLTP source was sending frequent change events and duplicate replays were corrupting the target table.',
@@ -32,8 +32,8 @@ export const storyBuilderItems = [
     badge: 'Modeling',
     summary: 'Modeled customer history with surrogate keys, current flags, and effective dates for reporting accuracy.',
     resumeBullets: [
-      'Designed an SCD Type 2 customer dimension with surrogate keys, active flags, and effective/expiry dates for historical reporting.',
-      'Protected BI reports from double counting by preserving row history while keeping the current record easy to query.',
+      'Designed an SCD Type 2 customer dimension with surrogate keys, current flags, and effective/expiry dates for historical reporting.',
+      'Protected BI reports from double counting by preserving row history while keeping current-row queries simple for analysts in Power BI and Synapse.',
     ],
     star: {
       situation: 'Customer attributes changed over time and analysts needed historical accuracy for past reporting periods.',
@@ -59,8 +59,8 @@ export const storyBuilderItems = [
     badge: 'Lakehouse',
     summary: 'Structured a Bronze / Silver / Gold flow that separated raw landing, cleansing, and business-ready serving.',
     resumeBullets: [
-      'Built a medallion-style lakehouse pipeline with raw Bronze landing, cleaned Silver transforms, and curated Gold reporting tables.',
-      'Added schema checks, reconciliation, and data quality gates so business users only saw trusted Gold data.',
+      'Built a medallion-style lakehouse pipeline in Databricks with raw Bronze landing, cleaned Silver transforms, and curated Gold reporting tables for business users.',
+      'Added schema checks, reconciliation, and data quality gates so analysts only consumed trusted Gold data.',
     ],
     star: {
       situation: 'Raw files were feeding multiple teams, but the data was inconsistent and hard to trust.',
@@ -86,7 +86,7 @@ export const storyBuilderItems = [
     badge: 'Synapse',
     summary: 'Improved warehouse performance by matching table design to the workload and reducing data movement.',
     resumeBullets: [
-      'Optimized Synapse warehouse queries by aligning distribution keys, partitioning, and loading patterns to the reporting workload.',
+      'Optimized Synapse dedicated SQL pool queries by aligning distribution keys, partitioning, and loading patterns to the reporting workload.',
       'Reduced data movement and refresh time by adjusting table design and validating the query plan before release.',
     ],
     star: {
@@ -113,7 +113,7 @@ export const storyBuilderItems = [
     badge: 'Spark',
     summary: 'Reduced a slow Spark job by addressing skew, shuffle spill, and unnecessary wide transformations.',
     resumeBullets: [
-      'Tuned a Databricks Spark job by removing key skew, reducing shuffle spill, and applying broadcast joins where appropriate.',
+      'Tuned a Databricks Spark job on a daily batch window by removing key skew, reducing shuffle spill, and applying broadcast joins where appropriate.',
       'Improved runtime and cluster efficiency while preserving the output dataset and downstream contract.',
     ],
     star: {
@@ -140,7 +140,7 @@ export const storyBuilderItems = [
     badge: 'DevOps',
     summary: 'Promoted data pipelines through dev, test, and prod with parameterization, approvals, and rollback coverage.',
     resumeBullets: [
-      'Implemented CI/CD for ADF and Databricks assets using parameterized deployment files, Key Vault references, and approval gates.',
+      'Implemented CI/CD for ADF, Databricks, and Synapse assets using parameterized deployment files, Key Vault references, and approval gates.',
       'Standardized environment promotion from dev to test to prod with smoke checks and rollback-safe release artifacts.',
     ],
     star: {
@@ -167,7 +167,7 @@ export const storyBuilderItems = [
     badge: 'Incident',
     summary: 'Led the investigation, triage, and fix for a broken pipeline or reporting issue with calm production support.',
     resumeBullets: [
-      'Handled a production incident by triaging logs, isolating the failure point, and restoring the affected pipeline with a safe fix.',
+      'Handled a production incident by triaging logs, isolating the failure point, and restoring the affected pipeline with a safe fix before the morning report window.',
       'Documented the root cause, implemented a prevention step, and shared the incident summary with stakeholders.',
     ],
     star: {

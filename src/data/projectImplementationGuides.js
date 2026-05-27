@@ -123,8 +123,8 @@ export const projectImplementationGuides = {
           {
             label: 'Resume bullet examples',
             items: [
-              'Built a Bronze/Silver/Gold retail lakehouse for 50+ store feeds, including conformed dimensions and daily reconciliation checks.',
-              'Reduced reporting latency from two days to under one hour by replacing manual Excel exports with an automated Databricks pipeline and SCD Type 2 customer handling.',
+              'Built a Bronze/Silver/Gold retail lakehouse in Databricks for 50+ store feeds, with conformed dimensions and daily reconciliation checks.',
+              'Reduced reporting latency from two days to under one hour by replacing manual Excel exports with an automated ADLS-to-Delta pipeline and SCD Type 2 customer handling.',
             ],
           },
         ],
@@ -179,7 +179,7 @@ export const projectImplementationGuides = {
         summary: 'Translate the ETL work into a senior-ready narrative.',
         sections: [
           { label: 'How to explain this in interviews', items: ['Explain the watermark strategy, the restart path, and how you proved the load was idempotent.'] },
-          { label: 'Resume bullet examples', items: ['Built a restartable incremental ETL pipeline that replaced a 4-hour full reload with a 15-minute delta load.'] },
+          { label: 'Resume bullet examples', items: ['Built a restartable incremental ETL pipeline with watermark tracking and UPSERT logic, replacing a 4-hour full reload with a 15-minute delta load.'] },
         ],
       },
     ],
@@ -232,7 +232,7 @@ export const projectImplementationGuides = {
         summary: 'Use a concise story that shows operational thinking and correctness.',
         sections: [
           { label: 'How to explain this in interviews', items: ['Focus on idempotency, replay safety, MERGE rules for inserts/updates/deletes, and how you reconcile source and target counts.'] },
-          { label: 'Resume bullet examples', items: ['Built an idempotent CDC pipeline with replay-safe MERGE logic, offset tracking, and row-level reconciliation checks.'] },
+          { label: 'Resume bullet examples', items: ['Built an idempotent CDC pipeline with replay-safe MERGE logic, offset tracking, delete handling, and row-level reconciliation checks.'] },
         ],
       },
     ],
@@ -285,7 +285,7 @@ export const projectImplementationGuides = {
         summary: 'Explain the ingestion story in a way that sounds production-ready.',
         sections: [
           { label: 'How to explain this in interviews', items: ['Describe the API contract, your retry strategy, and how you prevented duplicate landing data.'] },
-          { label: 'Resume bullet examples', items: ['Automated a REST API ingestion flow into ADLS Bronze with ADF orchestration, validation, and alerting.'] },
+          { label: 'Resume bullet examples', items: ['Automated a REST API ingestion flow into ADLS Bronze with ADF orchestration, schema validation, and alerting.'] },
         ],
       },
     ],
@@ -338,7 +338,7 @@ export const projectImplementationGuides = {
         summary: 'Explain why the medallion pattern is the right fit for the problem.',
         sections: [
           { label: 'How to explain this in interviews', items: ['Describe the benefit of separating raw, cleaned, and curated layers and how that improved trust.'] },
-          { label: 'Resume bullet examples', items: ['Implemented a Bronze/Silver/Gold medallion lakehouse to improve data quality, lineage, and reprocessing.'] },
+          { label: 'Resume bullet examples', items: ['Implemented a Bronze/Silver/Gold medallion lakehouse on Databricks to improve lineage, data quality, and replayability.'] },
         ],
       },
     ],
@@ -391,7 +391,7 @@ export const projectImplementationGuides = {
         summary: 'Explain how you built a real-time pipeline that the business could trust.',
         sections: [
           { label: 'How to explain this in interviews', items: ['Describe the latency target, the event contract, and how you handled recovery and replay.'] },
-          { label: 'Resume bullet examples', items: ['Built a low-latency streaming analytics pipeline with Event Hubs, Databricks, and checkpointed micro-batch processing.'] },
+          { label: 'Resume bullet examples', items: ['Built a low-latency streaming analytics pipeline with Event Hubs, Databricks, and checkpointed micro-batch processing for alerting use cases.'] },
         ],
       },
     ],
@@ -444,7 +444,7 @@ export const projectImplementationGuides = {
         summary: 'Explain the tuning as an engineering improvement with measurable impact.',
         sections: [
           { label: 'How to explain this in interviews', items: ['Name the bottleneck first, then explain the change and the measured improvement.'] },
-          { label: 'Resume bullet examples', items: ['Reduced a Spark job runtime by tuning joins, partitioning, and shuffle patterns without changing the output contract.'] },
+          { label: 'Resume bullet examples', items: ['Reduced a Spark job runtime by tuning joins, partitioning, and shuffle patterns in Databricks without changing the output contract.'] },
         ],
       },
     ],
@@ -550,7 +550,7 @@ export const projectImplementationGuides = {
         summary: 'Show that you understand both streaming systems and risk trade-offs.',
         sections: [
           { label: 'How to explain this in interviews', items: ['Describe how you balanced accuracy, false positives, and latency while keeping the pipeline observable.'] },
-          { label: 'Resume bullet examples', items: ['Implemented a real-time fraud scoring pipeline with streaming enrichment, model versioning, and low-latency alerting.'] },
+          { label: 'Resume bullet examples', items: ['Implemented a real-time fraud scoring pipeline with streaming enrichment, model versioning, and low-latency alerting in Databricks.'] },
         ],
       },
     ],
@@ -603,7 +603,7 @@ export const projectImplementationGuides = {
         summary: 'Explain the migration in terms of business value, not just platform changes.',
         sections: [
           { label: 'How to explain this in interviews', items: ['Describe the reason for the migration, the validation strategy, and how you reduced operational overhead for analysts and BI users.'] },
-          { label: 'Resume bullet examples', items: ['Migrated Synapse lakehouse assets to Fabric with OneLake, Git-integrated deployment, semantic-model validation, and report parity checks.'] },
+          { label: 'Resume bullet examples', items: ['Migrated Synapse lakehouse assets to Fabric with OneLake, Git-integrated deployment, semantic-model validation, and Power BI report parity checks.'] },
         ],
       },
     ],
