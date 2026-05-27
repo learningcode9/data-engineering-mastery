@@ -76,6 +76,7 @@ const SkillGraph        = lazy(() => import('./components/sections/SkillGraph.js
 const IncidentSimulator = lazy(() => import('./components/sections/IncidentSimulator.jsx').then(m => ({ default: m.IncidentSimulator })));
 const InterviewWarRoom  = lazy(() => import('./components/sections/InterviewWarRoom.jsx').then(m => ({ default: m.InterviewWarRoom })));
 const DailyStandup      = lazy(() => import('./components/sections/DailyStandup.jsx').then(m => ({ default: m.DailyStandup })));
+const HandsOnLabsPanel  = lazy(() => import('./components/sections/HandsOnLabsPanel.jsx'));
 
 function PageFallback() {
   return (
@@ -456,6 +457,9 @@ const App = memo(function App() {
                 />
 
                 <SectionPreviewGrid onNavigate={navigate} />
+                <Suspense fallback={<PageFallback />}>
+                  <HandsOnLabsPanel />
+                </Suspense>
               </div>
 
               {/* ── Right sidebar ── */}
