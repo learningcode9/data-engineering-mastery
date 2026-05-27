@@ -52,9 +52,9 @@ export const projectImplementationGuides = {
           {
             label: 'Bronze / Silver / Gold',
             items: [
-              'Bronze stores raw landed files and minimal metadata for recovery.',
-              'Silver applies type casting, dedupe, and standard business rules.',
-              'Gold exposes reporting-friendly sales facts and conformed dimensions.',
+              'Bronze stores the raw store export plus ingestion timestamp and source file name so the team can replay a bad batch later.',
+              'Silver applies type casting, store-level deduplication, and customer history handling with SCD Type 2 using surrogate keys, effective/expiry dates, and a current flag for corrected records.',
+              'Gold exposes reporting-friendly fact_sales and conformed dimensions for store, product, customer, and date.',
             ],
           },
         ],
@@ -82,7 +82,7 @@ export const projectImplementationGuides = {
             label: 'Error handling and CI/CD',
             items: [
               'Quarantine bad records instead of failing the entire pipeline on one malformed row.',
-              'Deploy notebooks and job configs through Azure DevOps with environment parameters and approvals.',
+              'Deploy the ADF trigger, Databricks notebooks, and job configs through Azure DevOps with environment parameters, Key Vault secrets, and approvals.',
             ],
           },
         ],
@@ -123,8 +123,8 @@ export const projectImplementationGuides = {
           {
             label: 'Resume bullet examples',
             items: [
-              'Built an end-to-end retail lakehouse pipeline with Bronze, Silver, and Gold layers for 50+ stores.',
-              'Reduced reporting latency by replacing manual Excel exports with an automated, incremental Databricks flow.',
+              'Built a Bronze/Silver/Gold retail lakehouse for 50+ store feeds, including conformed dimensions and daily reconciliation checks.',
+              'Reduced reporting latency from two days to under one hour by replacing manual Excel exports with an automated Databricks pipeline and SCD Type 2 customer handling.',
             ],
           },
         ],
@@ -200,11 +200,11 @@ export const projectImplementationGuides = {
       {
         id: 'build',
         title: '2. Implement the CDC pipeline',
-        summary: 'Stage changes, apply Bronze/Silver/Gold patterns, and keep the load replay-safe.',
+        summary: 'Stage changes, preserve offsets, and keep the CDC load replay-safe from Bronze through Gold.',
         sections: [
-          { label: 'Step-by-step implementation', items: ['Land the raw feed, stage the CDC batch, and apply deterministic MERGE rules against the target.'] },
-          { label: 'Data ingestion', items: ['Ingest by watermark or offset so each replay window is explicit and auditable.'] },
-          { label: 'Bronze / Silver / Gold', items: ['Bronze captures the raw change records, Silver normalizes them, and Gold publishes the current warehouse view.'] },
+          { label: 'Step-by-step implementation', items: ['Land the raw CDC events, decode the operation codes, and apply deterministic MERGE rules for inserts, updates, and deletes.'] },
+          { label: 'Data ingestion', items: ['Track the Kafka offset or CDC watermark per batch so each replay window is explicit and auditable.'] },
+          { label: 'Bronze / Silver / Gold', items: ['Bronze captures the raw change records with before/after payloads, Silver normalizes and deduplicates them, and Gold publishes the current warehouse view.'] },
         ],
       },
       {
@@ -212,9 +212,9 @@ export const projectImplementationGuides = {
         title: '3. Add production controls',
         summary: 'Make sure the pipeline stays observable and safe under retry.',
         sections: [
-          { label: 'Data quality checks', items: ['Check one current row per business key, no duplicate tombstones, and reconciled row counts.'] },
-          { label: 'Monitoring and logging', items: ['Track offset, watermark, replay window, and number of rows affected by each MERGE.'] },
-          { label: 'Error handling and CI/CD', items: ['Stop the checkpoint update until the merge commits, then deploy the job through Azure DevOps.'] },
+          { label: 'Data quality checks', items: ['Check one current row per business key, no duplicate tombstones, and reconciled row counts after each replay window.'] },
+          { label: 'Monitoring and logging', items: ['Track offset, watermark, replay window, deleted rows, and number of rows affected by each MERGE.'] },
+          { label: 'Error handling and CI/CD', items: ['Stop the checkpoint update until the merge commits, then deploy the streaming job through Azure DevOps with parameterized environment settings.'] },
         ],
       },
       {
@@ -222,8 +222,8 @@ export const projectImplementationGuides = {
         title: '4. Validate and troubleshoot',
         summary: 'Prove the pipeline can rerun without corrupting the target.',
         sections: [
-          { label: 'Validation checklist', items: ['Run the same CDC window twice and confirm the final table is unchanged.'] },
-          { label: 'Common real-world issues', items: ['Duplicate ingestion, late-arriving records, and a checkpoint that moves before the merge succeeds.'] },
+          { label: 'Validation checklist', items: ['Run the same CDC window twice and confirm the final table is unchanged, including soft deletes and replayed updates.'] },
+          { label: 'Common real-world issues', items: ['Duplicate ingestion, late-arriving records, tombstone handling mistakes, and a checkpoint that moves before the merge succeeds.'] },
         ],
       },
       {
@@ -231,8 +231,8 @@ export const projectImplementationGuides = {
         title: '5. Explain it in interviews',
         summary: 'Use a concise story that shows operational thinking and correctness.',
         sections: [
-          { label: 'How to explain this in interviews', items: ['Focus on idempotency, replay safety, and how you handle inserts, updates, deletes, and late events.'] },
-          { label: 'Resume bullet examples', items: ['Built an idempotent CDC pipeline with replay-safe MERGE logic and row-level reconciliation checks.'] },
+          { label: 'How to explain this in interviews', items: ['Focus on idempotency, replay safety, MERGE rules for inserts/updates/deletes, and how you reconcile source and target counts.'] },
+          { label: 'Resume bullet examples', items: ['Built an idempotent CDC pipeline with replay-safe MERGE logic, offset tracking, and row-level reconciliation checks.'] },
         ],
       },
     ],
@@ -467,9 +467,9 @@ export const projectImplementationGuides = {
         title: '2. Build the real-time telemetry flow',
         summary: 'Land telemetry, filter it continuously, and push alert-ready data downstream.',
         sections: [
-          { label: 'Step-by-step implementation', items: ['Capture device events, parse the payload, detect anomalies, and emit stream aggregates.'] },
-          { label: 'Data ingestion', items: ['Store the raw telemetry stream first so the team can replay it during incidents.'] },
-          { label: 'Bronze / Silver / Gold', items: ['Bronze stores raw telemetry, Silver standardizes and scores events, and Gold feeds dashboards or alerts.'] },
+          { label: 'Step-by-step implementation', items: ['Capture device events from Event Hub, parse the payload, detect anomalies, and emit stream aggregates with checkpointed state.'] },
+          { label: 'Data ingestion', items: ['Store the raw telemetry stream first so the team can replay it during incidents or backfill late device events.'] },
+          { label: 'Bronze / Silver / Gold', items: ['Bronze stores raw telemetry from Event Hub, Silver standardizes and scores events, and Gold feeds dashboards or alerts.'] },
         ],
       },
       {
@@ -477,9 +477,9 @@ export const projectImplementationGuides = {
         title: '3. Add operational safety',
         summary: 'Keep the stream observable, secure, and recoverable.',
         sections: [
-          { label: 'Data quality checks', items: ['Check event completeness, duplicate device IDs, and valid timestamps before publishing alerts.'] },
-          { label: 'Monitoring and logging', items: ['Track stream lag, alert counts, checkpoint progress, and device-level error spikes.'] },
-          { label: 'Error handling and CI/CD', items: ['Fail fast on malformed messages and deploy stream code through parameterized environments.'] },
+          { label: 'Data quality checks', items: ['Check event completeness, duplicate device IDs, valid timestamps, and late-arriving records before publishing alerts.'] },
+          { label: 'Monitoring and logging', items: ['Track stream lag, alert counts, checkpoint progress, and device-level error spikes by partition.'] },
+          { label: 'Error handling and CI/CD', items: ['Fail fast on malformed messages and deploy stream code through parameterized environments with rollout approval.'] },
         ],
       },
       {
@@ -487,8 +487,8 @@ export const projectImplementationGuides = {
         title: '4. Validate and troubleshoot',
         summary: 'Show that the stream behaves correctly under load and replay.',
         sections: [
-          { label: 'Validation checklist', items: ['Replay recorded telemetry and confirm the anomaly count matches the expected result.'] },
-          { label: 'Common real-world issues', items: ['Checkpoint drift, burst traffic, late device messages, and incorrect alert thresholds.'] },
+          { label: 'Validation checklist', items: ['Replay recorded telemetry and confirm the anomaly count matches the expected result, including late events and duplicate deliveries.'] },
+          { label: 'Common real-world issues', items: ['Checkpoint drift, burst traffic, late device messages, partition skew, and incorrect alert thresholds.'] },
         ],
       },
       {
@@ -496,8 +496,8 @@ export const projectImplementationGuides = {
         title: '5. Tell the interview story',
         summary: 'Present the solution like a production-ready real-time system.',
         sections: [
-          { label: 'How to explain this in interviews', items: ['Lead with the business need for low-latency telemetry and explain how you handled replay and monitoring.'] },
-          { label: 'Resume bullet examples', items: ['Built a real-time IoT telemetry pipeline that processed device events and surfaced anomaly alerts within seconds.'] },
+          { label: 'How to explain this in interviews', items: ['Lead with the business need for low-latency telemetry and explain how Event Hub, checkpoints, and replay handling kept the stream reliable.'] },
+          { label: 'Resume bullet examples', items: ['Built a real-time IoT telemetry pipeline using Event Hub, checkpointed Spark streaming, and replay-safe anomaly detection within seconds.'] },
         ],
       },
     ],
@@ -573,9 +573,9 @@ export const projectImplementationGuides = {
         title: '2. Rebuild the data flow in Fabric',
         summary: 'Move the lakehouse, pipelines, and semantic layer into the Fabric model.',
         sections: [
-          { label: 'Step-by-step implementation', items: ['Map the old Synapse assets to Fabric items, rebuild the flow, and validate the resulting model.'] },
-          { label: 'Data ingestion', items: ['Land data into OneLake and keep the original source copies available for backfill.'] },
-          { label: 'Bronze / Silver / Gold', items: ['Use Bronze for raw landing, Silver for transformed tables, and Gold for semantic and reporting-ready data.'] },
+          { label: 'Step-by-step implementation', items: ['Map the old Synapse assets to Fabric items, rebuild the flow, and validate the resulting semantic model with report parity checks.'] },
+          { label: 'Data ingestion', items: ['Land data into OneLake and keep the original source copies available for backfill and refresh recovery.'] },
+          { label: 'Bronze / Silver / Gold', items: ['Use Bronze for raw landing, Silver for transformed tables, and Gold for semantic-model-ready data exposed to Power BI.'] },
         ],
       },
       {
@@ -583,9 +583,9 @@ export const projectImplementationGuides = {
         title: '3. Add governance and release controls',
         summary: 'Keep the migration safe for analysts and downstream reports.',
         sections: [
-          { label: 'Data quality checks', items: ['Verify schema parity, refresh parity, and row-count reconciliation after each move.'] },
-          { label: 'Monitoring and logging', items: ['Track workspace deployment status, refresh duration, and semantic model errors.'] },
-          { label: 'Error handling and CI/CD', items: ['Use pull-request approvals and deployment pipelines to move workspaces from dev to prod.'] },
+          { label: 'Data quality checks', items: ['Verify schema parity, refresh parity, row-count reconciliation, and RLS behavior after each move.'] },
+          { label: 'Monitoring and logging', items: ['Track workspace deployment status, refresh duration, semantic model errors, and failed dataset refreshes.'] },
+          { label: 'Error handling and CI/CD', items: ['Use pull-request approvals and deployment pipelines to move workspaces from dev to prod with rollback-ready validation, including a backed-up Gold table and semantic model.'] },
         ],
       },
       {
@@ -593,8 +593,8 @@ export const projectImplementationGuides = {
         title: '4. Validate and troubleshoot',
         summary: 'Make sure the new platform behaves like the old one, only cleaner.',
         sections: [
-          { label: 'Validation checklist', items: ['Compare key reports before and after migration and confirm the numbers still match.'] },
-          { label: 'Common real-world issues', items: ['Refresh failures, semantic model mismatches, and access control differences between workspaces.'] },
+          { label: 'Validation checklist', items: ['Compare key reports before and after migration and confirm the numbers still match, including the Power BI semantic model.'] },
+          { label: 'Common real-world issues', items: ['Refresh failures, semantic model mismatches, stale Gold tables, and access control differences between workspaces.'] },
         ],
       },
       {
@@ -602,8 +602,8 @@ export const projectImplementationGuides = {
         title: '5. Tell the interview and résumé story',
         summary: 'Explain the migration in terms of business value, not just platform changes.',
         sections: [
-          { label: 'How to explain this in interviews', items: ['Describe the reason for the migration, the validation strategy, and how you reduced operational overhead.'] },
-          { label: 'Resume bullet examples', items: ['Migrated Synapse lakehouse assets to Fabric with OneLake, Git-integrated deployment, and report parity checks.'] },
+          { label: 'How to explain this in interviews', items: ['Describe the reason for the migration, the validation strategy, and how you reduced operational overhead for analysts and BI users.'] },
+          { label: 'Resume bullet examples', items: ['Migrated Synapse lakehouse assets to Fabric with OneLake, Git-integrated deployment, semantic-model validation, and report parity checks.'] },
         ],
       },
     ],
