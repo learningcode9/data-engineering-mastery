@@ -5,6 +5,7 @@ import { SearchInput, StatPill } from '../ui/design-system.jsx';
 import { useLocalStorage } from '../../hooks/useLocalStorage.js';
 import { getInterviewPrepAnalytics } from '../../utils/interviewPrepAnalytics.js';
 import MockInterviewSimulator from './MockInterviewSimulator.jsx';
+import ResumeStoryBuilder from './ResumeStoryBuilder.jsx';
 
 // ─── Level metadata ───────────────────────────────────────────────────────────
 const LEVEL_META = {
@@ -524,6 +525,7 @@ const InterviewPrep = memo(function InterviewPrep() {
         </p>
 
         <MockInterviewSimulator />
+        <ResumeStoryBuilder />
 
         {/* ── Progress summary ───────────────────────────────────────────── */}
         <div className="ipv2-progress-summary">

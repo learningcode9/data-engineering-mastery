@@ -1,14 +1,12 @@
 import { useState, useMemo, useCallback, useEffect, useRef, memo, lazy, Suspense } from 'react';
 import Sidebar from './components/layout/Sidebar.jsx';
 import TopHeader from './components/layout/TopHeader.jsx';
-import RightRail from './components/layout/RightRail.jsx';
 import {
-  SummaryGrid, ContinueCard, SmartBanner, OnboardingCTA,
+  SummaryGrid, ContinueCard,
   JobReadinessChecklist, StartHereCard, DailyGoalCard,
   WeeklyProgress, NextActionCard, SectionPreviewGrid,
-  DashboardHero, ProgressOverviewCard, TodaysFocusSimple, AchievementShelf,
-  UpcomingMilestoneCard, MotivationCard, LearningConsistencyCard,
-  CareerReadinessCard, QuickLinksCard,
+  DashboardHero, ProgressOverviewCard, TodaysFocusSimple,
+  UpcomingMilestoneCard, WorkplaceSimulatorsGrid,
 } from './components/sections/Dashboard.jsx';
 import Topics from './components/sections/Topics.jsx';
 import LessonPage from './components/sections/LessonPage.jsx';
@@ -23,6 +21,7 @@ import { useSqlProgress } from './hooks/useSqlProgress.js';
 import { useToast } from './hooks/useToast.js';
 import { useXP, XP_PER_TASK, XP_PER_TOPIC } from './hooks/useXP.js';
 import { useStreak } from './hooks/useStreak.js';
+import { useUserProgressSync } from './hooks/useUserProgressSync.js';
 import { computeSearchResults } from './utils/searchUtils.js';
 import { computeAllTopicStates, getNextRecommendedAction, computeOverallReadiness } from './utils/learningState.js';
 import { computeLearningPathProgress } from './utils/learningPathProgress.js';
@@ -77,6 +76,7 @@ const IncidentSimulator = lazy(() => import('./components/sections/IncidentSimul
 const InterviewWarRoom  = lazy(() => import('./components/sections/InterviewWarRoom.jsx').then(m => ({ default: m.InterviewWarRoom })));
 const DailyStandup      = lazy(() => import('./components/sections/DailyStandup.jsx').then(m => ({ default: m.DailyStandup })));
 const HandsOnLabsPanel  = lazy(() => import('./components/sections/HandsOnLabsPanel.jsx'));
+const WorkplaceSimulator = lazy(() => import('./components/sections/WorkplaceSimulator.jsx'));
 const ResumeStoryBuilder = lazy(() => import('./components/sections/ResumeStoryBuilder.jsx'));
 
 function PageFallback() {
@@ -91,9 +91,9 @@ function PageFallback() {
 
 const App = memo(function App() {
   // ─── Auth + onboarding ────────────────────────────────────────────────────────
-  const { userId, authPageOpen, onboardingPageOpen, closeOnboardingPage, openOnboardingPage } = useUser();
+  const { userId, authPageOpen, onboardingPageOpen, closeOnboardingPage } = useUser();
   useSyncXP();
-  const { onboardingProfile, isCompleted: onboardingCompleted } = useOnboarding();
+  const { onboardingProfile } = useOnboarding();
 
   // ─── UI state ─────────────────────────────────────────────────────────────────
   const [isDark, setIsDark]                   = useState(false);
@@ -121,6 +121,14 @@ const App = memo(function App() {
   const [lastOpenTopicId, setLastOpenTopicId] = useLocalStorage('dem-last-topic', topics[0].id);
 
   const completedTopics    = useLearningStore(s => s.completedTopics);
+  const completedProjects  = useLearningStore(s => s.completedProjects);
+  const achievementsMap    = useLearningStore(s => s.achievements);
+  const streakLastDate     = useLearningStore(s => s.streakLastDate);
+  const incidentsResolved  = useLearningStore(s => s.incidentsResolved);
+  const interviewReadiness = useLearningStore(s => s.interviewReadiness);
+  const roleReadiness      = useLearningStore(s => s.roleReadiness);
+  const unlockedTracks     = useLearningStore(s => s.unlockedTracks);
+  const hydrateProgress    = useLearningStore(s => s.hydrateFromSupabase);
   const setCompletedTopics = useLearningStore(s => s.setCompletedTopics);
   useHydrateFromSupabase(userId, setCompletedTopics);
 
@@ -133,7 +141,7 @@ const App = memo(function App() {
   const dailyPlan    = useLearningStore(s => s.dailyTasks);
   const setDailyPlan = useLearningStore(s => s.setDailyTasks);
   const [activityLog, setActivityLog] = useLocalStorage('dem-activity-log', []);
-  const [learnedSet]                  = useLocalStorage('dem-interview-learned', {});
+  const [learnedSet, setLearnedSet]                  = useLocalStorage('dem-interview-learned', {});
 
   useEffect(() => {
     if (Object.keys(dailyPlan ?? {}).length > 0) return;
@@ -209,6 +217,69 @@ const App = memo(function App() {
       : DEFAULT_RECOMMENDATION,
     [onboardingProfile, allTopicsProgress]
   );
+
+  const userProgressSnapshot = useMemo(() => ({
+    completedTopics,
+    completedProjects,
+    achievements: achievementsMap,
+    practiceProgress,
+    interviewLearned: learnedSet,
+    xp,
+    streakCount: streak,
+    streakLastDate,
+    incidentsResolved,
+    interviewReadiness,
+    roleReadiness,
+    unlockedTracks,
+  }), [
+    completedTopics,
+    completedProjects,
+    achievementsMap,
+    practiceProgress,
+    learnedSet,
+    xp,
+    streak,
+    streakLastDate,
+    incidentsResolved,
+    interviewReadiness,
+    roleReadiness,
+    unlockedTracks,
+  ]);
+
+  const applyHydratedProgress = useCallback((merged = {}) => {
+    if (!merged) return;
+
+    if (merged.completedTopics) {
+      setCompletedTopics(prev => ({ ...(prev ?? {}), ...merged.completedTopics }));
+    }
+
+    if (merged.practiceProgress) {
+      setPracticeProgress(prev => ({ ...(prev ?? {}), ...merged.practiceProgress }));
+    }
+
+    if (merged.interviewLearned) {
+      setLearnedSet(prev => ({ ...(prev ?? {}), ...merged.interviewLearned }));
+    }
+
+    hydrateProgress({
+      xp: merged.xp,
+      streakCount: merged.streakCount,
+      streakLastDate: merged.streakLastDate,
+      completedTopics: merged.completedTopics,
+      completedProjects: merged.completedProjects,
+      achievements: merged.achievements,
+      incidentsResolved: merged.incidentsResolved,
+      interviewReadiness: merged.interviewReadiness,
+      roleReadiness: merged.roleReadiness,
+      unlockedTracks: merged.unlockedTracks,
+    });
+  }, [hydrateProgress, setCompletedTopics, setLearnedSet, setPracticeProgress]);
+
+  useUserProgressSync({
+    userId,
+    snapshot: userProgressSnapshot,
+    onHydrate: applyHydratedProgress,
+  });
 
   const enrichedTopics = useMemo(() =>
     topics.map(t => ({
@@ -401,29 +472,17 @@ const App = memo(function App() {
         {/* ── DASHBOARD PAGE ─────────────────────────────────────────────── */}
         {activePage === 'dashboard' && (
           <div className="page page--dashboard">
-            <SmartBanner
-              allCompletedTopics={allCompletedTopics}
-              topicStates={topicStates}
-              topics={topics}
-              streak={streak}
-              onNavigate={navigate}
-              personalizedRec={personalizedRec}
-            />
-            {!onboardingCompleted && <OnboardingCTA onOpen={openOnboardingPage} />}
-
             <div className="dash-layout">
               {/* ── Main column ── */}
               <div className="dash-main">
+                {/* 1 — Welcome hero (primary CTA: Continue Learning) */}
                 <DashboardHero
                   sqlProgress={sqlProgress}
                   onResume={handleResume}
                   onNavigate={navigate}
                 />
-                <AchievementShelf
-                  achievements={unlockedList}
-                  totalCount={totalAchCount}
-                />
 
+                {/* 2 — Learning journey progress · 3 — recommended next step */}
                 <div className="dash-row-2">
                   <ProgressOverviewCard
                     completedCount={completedCount}
@@ -447,32 +506,16 @@ const App = memo(function App() {
                     enrichedTopics={enrichedTopics}
                     onNavigate={navigate}
                   />
+                  <UpcomingMilestoneCard sqlProgress={sqlProgress} onNavigate={navigate} />
                 </div>
 
-                <CareerReadinessCard
-                  topicStates={topicStates}
-                  completedTopics={completedTopics}
-                  learnedCount={learnedCount}
-                  overallReadiness={overallReadiness}
-                  topics={topics}
-                />
-
+                {/* 4 — Workspaces */}
                 <SectionPreviewGrid onNavigate={navigate} />
-                <Suspense fallback={<PageFallback />}>
-                  <HandsOnLabsPanel />
-                </Suspense>
-                <Suspense fallback={<PageFallback />}>
-                  <ResumeStoryBuilder />
-                </Suspense>
+
+                {/* 5 — Workplace Simulator (advanced stage — comes after learning & projects) */}
+                <WorkplaceSimulatorsGrid onNavigate={navigate} />
               </div>
 
-              {/* ── Right sidebar ── */}
-              <aside className="dash-sidebar">
-                <MotivationCard />
-                <UpcomingMilestoneCard sqlProgress={sqlProgress} onNavigate={navigate} />
-                <LearningConsistencyCard activityLog={activityLog} />
-                <QuickLinksCard onNavigate={navigate} />
-              </aside>
             </div>
           </div>
         )}
@@ -526,6 +569,15 @@ const App = memo(function App() {
           <div className="page page--projects">
             <Suspense fallback={<PageFallback />}>
               <Projects />
+            </Suspense>
+          </div>
+        )}
+
+        {/* ── WORKPLACE SIMULATOR PAGE ───────────────────────────────────── */}
+        {activePage === 'workplace' && (
+          <div className="page page--workplace">
+            <Suspense fallback={<PageFallback />}>
+              <WorkplaceSimulator />
             </Suspense>
           </div>
         )}
@@ -588,6 +640,13 @@ const App = memo(function App() {
                 practiceProgress={practiceProgress} activityLog={activityLog}
                 xp={xp} streak={streak} learnedCount={learnedCount}
               />
+            </Suspense>
+          </div>
+        )}
+        {activePage === 'hands-on-labs' && (
+          <div className="page page--hands-on-labs">
+            <Suspense fallback={<PageFallback />}>
+              <HandsOnLabsPanel />
             </Suspense>
           </div>
         )}

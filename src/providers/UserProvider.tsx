@@ -9,7 +9,12 @@ import {
   useEffect,
   type ReactNode,
 } from 'react'
-import { getCurrentUser, signOut as authSignOut, type AuthUser } from '../services/supabase/auth'
+import {
+  getCurrentUser,
+  signOut as authSignOut,
+  onAuthStateChange as watchAuthStateChange,
+  type AuthUser,
+} from '../services/supabase/auth'
 import { isBackendEnabled } from '../config/env'
 
 interface UserContextValue {
@@ -58,7 +63,25 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    loadUser().finally(() => setIsLoading(false))
+    let mounted = true
+
+    loadUser().finally(() => {
+      if (mounted) setIsLoading(false)
+    })
+
+    if (!isBackendEnabled()) {
+      return () => { mounted = false }
+    }
+
+    const unsubscribe = watchAuthStateChange(async () => {
+      await loadUser()
+      if (mounted) setIsLoading(false)
+    })
+
+    return () => {
+      mounted = false
+      unsubscribe()
+    }
   }, [loadUser])
 
   const refreshUser = useCallback(async () => {
@@ -81,7 +104,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     setAuthPageOpen(false)
   }, [refreshUser])
 
-  const isMockUser = !isBackendEnabled() || currentUser?.id === 'local-guest'
+  const isMockUser = currentUser?.id === 'local-guest' || !currentUser
 
   return (
     <UserContext.Provider

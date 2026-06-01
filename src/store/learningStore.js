@@ -188,16 +188,39 @@ const useLearningStore = create(
       },
 
       // Merge hydrated Supabase state (called once on auth + backend enabled)
-      hydrateFromSupabase({ xp, streakCount, completedTopics, achievements } = {}) {
+      hydrateFromSupabase({
+        xp,
+        streakCount,
+        streakLastDate,
+        completedTopics,
+        completedProjects,
+        achievements,
+        incidentsResolved,
+        interviewReadiness,
+        roleReadiness,
+        unlockedTracks,
+      } = {}) {
         set(s => ({
           xp:             xp             ?? s.xp,
           streakCount:    streakCount    ?? s.streakCount,
+          streakLastDate: streakLastDate ?? s.streakLastDate,
+          completedProjects: completedProjects
+            ? { ...s.completedProjects, ...completedProjects }
+            : s.completedProjects,
           completedTopics: completedTopics
             ? { ...s.completedTopics, ...completedTopics }
             : s.completedTopics,
           achievements:   achievements
             ? { ...s.achievements, ...achievements }
             : s.achievements,
+          incidentsResolved: incidentsResolved ?? s.incidentsResolved,
+          interviewReadiness: interviewReadiness ?? s.interviewReadiness,
+          roleReadiness: roleReadiness
+            ? { ...s.roleReadiness, ...roleReadiness }
+            : s.roleReadiness,
+          unlockedTracks: unlockedTracks
+            ? Array.from(new Set([...(s.unlockedTracks ?? []), ...unlockedTracks]))
+            : s.unlockedTracks,
         }));
       },
     }),

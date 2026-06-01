@@ -5,6 +5,39 @@ export const buildLabs = [
     badge: 'ADF · Bronze',
     scenario: 'A marketing team needs hourly customer events from a third-party REST API ingested into ADLS Bronze with retry-safe loads.',
     objective: 'Land raw JSON, track a watermark, and make the pipeline restartable without duplicating rows.',
+    projectTicket: {
+      businessTeam: 'Marketing Operations',
+      priority: 'P1 • Hourly customer events',
+      requirements: [
+        'Pull data from a paginated REST API with retry-safe orchestration.',
+        'Land raw JSON into an ADLS Bronze zone and preserve every response batch.',
+        'Store the watermark outside the pipeline and advance it only after success.',
+      ],
+      successCriteria: [
+        'Bronze row counts match the API response for the selected window.',
+        'A rerun with the same inputs does not duplicate files or records.',
+        'Secrets stay in Key Vault and the pipeline uses managed identity.',
+      ],
+    },
+    simulator: {
+      canvas: [
+        { title: 'Ticket review', detail: 'Confirm scope, SLA, and source contract.' },
+        { title: 'ADF setup', detail: 'Create the linked service, retry policy, and pagination.' },
+        { title: 'Bronze landing', detail: 'Persist raw JSON and watermark metadata.' },
+        { title: 'Validation gate', detail: 'Check counts, retries, and idempotency.' },
+        { title: 'Production ready', detail: 'Release with monitoring and rollback notes.' },
+      ],
+      mentorHints: [
+        'Think like an operator: landing raw JSON cleanly matters more than transforming too early.',
+        'Keep the watermark separate from the payload so a failed run can be replayed safely.',
+        'Managed identity plus Key Vault is the cleanest production pattern here.',
+      ],
+      postCompletion: {
+        incident: 'A Friday evening schema tweak causes the hourly ADF trigger to land fewer records than expected. How would you confirm whether the issue is pagination, auth, or an upstream API change?',
+        interview: 'How would you design a restart-safe ADF API ingestion pipeline for a source that rate-limits requests and occasionally returns partial pages?',
+        resume: 'Built a restart-safe ADF API ingestion pipeline with pagination, watermark tracking, Key Vault secrets, and Bronze landing validation, eliminating duplicate loads on hourly reruns.',
+      },
+    },
     services: [
       { name: 'Azure Data Factory', why: 'Schedules the trigger, handles the copy activity, and stores the retry logic.' },
       { name: 'ADLS Gen2', why: 'Landing zone for raw Bronze files with immutable timestamps and source partitions.' },

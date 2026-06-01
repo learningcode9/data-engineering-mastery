@@ -167,7 +167,7 @@ export const SidebarItem = memo(function SidebarItem({
       <span className="nav-icon ds-sidebar-icon" aria-hidden="true">{icon}</span>
       {!compact && <span className="nav-label">{label}</span>}
       {!compact && progress > 0 && (
-        <Badge variant="success" size="sm" aria-label={`${progress}% complete`}>
+        <Badge variant="info" size="sm" aria-label={`${progress}% complete`}>
           {progress}%
         </Badge>
       )}

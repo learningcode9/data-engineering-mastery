@@ -2,7 +2,7 @@
 // Shows a demo-mode notice and "Continue as Demo Learner" when Supabase is not configured.
 
 import { useState, type FormEvent } from 'react'
-import { signInWithEmail } from '../../services/supabase/auth'
+import { signInWithEmail, signInWithGoogle } from '../../services/supabase/auth'
 import { isSupabaseConfigured } from '../../services/supabase/client'
 
 interface LoginFormProps {
@@ -15,6 +15,7 @@ export function LoginForm({ onSuccess, onSwitchToSignup, onDemoMode }: LoginForm
   const [email,    setEmail]    = useState('')
   const [password, setPassword] = useState('')
   const [loading,  setLoading]  = useState(false)
+  const [googleLoading, setGoogleLoading] = useState(false)
   const [error,    setError]    = useState<string | null>(null)
 
   const configured = isSupabaseConfigured()
@@ -51,6 +52,23 @@ export function LoginForm({ onSuccess, onSwitchToSignup, onDemoMode }: LoginForm
     }
   }
 
+  async function handleGoogleSignIn() {
+    setError(null)
+    if (!configured) {
+      setError('Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env.local to enable Google sign-in.')
+      return
+    }
+
+    setGoogleLoading(true)
+    try {
+      await signInWithGoogle()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Google sign-in failed'
+      setError(msg)
+      setGoogleLoading(false)
+    }
+  }
+
   return (
     <div>
       {!configured && (
@@ -64,6 +82,17 @@ export function LoginForm({ onSuccess, onSwitchToSignup, onDemoMode }: LoginForm
         {error && (
           <div className="auth-error" role="alert">{error}</div>
         )}
+
+        <button
+          type="button"
+          className="auth-google-btn"
+          onClick={handleGoogleSignIn}
+          disabled={loading || googleLoading || !configured}
+        >
+          {googleLoading ? 'Connecting to Google…' : 'Continue with Google'}
+        </button>
+
+        <div className="auth-divider"><span>or use your email</span></div>
 
         <div className="auth-field">
           <label htmlFor="login-email">Email</label>

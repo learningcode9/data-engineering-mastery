@@ -4,6 +4,7 @@ import { useLocalStorage } from '../../hooks/useLocalStorage.js';
 import { topics } from '../../data/topics.js';
 import { ACHIEVEMENTS, RARITY } from '../../hooks/useAchievements.js';
 import useLearningStore from '../../store/learningStore.js';
+import { useUser } from '../../providers/UserProvider';
 import { ProgressBar, SidebarItem } from '../ui/design-system.jsx';
 
 function computeOverallPct(practiceProgress) {
@@ -30,6 +31,7 @@ const Sidebar = memo(function Sidebar({
 }) {
   const [practiceProgress] = useLocalStorage('dem-practice-progress', {});
   const [learnedSet]       = useLocalStorage('dem-interview-learned', {});
+  const { currentUser, isMockUser, openAuthPage, signOut } = useUser();
   const completedTopics    = useLearningStore(s => s.completedTopics);
   const unlockedAch        = useLearningStore(s => s.achievements);
   const [showAch,  setShowAch]  = useState(false);
@@ -176,6 +178,28 @@ const Sidebar = memo(function Sidebar({
                   </div>
                 ))}
               </div>
+            )}
+          </div>
+        )}
+
+        {!compact && (
+          <div className="sidebar-auth">
+            <div className="sidebar-auth-copy">
+              <p className="sidebar-auth-label">{isMockUser ? 'Guest mode' : 'Signed in'}</p>
+              <p className="sidebar-auth-value">
+                {isMockUser
+                  ? 'Progress stays on this device until you sign in.'
+                  : (currentUser?.email ?? 'Signed in on this device')}
+              </p>
+            </div>
+            {isMockUser ? (
+              <button type="button" className="sidebar-auth-btn" onClick={openAuthPage}>
+                Google sign-in
+              </button>
+            ) : (
+              <button type="button" className="sidebar-auth-btn sidebar-auth-btn--secondary" onClick={signOut}>
+                Sign out
+              </button>
             )}
           </div>
         )}

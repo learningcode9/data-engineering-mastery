@@ -31,7 +31,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   if (!isBackendEnabled()) return MOCK_GUEST
   const sb = requireSupabase()
   const { data: { user } } = await sb.auth.getUser()
-  if (!user) return null
+  if (!user) return MOCK_GUEST
   return {
     id: user.id,
     email: user.email!,
@@ -76,7 +76,7 @@ export async function signUpWithEmail(
 export async function signInWithGoogle(): Promise<void> {
   const { error } = await requireSupabase().auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: `${window.location.origin}/auth/callback` },
+    options: { redirectTo: `${window.location.origin}${window.location.pathname}${window.location.search}` },
   })
   if (error) throw new Error(error.message)
 }

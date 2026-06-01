@@ -13,17 +13,19 @@ export const quickLinks = [
 
 // Core navigation pages — rendered as distinct views, not scroll targets
 export const coreNavItems = [
-  { id: 'dashboard',      label: 'Dashboard',      icon: '⌂' },
-  { id: 'topics',         label: 'Learning Path',  icon: '▦' },
-  { id: 'sql-lab',        label: 'SQL Lab',        icon: '▤' },
-  { id: 'projects',       label: 'Projects',       icon: '▣' },
-  { id: 'interview-prep', label: 'Interview Prep', icon: '◌' },
-  { id: 'roadmap',        label: 'Roadmaps',       icon: '◇' },
-  { id: 'ai-learning',    label: 'AI Coach',       icon: '✦' },
+  { id: 'dashboard',      label: 'Dashboard',           icon: '⌂' },
+  { id: 'topics',         label: 'Learning Path',       icon: '▦' },
+  { id: 'sql-lab',        label: 'SQL Lab',             icon: '▤' },
+  { id: 'projects',       label: 'Projects',            icon: '▣' },
+  { id: 'workplace',      label: 'Workplace Simulator', icon: '🖥' },
+  { id: 'interview-prep', label: 'Interview Prep',      icon: '◌' },
+  { id: 'roadmap',        label: 'Roadmaps',            icon: '◇' },
+  { id: 'ai-learning',    label: 'AI Coach',            icon: '✦' },
 ];
 
 // Engineering-mode labs — shown under collapsible Labs section
 export const labsNavItems = [
+  { id: 'hands-on-labs', label: 'Hands-On Labs', icon: '◬' },
   { id: 'architecture', label: 'Architecture', icon: '◫' },
   { id: 'skill-graph',  label: 'Skill Graph',  icon: '◉' },
   { id: 'incidents',    label: 'Incidents',    icon: '⊗' },
