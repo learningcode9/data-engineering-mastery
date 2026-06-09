@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { phases } from '../../data/phases.js';
 import { SummaryCard } from '../ui/Card.jsx';
 import { ProgressBar } from '../ui/ProgressBar.jsx';
-import { Badge, StatPill } from '../ui/design-system.jsx';
+import { Badge } from '../ui/design-system.jsx';
 import { summaryCards } from '../../data/appData.js';
 import { beginnerJourney, getInterviewReadinessEstimate, getPhaseMentorship } from '../../data/careerGuidance.js';
 import { useLocalStorage } from '../../hooks/useLocalStorage.js';
@@ -12,6 +12,10 @@ import {
 } from '../../utils/learningAnalytics.js';
 import { getDashboardNextLessonAction } from '../../utils/dashboardInsights.js';
 import { workplaceSimulators } from '../../data/workplaceSimulators.js';
+import { topics } from '../../data/topics.js';
+import { readCareer, careerLevel, readSprint, sprintProgress } from '../../data/adfTickets.js';
+import { SIM_PREREQS, recommendSimulator } from '../../data/adfLearning.js';
+import useLearningStore from '../../store/learningStore.js';
 
 function useCountUp(target, duration = 900) {
   const [display, setDisplay] = useState(0);
@@ -1129,163 +1133,162 @@ export const SectionPreviewGrid = memo(function SectionPreviewGrid({ onNavigate 
 
 // ─── New Dashboard: Hero Current Focus ────────────────────────────────────────
 
-export const DashboardHero = memo(function DashboardHero({ sqlProgress, onResume, onNavigate }) {
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1)  return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24)  return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7)  return `${days}d ago`;
+  return new Date(dateStr).toLocaleDateString();
+}
+
+// ─── Section 1: Hero ─────────────────────────────────────────────────────────
+// Answers: "What am I doing now?" — single CTA, current path + progress.
+
+export const DashboardHero = memo(function DashboardHero({ sqlProgress, nextLesson, onResume }) {
   const { percent, nextSection, nextSectionIndex, total } = sqlProgress;
-  const allDone = nextSection === null;
-  const sectionTitle = allDone ? 'All sections complete!' : nextSection?.title ?? '';
-  const sectionNum = allDone ? total : (nextSectionIndex ?? 0) + 1;
-  const remaining = allDone ? 0 : total - (nextSectionIndex ?? 0);
-  const minsLeft = remaining * 18;
-  const timeLabel = minsLeft >= 60
-    ? `~${Math.round(minsLeft / 60)}h left in this section`
-    : `~${minsLeft} min left in this section`;
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const allDone     = nextSection === null;
+  const sectionTitle = allDone ? 'All sections complete' : nextSection?.title ?? '';
+  const sectionNum   = allDone ? total : (nextSectionIndex ?? 0) + 1;
 
   return (
     <section className="dash-hero">
-      <div className="dash-hero-focus">
-        <p className="eyebrow" style={{ marginBottom: 10 }}>Welcome back</p>
-        <div className="dash-hero-body">
-
-          <div className="dash-hero-icon-wrap" aria-hidden="true">📊</div>
-          <div className="dash-hero-content">
-            <h2 className="dash-hero-title">{greeting}, Data Engineer!</h2>
-            <p className="dash-hero-meta">SQL Mastery · Section {sectionNum}/{total}</p>
-            {!allDone && <p className="dash-hero-current-label">{sectionTitle}</p>}
-            <div className="dash-hero-bar-row">
-              <div className="dash-hero-track">
-                <div className="dash-hero-fill" style={{ width: `${percent}%` }} />
-              </div>
-              <span className="dash-hero-pct">{percent}%</span>
-            </div>
-            <p className="dash-hero-time">
-              <span aria-hidden="true">⏱</span> {allDone ? 'All complete!' : timeLabel}
-            </p>
+      <p className="eyebrow">Continue where you left off</p>
+      <div className="dash-hero-band">
+        <div className="dash-hero-icon-wrap" aria-hidden="true">📊</div>
+        <div className="dash-hero-details">
+          <h2 className="dash-hero-title">SQL Mastery</h2>
+          <p className="dash-hero-subtitle">
+            Section {sectionNum} of {total}
+            {sectionTitle ? ` · ${sectionTitle}` : ''}
+          </p>
+          {nextLesson && (
+            <p className="dash-hero-next-lesson">Next up: {nextLesson}</p>
+          )}
+        </div>
+        <div className="dash-hero-progress-block">
+          <div className="dash-hero-track">
+            <div className="dash-hero-fill" style={{ width: `${percent}%` }} />
           </div>
+          <span className="dash-hero-pct">{percent}%</span>
         </div>
-        <div className="dash-hero-actions">
-          <button type="button" className="btn-primary" onClick={onResume}>
-            Continue Learning →
-          </button>
-          <button type="button" className="btn-secondary" onClick={() => onNavigate?.('topics')}>
-            Open Learning Path
-          </button>
-        </div>
+        <button type="button" className="btn-primary dash-hero-cta" onClick={onResume}>
+          Continue Learning →
+        </button>
       </div>
     </section>
   );
 });
 
-// ─── Progress Overview card ───────────────────────────────────────────────────
+// ─── Section 2: Workbench ─────────────────────────────────────────────────────
+// Answers: "What can I do next?" — 4 modes (2×2 on desktop), each with one CTA.
 
-const CORE_PHASES = phases.filter(p =>
-  ['foundation', 'pipeline', 'big-data', 'cloud', 'streaming', 'production', 'career'].includes(p.id)
-);
-
-const COMPACT_SKILL_LABELS = {
-  'SQL Mastery': 'SQL',
-  'SQL Fundamentals': 'SQL',
-  'Advanced SQL': 'SQL',
-  'Python for Data Engineering': 'Python',
-  'Data Warehousing & Data Modeling': 'Modeling',
-  'Azure Data Factory': 'ADF',
-  'Azure Databricks': 'Databricks',
-  'AWS Glue': 'Glue',
-  'SCD Type 2': 'SCD2',
-  'CDC & SCD2': 'CDC',
-  'CI/CD for Azure Data Engineering': 'CI/CD',
-  'Streaming & Kafka Engineering': 'Streaming',
-  'Synapse / Fabric': 'Synapse',
-  'Synapse Analytics': 'Synapse',
-};
-
-function compactSkillLabel(title) {
-  if (!title) return 'Next';
-  return COMPACT_SKILL_LABELS[title]
-    || (title.length > 18 ? title.split(' ').slice(0, 2).join(' ') : title);
+function WbCard({ icon, label, title, description, status, ctaLabel, onClick }) {
+  return (
+    <div className="card wb-card">
+      <div className="wb-header">
+        <span className="wb-icon" aria-hidden="true">{icon}</span>
+        <span className="wb-label">{label}</span>
+      </div>
+      <div className="wb-body">
+        <h3 className="wb-title">{title}</h3>
+        <p className="wb-desc">{description}</p>
+      </div>
+      <div className="wb-footer">
+        <span className="wb-status">{status}</span>
+        <button type="button" className="wb-cta-btn" onClick={onClick}>
+          {ctaLabel} →
+        </button>
+      </div>
+    </div>
+  );
 }
 
-export const ProgressOverviewCard = memo(function ProgressOverviewCard({
-  completedCount, totalTopics, inProgressCount, learnedCount,
-  practiceProgress, topicStates, topics = [], activityLog = [], streak = 0, overallReadiness = 0, onSelectTopic,
+export const WorkbenchGrid = memo(function WorkbenchGrid({
+  sqlProgress, practiceDone, interviewReadiness, onNavigate,
 }) {
-  const ts = topicStates ?? {};
-  const strongest = getStrengths(topics ?? [], ts)[0] ?? null;
-  const weakAreas = getWeakAreas(topics ?? [], ts);
-  const weakest = weakAreas[0] ?? null;
-  const nextAction = useMemo(
-    () => getDashboardNextLessonAction({ topics, topicStates: ts }),
-    [topics, ts]
-  );
-  const remainingEstimate = useMemo(
-    () => estimateRemainingLearningTime({ topics, topicStates: ts, activityLog }),
-    [topics, ts, activityLog]
-  );
-  const interviewEstimate = getInterviewReadinessEstimate(overallReadiness ?? 0);
-
-  // Determine current core phase (1-indexed)
-  const currentPhaseIdx = useMemo(() => {
-    const firstIncomplete = CORE_PHASES.findIndex(phase =>
-      !phase.topicIds.every(id => ts[id]?.state === 'mastered' || ts[id]?.state === 'completed')
-    );
-    return firstIncomplete >= 0 ? firstIncomplete + 1 : CORE_PHASES.length;
-  }, [ts]);
-
-  const overallPct = totalTopics > 0 ? Math.round((completedCount / totalTopics) * 100) : 0;
-
-  const summaryItems = [
-    { label: 'Phase', value: `${currentPhaseIdx}/${CORE_PHASES.length}`, title: 'Current stage' },
-    { label: 'Topics', value: `${completedCount}/${totalTopics}`, title: inProgressCount > 0 ? `${inProgressCount} in progress` : 'Completed' },
-    { label: 'Streak', value: `${streak}d`, title: 'Keep the chain going' },
-    { label: 'ETA', value: `~${remainingEstimate.hours}h`, title: 'Remaining focus' },
-    { label: 'Strongest Skill', value: compactSkillLabel(strongest?.title), title: 'Most consistent area' },
-    { label: 'Weakest Skill', value: compactSkillLabel(weakest?.title), title: 'Best next focus' },
-  ];
+  const { percent, nextSectionIndex, total } = sqlProgress;
+  const sectionNum = (nextSectionIndex ?? 0) + 1;
+  const iReadiness = Math.min(100, Math.round(interviewReadiness ?? 0));
 
   return (
-    <section className="card dash-progress-card">
-      <div className="dash-progress-head">
-        <div>
-          <p className="eyebrow">Progress Snapshot</p>
-          <h2>Keep momentum in view</h2>
-        </div>
-        <StatPill label="Readiness" value={`${overallReadiness ?? 0}%`} icon="◆" variant="info" />
+    <div className="dash-workbench-section">
+      <p className="eyebrow" style={{ marginBottom: 14 }}>Your Workbench</p>
+      <div className="dash-workbench">
+        <WbCard
+          icon="📚"
+          label="Learn"
+          title="SQL Mastery"
+          description="Build SQL skills from fundamentals to advanced joins, window functions, and query optimization."
+          status={`Section ${sectionNum} of ${total} · ${percent}% complete`}
+          ctaLabel="Continue"
+          onClick={() => onNavigate?.('topics')}
+        />
+        <WbCard
+          icon="🧪"
+          label="Practice"
+          title="SQL Lab"
+          description="Apply what you have learned with hands-on query exercises on real datasets with instant feedback."
+          status={practiceDone > 0 ? `${practiceDone} exercise${practiceDone !== 1 ? 's' : ''} completed` : 'Not started yet'}
+          ctaLabel="Open Lab"
+          onClick={() => onNavigate?.('sql-lab')}
+        />
+        <WbCard
+          icon="🏭"
+          label="Simulate"
+          title="ADF Pipeline Simulator"
+          description="Debug and fix real Azure Data Factory pipeline failures in a safe, guided sandbox environment."
+          status="Reproduce real production incidents"
+          ctaLabel="Launch"
+          onClick={() => onNavigate?.('workplace')}
+        />
+        <WbCard
+          icon="💬"
+          label="Interview Prep"
+          title="Mock Q&A"
+          description="Practice data engineering interview questions with structured answers and AI-powered feedback."
+          status={iReadiness > 0 ? `${iReadiness}% readiness` : 'Not started yet'}
+          ctaLabel="Start"
+          onClick={() => onNavigate?.('interview-prep')}
+        />
       </div>
+    </div>
+  );
+});
 
-      <div className="dash-progress-summary-grid">
-        {summaryItems.map(item => (
-          <div key={item.label} className="dash-progress-summary-item" title={item.title}>
-            <span className="dash-progress-summary-label">{item.label}</span>
-            <strong className="dash-progress-summary-value">{item.value}</strong>
-          </div>
-        ))}
-      </div>
-      <div className="dash-progress-focus">
-        <span className="dash-progress-focus-label">Recommended next lesson</span>
-        <div className="dash-progress-focus-row">
-          <div className="dash-progress-focus-copy">
-            <strong>{nextAction.title}</strong>
-            <span>{nextAction.detail}</span>
-          </div>
-          {nextAction.topicId && (
-            <button
-              type="button"
-              className="ps-open-btn"
-              onClick={() => onSelectTopic?.(nextAction.topicId)}
-            >
-              Open →
-            </button>
-          )}
+// ─── Section 3: Recent Activity ───────────────────────────────────────────────
+// Answers: "What have I done recently?" — empty state when no log exists.
+
+export const RecentActivityCard = memo(function RecentActivityCard({ activityLog = [] }) {
+  const entries = (activityLog ?? []).slice(0, 6);
+
+  return (
+    <section className="card">
+      <p className="eyebrow">Recent Activity</p>
+      {entries.length === 0 ? (
+        <div className="activity-empty">
+          <p className="activity-empty-title">Nothing here yet</p>
+          <p className="activity-empty-sub">
+            Complete a lesson, exercise, or simulator session and your activity will appear here.
+          </p>
         </div>
-      </div>
-      <div className="dash-progress-overall-row">
-        <div className="dash-overall-track">
-          <div className="dash-overall-fill" style={{ width: `${overallPct}%` }} />
-        </div>
-        <span className="dash-overall-label">Overall Progress</span>
-        <span className="dash-overall-pct">{overallPct}%</span>
-      </div>
+      ) : (
+        <ul className="activity-list" role="list">
+          {entries.map((entry, i) => (
+            <li key={i} className="activity-row">
+              <span className="activity-dot" aria-hidden="true" />
+              <span className="activity-text">{entry.text}</span>
+              <span className="activity-time">{timeAgo(entry.date)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 });
@@ -1613,6 +1616,124 @@ export const WorkplaceSimulatorsGrid = memo(function WorkplaceSimulatorsGrid({ o
             </button>
           );
         })}
+      </div>
+    </section>
+  );
+});
+
+// ─── Career Roadmap & Job Readiness (Phase 12) ───────────────────────────────
+
+const ROADMAP_SKILLS = [
+  { label: 'ADF', topicId: 'azure-data-factory' },
+  { label: 'CDC / SCD2', topicId: 'cdc' },
+  { label: 'Delta Lake', topicId: 'delta-lake' },
+  { label: 'Spark Optimization', topicId: 'spark-optimization' },
+  { label: 'System Design', topicId: 'system-design' },
+  { label: 'Data Modeling', topicId: 'data-modeling' },
+  { label: 'CI/CD', topicId: 'cicd-de' },
+  { label: 'Monitoring', topicId: 'monitoring-logging' },
+];
+
+const TOTAL_SIMS = 9; // 4 sprint + CDC + Databricks + CI/CD + Architecture + Incident
+
+export const CareerRoadmapCard = memo(function CareerRoadmapCard({
+  onNavigate,
+  topicStates = {},
+  activityLog = [],
+  streak = 0,
+}) {
+  const completedTopics = useLearningStore(s => s.completedTopics) ?? {};
+  const [learnedSet] = useLocalStorage('dem-interview-learned', {});
+  const career = readCareer();
+  const sprint = readSprint();
+
+  const completedTopicCount = Object.values(completedTopics).filter(Boolean).length;
+  const learnedCount = Object.values(learnedSet ?? {}).filter(Boolean).length;
+
+  // ── Job readiness components ──
+  const learningPct = Math.min(100, Math.round((completedTopicCount / (topics.length || 1)) * 100));
+  const simPct = Math.min(100, Math.round(((career.ticketsCompleted ?? 0) / TOTAL_SIMS) * 100));
+  const interviewPct = Math.min(100, Math.round((learnedCount / 20) * 100));
+  const projectPct = sprintProgress(sprint.done).pct;
+  const components = [
+    { key: 'learning', label: 'Learning', value: learningPct, action: { text: 'Continue your Learning Path', target: 'topics' } },
+    { key: 'sim', label: 'Simulators', value: simPct, action: null },
+    { key: 'interview', label: 'Interview', value: interviewPct, action: { text: 'Practice interview questions', target: 'interview-prep' } },
+    { key: 'projects', label: 'Projects', value: projectPct, action: { text: 'Finish the current workplace project', target: 'workplace' } },
+  ];
+  const jobReadiness = Math.round(components.reduce((a, c) => a + c.value, 0) / components.length);
+
+  // ── Career level ──
+  const { level, next } = careerLevel(career.ticketsCompleted ?? 0);
+  const toNext = next ? Math.max(0, next.min - (career.ticketsCompleted ?? 0)) : 0;
+  const levelPct = next
+    ? Math.min(100, Math.round((((career.ticketsCompleted ?? 0) - level.min) / (next.min - level.min)) * 100))
+    : 100;
+  const remainingEstimate = useMemo(
+    () => estimateRemainingLearningTime({ topics, topicStates: topicStates ?? {}, activityLog }),
+    [topicStates, activityLog]
+  );
+
+  // ── Next best action (lowest-scoring area) ──
+  const weakest = components.reduce((a, b) => (b.value < a.value ? b : a));
+  const nextAction = weakest.key === 'sim'
+    ? { text: 'Start the next workplace assignment', target: 'workplace' }
+    : weakest.key === 'learning'
+      ? { text: 'Review the learning roadmap', target: 'topics' }
+      : (weakest.action ?? { text: 'Practice interview questions', target: 'interview-prep' });
+
+  // ── Milestones ──
+  const milestones = [
+    { label: 'First workplace assignment', done: (career.ticketsCompleted ?? 0) >= 1 },
+    { label: 'First project', done: sprint.done.length >= 1 },
+    { label: 'First incident resolved', done: (career.incidentsResolved ?? 0) >= 1 },
+    { label: 'First architecture design', done: (career.architectureDesigns ?? 0) >= 1 },
+    { label: 'End-to-end project delivered', done: (career.projectsDelivered ?? 0) >= 1 },
+  ];
+
+  const summaryItems = [
+    { label: 'Career Level', value: `${level.label}`, title: 'Current career stage' },
+    { label: 'Topics', value: `${completedTopicCount}/${topics.length}`, title: 'Completed topics' },
+    { label: 'Streak', value: `${streak}d`, title: 'Active streak' },
+    { label: 'ETA', value: `~${remainingEstimate.hours}h`, title: 'Estimated remaining time' },
+  ];
+
+  return (
+    <section className="card dash-roadmap-card">
+      <div className="dash-roadmap-head">
+        <div>
+          <p className="eyebrow" style={{ margin: 0 }}>Career roadmap</p>
+          <h2>{level.label}</h2>
+          <p className="dash-roadmap-sub">
+            {next ? `${toNext} workplace assignment${toNext === 1 ? '' : 's'} away from ${next.label}` : 'Top level reached'}
+          </p>
+        </div>
+        <div className="dash-roadmap-readiness">
+          <span className="dash-roadmap-readiness-pct">{jobReadiness}%</span>
+          <span className="dash-roadmap-readiness-label">Job readiness</span>
+        </div>
+      </div>
+
+      <div className="dash-roadmap-summary-grid">
+        {summaryItems.map(item => (
+          <div key={item.label} className="dash-progress-summary-item" title={item.title}>
+            <span className="dash-progress-summary-label">{item.label}</span>
+            <strong className="dash-progress-summary-value">{item.value}</strong>
+          </div>
+        ))}
+      </div>
+
+      <button type="button" className="dash-roadmap-nba" onClick={() => onNavigate?.(nextAction.target)}>
+        <span className="dash-roadmap-nba-label">Next best action</span>
+        <span className="dash-roadmap-nba-text">{nextAction.text} →</span>
+      </button>
+
+      <div className="dash-roadmap-milestones">
+        {milestones.map(m => (
+          <span key={m.label} className={`dash-roadmap-milestone${m.done ? ' dash-roadmap-milestone--done' : ''}`}>
+            <span aria-hidden="true">{m.done ? '✓' : '○'}</span> {m.label}
+          </span>
+        ))}
       </div>
     </section>
   );

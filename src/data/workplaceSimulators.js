@@ -16,8 +16,8 @@ export const workplaceSimulators = [
     title: 'Databricks Simulator',
     summary: 'Transform Bronze into Silver and Gold with notebooks, Delta, and quality checks.',
     tools: ['Databricks', 'Delta', 'Spark'],
-    status: 'next',
-    statusLabel: 'Next',
+    status: 'available',
+    statusLabel: 'Available',
     icon: '⚡',
   },
   {
@@ -25,8 +25,8 @@ export const workplaceSimulators = [
     title: 'Production Incident Simulator',
     summary: 'Diagnose a failing overnight load from logs, run history, and watermark state.',
     tools: ['Logs', 'Monitor', 'On-call'],
-    status: 'soon',
-    statusLabel: 'Coming soon',
+    status: 'available',
+    statusLabel: 'Available',
     icon: '⊗',
   },
   {
@@ -34,8 +34,8 @@ export const workplaceSimulators = [
     title: 'CI/CD Release Simulator',
     summary: 'Promote ADF and Databricks artifacts across dev, test, and prod with approvals.',
     tools: ['DevOps', 'Git', 'Approvals'],
-    status: 'soon',
-    statusLabel: 'Coming soon',
+    status: 'available',
+    statusLabel: 'Available',
     icon: '◈',
   },
 ];

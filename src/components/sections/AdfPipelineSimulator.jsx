@@ -6,10 +6,13 @@ import {
   SecondaryButton,
 } from '../ui/design-system.jsx';
 import { getSim } from '../../data/adfSims.js';
+import useLearningStore from '../../store/learningStore.js';
+import { SIM_PREREQS, simReadiness } from '../../data/adfLearning.js';
 import {
   TICKET_BACKLOG,
   EXPERIENCE_KEYS,
   INCIDENTS,
+  STANDALONE_TICKETS,
   readCareer,
   careerLevel,
   SPRINT,
@@ -164,7 +167,33 @@ function AcceptanceCriteria({ sim, stepStates, className = '' }) {
   );
 }
 
-function TicketCard({ sim, onStart, onBack }) {
+function LearningReadiness({ simId, completedTopics }) {
+  const prereqs = SIM_PREREQS[simId]?.prereqs ?? [];
+  if (!prereqs.length) return null;
+  const { pct } = simReadiness(simId, completedTopics);
+  return (
+    <div className="adf-tk-ac adf-tk-readiness">
+      <div className="adf-tk-ac-head">
+        <span className="adf-sim-label">Learning readiness</span>
+        <span className="adf-tk-ac-count">{pct}%</span>
+      </div>
+      <ul className="adf-tk-ac-list" role="list">
+        {prereqs.map((p, i) => {
+          const done = !!completedTopics?.[p.topicId];
+          return (
+            <li key={`${p.label}-${i}`} className={done ? 'adf-tk-ac-li--done' : ''}>
+              <span className="adf-tk-ac-box" aria-hidden="true">{done ? '✓' : '⚠'}</span>
+              <span>{p.label}</span>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="adf-tk-readiness-note">Recommended, not required — you can start anytime.</p>
+    </div>
+  );
+}
+
+function TicketCard({ sim, simId, completedTopics, onStart, onBack }) {
   const t = sim.ticket ?? {};
   const impact = sim.businessImpact;
   const meta = [
@@ -182,7 +211,7 @@ function TicketCard({ sim, onStart, onBack }) {
     <AppCard className="adf-sim-ticket">
       <div className="adf-sim-ticket-header">
         <div className="adf-sim-ticket-copy">
-          <p className="eyebrow">{t.id ? `${t.id} · Work item` : 'Work item'}</p>
+          <p className="eyebrow">{t.id ? `${t.id} · Ticket` : 'Ticket'}</p>
           <h3>{sim.ticketTitle}</h3>
           <p>{sim.subtitle}</p>
         </div>
@@ -229,6 +258,7 @@ function TicketCard({ sim, onStart, onBack }) {
 
       <div className="adf-sim-ticket-columns">
         <AcceptanceCriteria sim={sim} stepStates={null} className="adf-sim-ticket-block" />
+        <LearningReadiness simId={simId} completedTopics={completedTopics} />
         {t.definitionOfDone?.length ? (
           <div className="adf-sim-ticket-block adf-tk-dod">
             <span className="adf-sim-label">Definition of done</span>
@@ -288,10 +318,10 @@ function TicketCard({ sim, onStart, onBack }) {
 
       {onStart ? (
         <div className="adf-sim-ticket-start">
-          <p>Accept the assignment to open your office laptop and configure the pipeline one work item at a time. You'll be guided through all 6 steps.</p>
+          <p>Accept this ticket to open your office laptop and work through it one step at a time — you'll be guided through all {sim.steps?.length ?? ''} steps.</p>
           <div className="adf-sim-ticket-start-actions">
             {onBack ? <SecondaryButton onClick={onBack}>← Back to inbox</SecondaryButton> : null}
-            <PrimaryButton onClick={onStart}>Accept Assignment →</PrimaryButton>
+            <PrimaryButton onClick={onStart}>Accept ticket →</PrimaryButton>
           </div>
         </div>
       ) : null}
@@ -373,7 +403,14 @@ function SprintProgressCard({ progress }) {
   );
 }
 
-function OfficeInbox({ career, sprint, notice, onOpenTicket, onDeliver }) {
+function ReadinessChip({ simId, completedTopics }) {
+  if (!SIM_PREREQS[simId]) return null;
+  const { pct } = simReadiness(simId, completedTopics);
+  const tone = pct >= 70 ? 'high' : pct >= 30 ? 'med' : 'low';
+  return <span className={`adf-tk-ready-chip adf-tk-ready-chip--${tone}`}>Ready {pct}%</span>;
+}
+
+function OfficeInbox({ career, sprint, notice, completedTopics, onOpenTicket, onDeliver }) {
   const { level, next } = careerLevel(career.ticketsCompleted);
   const toNext = next ? Math.max(0, next.min - career.ticketsCompleted) : 0;
   const done = sprint.done;
@@ -453,6 +490,7 @@ function OfficeInbox({ career, sprint, notice, onOpenTicket, onDeliver }) {
                     {status === 'done' ? <Badge variant="success" size="sm">Done</Badge> : null}
                     {status === 'blocked' ? <Badge variant="muted" size="sm">Blocked by {blockers.join(', ')}</Badge> : null}
                     {status === 'unlocked' ? <Badge variant="info" size="sm">Ready</Badge> : null}
+                    <ReadinessChip simId={t.id} completedTopics={completedTopics} />
                   </div>
                   <strong className="adf-office-chain-title">{t.title}</strong>
                   <div className="adf-office-chain-deps">
@@ -470,6 +508,28 @@ function OfficeInbox({ career, sprint, notice, onOpenTicket, onDeliver }) {
         </ol>
       </AppCard>
 
+      <AppCard className="adf-office-inbox">
+        <div className="adf-sim-header-row">
+          <div>
+            <p className="eyebrow">Data engineering tickets</p>
+            <h3>Standalone build tickets</h3>
+          </div>
+          <Badge variant="info">{STANDALONE_TICKETS.length} ready</Badge>
+        </div>
+        <ul className="adf-office-ticket-list" role="list">
+          {STANDALONE_TICKETS.map(tk => (
+            <li key={tk.id} className="adf-office-ticket adf-office-ticket--open">
+              <span className={`adf-office-prio adf-office-prio--${tk.priority.toLowerCase()}`}>{tk.priority}</span>
+              <div className="adf-office-ticket-copy">
+                <strong>{tk.id} · {tk.title}</strong>
+                <span className="adf-office-ticket-meta">{tk.team} · {tk.topic} <ReadinessChip simId={tk.id} completedTopics={completedTopics} /></span>
+              </div>
+              <PrimaryButton onClick={() => onOpenTicket(tk.id)}>Open ticket →</PrimaryButton>
+            </li>
+          ))}
+        </ul>
+      </AppCard>
+
       <AppCard className="adf-office-inbox adf-office-incidents">
         <div className="adf-sim-header-row">
           <div>
@@ -484,7 +544,7 @@ function OfficeInbox({ career, sprint, notice, onOpenTicket, onDeliver }) {
               <span className={`adf-office-prio adf-office-prio--${inc.priority.toLowerCase()}`}>{inc.priority}</span>
               <div className="adf-office-ticket-copy">
                 <strong>{inc.id} · {inc.title}</strong>
-                <span className="adf-office-ticket-meta">{inc.team} · SLA: {inc.sla}</span>
+                <span className="adf-office-ticket-meta">{inc.team} · SLA: {inc.sla} <ReadinessChip simId={inc.id} completedTopics={completedTopics} /></span>
               </div>
               <PrimaryButton onClick={() => onOpenTicket(inc.id)}>Open incident →</PrimaryButton>
             </li>
@@ -745,7 +805,7 @@ function computeManagerReview(sim, stepStates) {
   return { score, strengths, improve };
 }
 
-function CompletionCard({ sim, stepStates, onReset, onLogExperience, logged }) {
+function CompletionCard({ sim, simId, completedTopics, stepStates, onReset, onLogExperience, logged }) {
   const completed = stepStates.filter(step => step.correct).length;
   const allComplete = completed === sim.steps.length;
 
@@ -755,6 +815,8 @@ function CompletionCard({ sim, stepStates, onReset, onLogExperience, logged }) {
   const review = computeManagerReview(sim, stepStates);
   const readiness = computeReadiness(sim, stepStates);
   const interviewQuestions = sim.interviewQuestions ?? [];
+  const struggled = sim.steps.filter((s, i) => (stepStates[i]?.mistakes ?? 0) > 0).map(s => s.title);
+  const learnPrereqs = SIM_PREREQS[simId]?.prereqs ?? [];
 
   return (
     <div className="adf-sim-completion">
@@ -811,6 +873,41 @@ function CompletionCard({ sim, stepStates, onReset, onLogExperience, logged }) {
               <span className="adf-sim-label">Business impact</span>
               <strong>{sim.ticket.closed.businessImpact}</strong>
             </div>
+          </div>
+        </AppCard>
+      ) : null}
+
+      {c.results ? (
+        <AppCard className="adf-sim-completion-card adf-tk-closed">
+          <div className="adf-tk-closed-head">
+            <span className="adf-sim-label">Release results</span>
+            <Badge variant="success">{c.headline?.replace(/[✅\s]+$/, '') || 'Complete'}</Badge>
+          </div>
+          <div className="adf-tk-closed-grid">
+            {c.results.map((r, i) => (
+              <div key={`${r.label}-${i}`}>
+                <span className="adf-sim-label">{r.label}</span>
+                <strong>{r.value}</strong>
+              </div>
+            ))}
+          </div>
+        </AppCard>
+      ) : null}
+
+      {c.metrics ? (
+        <AppCard className="adf-sim-completion-card adf-perf-metrics">
+          <p className="adf-sim-label">Optimization results</p>
+          <div className="adf-perf-grid">
+            {c.metrics.map((m, i) => (
+              <div key={`${m.label}-${i}`} className="adf-perf-metric">
+                <span className="adf-perf-metric-key">{m.label}</span>
+                <div className="adf-perf-metric-row">
+                  <span className="adf-perf-before">{m.before}</span>
+                  <span className="adf-perf-arrow" aria-hidden="true">→</span>
+                  <strong className="adf-perf-after">{m.after}</strong>
+                </div>
+              </div>
+            ))}
           </div>
         </AppCard>
       ) : null}
@@ -927,9 +1024,31 @@ function CompletionCard({ sim, stepStates, onReset, onLogExperience, logged }) {
         </AppCard>
       </div>
 
+      {learnPrereqs.length ? (
+        <AppCard className="adf-sim-completion-card adf-learn-gap">
+          <p className="adf-sim-label">Recommended learning</p>
+          {struggled.length ? (
+            <div className="adf-learn-gap-block">
+              <span className="adf-sim-label">You took extra tries on</span>
+              <ul className="adf-sim-completion-notes" role="list">
+                {struggled.map((s, i) => <li key={`${s}-${i}`}>{s}</li>)}
+              </ul>
+            </div>
+          ) : (
+            <p className="adf-learn-gap-clean">Clean run — no retries. Revise these modules to stay sharp for interviews:</p>
+          )}
+          <div className="adf-learn-gap-block">
+            <span className="adf-sim-label">Suggested learning modules</span>
+            <div className="adf-sim-chip-row">
+              {learnPrereqs.map(p => <span key={p.label} className="adf-sim-chip">{p.label}</span>)}
+            </div>
+          </div>
+        </AppCard>
+      ) : null}
+
       {interviewQuestions.length ? (
         <AppCard className="adf-sim-completion-card">
-          <p className="adf-sim-label">Interview mode · questions for this ticket</p>
+          <p className="adf-sim-label">Related interview topics · revise in Interview Prep</p>
           <ol className="adf-sim-interview-list" role="list">
             {interviewQuestions.map((q, i) => (
               <li key={`${q}-${i}`}>{q}</li>
@@ -1041,6 +1160,34 @@ function EvidencePanel({ evidence }) {
         </div>
       ) : null}
 
+      {evidence.type === 'records' ? (
+        <div className="adf-ev-table-wrap">
+          <table className="adf-ev-table">
+            <thead>
+              <tr>{evidence.columns.map(col => <th key={col}>{col}</th>)}</tr>
+            </thead>
+            <tbody>
+              {evidence.rows.map((row, ri) => (
+                <tr key={ri}>{row.map((cell, ci) => <td key={ci}>{cell}</td>)}</tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+
+      {evidence.type === 'metrics' ? (
+        <div className="adf-ev-metrics">
+          {evidence.items.map((it, i) => (
+            <div key={`${it.label}-${i}`} className="adf-ev-metric">
+              <span className="adf-ev-metric-key">{it.label}</span>
+              <span className="adf-ev-metric-before">{it.before}</span>
+              <span className="adf-ev-metric-arrow" aria-hidden="true">→</span>
+              <strong className="adf-ev-metric-after">{it.after}</strong>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       {evidence.type === 'note' ? <p className="adf-ev-note">{evidence.text}</p> : null}
 
       {evidence.type === 'validation' ? (
@@ -1147,6 +1294,7 @@ const makeStatesFor = sim => sim.steps.map(step => ({
 }));
 
 export function AdfPipelineSimulator({ item, onResetRequest }) {
+  const completedTopics = useLearningStore(s => s.completedTopics) ?? {};
   const [stage, setStage] = useState('inbox'); // 'inbox' | 'brief' | 'sim'
   const [activeTicketId, setActiveTicketId] = useState('ADF-1024');
   const [career, setCareer] = useState(readCareer);
@@ -1229,14 +1377,17 @@ export function AdfPipelineSimulator({ item, onResetRequest }) {
 
   const handleLogExperience = () => {
     if (!logged) {
-      if (sim.kind === 'incident') {
-        setCareer(logIncident(sim.experienceDelta ?? {}));
-        setSprintNotice(null);
-      } else {
+      const isSprintTicket = SPRINT.tickets.some(t => t.id === activeTicketId);
+      if (isSprintTicket) {
         const result = completeSprintTicket(activeTicketId, sim.experienceDelta ?? {});
         setCareer(result.career);
         setSprint(result.sprint);
         setSprintNotice(result.notice);
+      } else {
+        // Incident or standalone build ticket — career only, no sprint involvement.
+        // Pass the ticket id so replays don't inflate career stats or level.
+        setCareer(logIncident(activeTicketId, sim.experienceDelta ?? {}));
+        setSprintNotice(null);
       }
       setLogged(true);
     }
@@ -1254,6 +1405,7 @@ export function AdfPipelineSimulator({ item, onResetRequest }) {
         career={career}
         sprint={sprint}
         notice={sprintNotice}
+        completedTopics={completedTopics}
         onOpenTicket={handleOpenTicket}
       />
     );
@@ -1262,7 +1414,7 @@ export function AdfPipelineSimulator({ item, onResetRequest }) {
   if (stage === 'brief') {
     return (
       <div className="adf-sim-workspace adf-sim-intro">
-        <TicketCard sim={sim} onStart={() => setStage('sim')} onBack={() => setStage('inbox')} />
+        <TicketCard sim={sim} simId={activeTicketId} completedTopics={completedTopics} onStart={() => setStage('sim')} onBack={() => setStage('inbox')} />
       </div>
     );
   }
@@ -1372,7 +1524,7 @@ export function AdfPipelineSimulator({ item, onResetRequest }) {
       </div>
 
       <div id="adf-simulator-completion">
-        <CompletionCard sim={sim} stepStates={stepStates} onReset={handleReset} onLogExperience={handleLogExperience} logged={logged} />
+        <CompletionCard sim={sim} simId={activeTicketId} completedTopics={completedTopics} stepStates={stepStates} onReset={handleReset} onLogExperience={handleLogExperience} logged={logged} />
       </div>
     </div>
   );

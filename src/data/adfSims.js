@@ -4,6 +4,10 @@
 // engine is data-driven, so all four tickets are fully playable.
 import { adfPipelineSimulator } from './adfSimulator.js';
 import { incident1001 } from './adfIncidents.js';
+import { cdcSim } from './adfCdc.js';
+import { dbxSim } from './adfDatabricks.js';
+import { releaseSim } from './adfRelease.js';
+import { archSim } from './adfArchitecture.js';
 
 const silverSim = {
   id: 'adf-1025-silver',
@@ -598,6 +602,10 @@ export const ADF_SIMS = {
   'ADF-1026': goldSim,
   'ADF-1027': servingSim,
   'INC-1001': incident1001,
+  'ADF-1030': cdcSim,
+  'DBX-2001': dbxSim,
+  'REL-3001': releaseSim,
+  'ARCH-4001': archSim,
 };
 
 export function getSim(ticketId) {

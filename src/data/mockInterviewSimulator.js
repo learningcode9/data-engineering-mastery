@@ -377,4 +377,38 @@ export const mockInterviewModes = [
       },
     ],
   },
+  {
+    id: 'python',
+    title: 'Python Interview',
+    summary: 'Practice the Python questions that appear in Azure DE technical screens: ETL architecture, code review, and performance at scale.',
+    coaching: {
+      lookFor: 'Applied knowledge, not vocabulary. Can they write code under pressure, explain design decisions, and spot production bugs in someone else\'s code?',
+      structure: 'Lead with the design principle, give one concrete Python example, then mention the production implication — testability, debuggability, or performance.',
+      mistakes: 'Describing patterns conceptually without naming specific Python constructs. Experienced interviewers follow up with "can you show me in code?" Vague answers fail that follow-up.',
+      mention: 'Mention configuration injection, specific exception types, and Python logging when production readiness or observability is being evaluated.',
+    },
+    questions: [
+      {
+        question: 'Walk me through how you would structure a Python ETL pipeline for production. What would you build, and why?',
+        interviewerExpectation: 'A class-based design with separated extract/transform/load methods, configuration injection, structured logging, and a CLI entry point. Not a procedural script with hardcoded paths.',
+        strongAnswer: 'I would build an ETL class that accepts a configuration dictionary at construction time — source path, destination path, environment name. Extract, transform, and load are separate methods with single responsibilities. Transform is a pure function: it takes a DataFrame and returns a DataFrame, no side effects. run() chains them and returns a structured result dict with row counts and status. Every state transition is logged at the appropriate level using the Python logging module — INFO for stage transitions, ERROR with logger.exception() for failures so the stack trace is preserved. The script has a main() function with argparse for the CLI interface and exits with code 0 on success or 1 on failure so the orchestrator detects pipeline failures without parsing logs.',
+        commonWeakAnswer: 'Write a script with functions for each step — extract(), transform(), load() — called in sequence at the bottom of the file.',
+        coachNote: 'The distinguishing factor is configuration injection. A script with hardcoded paths cannot be tested without modifying the code. A class that accepts a config dict can be instantiated with a test config in a unit test. This is what senior interviewers mean when they ask "how do you make this testable?"',
+      },
+      {
+        question: 'I am going to show you a Python function. Tell me everything you would flag in a code review.\n\ndef process_orders(orders):\n    result = []\n    for i, row in orders.iterrows():\n        orders["status"] = orders["status"].str.upper()\n        if row["amount"] > 0:\n            result.append(row)\n    return pd.DataFrame(result)',
+        interviewerExpectation: 'At minimum: iterrows() performance and in-place mutation. A strong answer identifies the mutation-while-iterating correctness bug and at least one more issue with production consequence.',
+        strongAnswer: 'Four flags. One: orders["status"] = ... modifies the caller\'s DataFrame inside the loop — silent data integrity bug. The caller does not know their data changed. Two: modifying orders while iterating over it with iterrows() produces undefined behavior — Pandas may skip or repeat rows depending on the index. Three: iterrows() is 100 to 1000 times slower than vectorized operations. On 500K rows this takes minutes; the vectorized version takes under a second. Four: if orders is empty, pd.DataFrame(result) returns an empty DataFrame with no column schema, which causes a KeyError on the next pipeline step that tries to access expected columns.',
+        commonWeakAnswer: 'This code uses iterrows() which is slow. You should use vectorized Pandas operations instead.',
+        coachNote: 'Only flagging iterrows() is the junior answer — it is the obvious surface-level catch. The mutation bug is what senior engineers find. Interviewers use code review questions specifically to see who spots silent correctness bugs versus who only catches performance issues.',
+      },
+      {
+        question: 'Your Pandas transformation pipeline runs fine on your 10,000-row development sample. It fails with a MemoryError on the production file of 50 million rows. What are your options?',
+        interviewerExpectation: 'Diagnose first, then present Pandas-level options before escalating to distributed frameworks. Jumping straight to Spark is the mid-level answer.',
+        strongAnswer: 'First, diagnose: a MemoryError on 50M rows usually means Pandas is holding two or three copies of the DataFrame simultaneously — input, intermediate, and output. At 50M rows with 20 float64 columns, that is 8 gigabytes before any transformation overhead. Two Pandas-level options before reaching for Spark. One: dtype optimization. df.info(memory_usage="deep") often shows string columns stored as Python object dtype — converting low-cardinality columns to category dtype can reduce memory 4 to 8 times. Try this first. Two: chunked processing with pd.read_csv(chunksize=500000). Process in half-million-row chunks, transform each, write incrementally. This works for stateless-per-row transforms like filtering and casting, but not for operations that require the full dataset like groupby or deduplication. If those options are exhausted and the transform requires cross-row operations at this scale, I move to PySpark on Databricks.',
+        commonWeakAnswer: 'Use Spark instead — Pandas does not scale to that size.',
+        coachNote: 'The dtype optimization option is what separates senior from mid-level answers. It shows the engineer understands memory layout, not just tooling. And the caveat — chunked processing does not work for cross-row operations — shows production judgment rather than generic advice.',
+      },
+    ],
+  },
 ];

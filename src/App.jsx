@@ -2,11 +2,7 @@ import { useState, useMemo, useCallback, useEffect, useRef, memo, lazy, Suspense
 import Sidebar from './components/layout/Sidebar.jsx';
 import TopHeader from './components/layout/TopHeader.jsx';
 import {
-  SummaryGrid, ContinueCard,
-  JobReadinessChecklist, StartHereCard, DailyGoalCard,
-  WeeklyProgress, NextActionCard, SectionPreviewGrid,
-  DashboardHero, ProgressOverviewCard, TodaysFocusSimple,
-  UpcomingMilestoneCard, WorkplaceSimulatorsGrid,
+  DashboardHero, WorkbenchGrid, RecentActivityCard,
 } from './components/sections/Dashboard.jsx';
 import Topics from './components/sections/Topics.jsx';
 import LessonPage from './components/sections/LessonPage.jsx';
@@ -78,6 +74,7 @@ const DailyStandup      = lazy(() => import('./components/sections/DailyStandup.
 const HandsOnLabsPanel  = lazy(() => import('./components/sections/HandsOnLabsPanel.jsx'));
 const WorkplaceSimulator = lazy(() => import('./components/sections/WorkplaceSimulator.jsx'));
 const ResumeStoryBuilder = lazy(() => import('./components/sections/ResumeStoryBuilder.jsx'));
+const PythonLab         = lazy(() => import('./components/sections/PythonLab.jsx'));
 
 function PageFallback() {
   return (
@@ -168,6 +165,18 @@ const App = memo(function App() {
 
   const sqlSections = useMemo(() => topics.find(t => t.id === 'sql')?.module?.sections, []);
   const sqlProgress = useSqlProgress(sqlSections, practiceProgress);
+
+  const nextLesson = useMemo(() => {
+    const section = sqlProgress.nextSection;
+    if (!section) return null;
+    const incomplete = section.subtopics?.find(st => st.practice && !(practiceProgress ?? {})[st.id]);
+    return incomplete?.title ?? section.subtopics?.[0]?.title ?? null;
+  }, [sqlProgress.nextSection, practiceProgress]);
+
+  const practiceDone = useMemo(
+    () => Object.values(practiceProgress ?? {}).filter(Boolean).length,
+    [practiceProgress]
+  );
 
   const allTopicsProgress = useMemo(() => {
     const result = {};
@@ -473,49 +482,25 @@ const App = memo(function App() {
         {activePage === 'dashboard' && (
           <div className="page page--dashboard">
             <div className="dash-layout">
-              {/* ── Main column ── */}
               <div className="dash-main">
-                {/* 1 — Welcome hero (primary CTA: Continue Learning) */}
+                {/* 1 — Hero: what am I doing now? */}
                 <DashboardHero
                   sqlProgress={sqlProgress}
+                  nextLesson={nextLesson}
                   onResume={handleResume}
+                />
+
+                {/* 2 — Workbench: what can I do next? */}
+                <WorkbenchGrid
+                  sqlProgress={sqlProgress}
+                  practiceDone={practiceDone}
+                  interviewReadiness={interviewReadiness}
                   onNavigate={navigate}
                 />
 
-                {/* 2 — Learning journey progress · 3 — recommended next step */}
-                <div className="dash-row-2">
-                  <ProgressOverviewCard
-                    completedCount={completedCount}
-                    totalTopics={topics.length}
-                    inProgressCount={inProgressCount}
-                    learnedCount={learnedCount}
-                    practiceProgress={practiceProgress}
-                    topicStates={topicStates}
-                    topics={topics}
-                    activityLog={activityLog}
-                    streak={streak}
-                    overallReadiness={overallReadiness}
-                    onSelectTopic={id => {
-                      if (id) {
-                        setSelectedTopicId(id);
-                        navigate('topics');
-                      }
-                    }}
-                  />
-                  <TodaysFocusSimple
-                    enrichedTopics={enrichedTopics}
-                    onNavigate={navigate}
-                  />
-                  <UpcomingMilestoneCard sqlProgress={sqlProgress} onNavigate={navigate} />
-                </div>
-
-                {/* 4 — Workspaces */}
-                <SectionPreviewGrid onNavigate={navigate} />
-
-                {/* 5 — Workplace Simulator (advanced stage — comes after learning & projects) */}
-                <WorkplaceSimulatorsGrid onNavigate={navigate} />
+                {/* 3 — Recent Activity: what have I done recently? */}
+                <RecentActivityCard activityLog={activityLog} />
               </div>
-
             </div>
           </div>
         )}
@@ -652,6 +637,15 @@ const App = memo(function App() {
         )}
         {activePage === 'scenarios' && (
           <div className="page"><Suspense fallback={<PageFallback />}><Scenarios /></Suspense></div>
+        )}
+
+        {/* ── PYTHON LAB PAGE ────────────────────────────────────────────── */}
+        {activePage === 'python-lab' && (
+          <div className="page page--python-lab">
+            <Suspense fallback={<PageFallback />}>
+              <PythonLab addToActivityLog={addToActivityLog} />
+            </Suspense>
+          </div>
         )}
       </main>
 

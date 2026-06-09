@@ -52,6 +52,9 @@ export const EXPERIENCE_KEYS = [
   { key: 'ticketsCompleted', label: 'ADF tickets completed' },
   { key: 'projectsDelivered', label: 'End-to-end projects' },
   { key: 'incidentsResolved', label: 'Incidents resolved' },
+  { key: 'performanceOptimizations', label: 'Performance optimizations' },
+  { key: 'productionReleases', label: 'Production releases' },
+  { key: 'architectureDesigns', label: 'Architecture designs' },
   { key: 'restApis', label: 'REST API pipelines' },
   { key: 'sqlPipelines', label: 'SQL pipelines' },
   { key: 'cdc', label: 'CDC implementations' },
@@ -63,17 +66,46 @@ export const INCIDENTS = [
   { id: 'INC-1001', title: 'Customer Events Pipeline Failed Overnight', priority: 'P1', team: 'Marketing', sla: 'Fix before 10 AM dashboard refresh', status: 'open' },
 ];
 
+// Standalone build tickets (Phase 7+) — playable, outside the medallion sprint.
+export const STANDALONE_TICKETS = [
+  { id: 'ADF-1030', title: 'Customer Master CDC Pipeline', priority: 'P1', team: 'Customer Analytics', topic: 'CDC + SCD Type 2', status: 'open' },
+  { id: 'DBX-2001', title: 'Slow Customer Analytics Job', priority: 'P2', team: 'Marketing Analytics', topic: 'Databricks performance tuning', status: 'open' },
+  { id: 'REL-3001', title: 'Deploy Customer Analytics Release', priority: 'P1', team: 'Marketing Analytics', topic: 'CI/CD release management', status: 'open' },
+  { id: 'ARCH-4001', title: 'Design Customer Analytics Platform', priority: 'P1', team: 'Marketing Analytics', topic: 'System design & architecture', status: 'open' },
+];
+
 export const CAREER_KEY = 'dem-adf-career';
 
-const EMPTY_CAREER = { ticketsCompleted: 0, projectsDelivered: 0, incidentsResolved: 0, restApis: 0, sqlPipelines: 0, cdc: 0, monitoring: 0 };
+const EMPTY_CAREER = { ticketsCompleted: 0, projectsDelivered: 0, incidentsResolved: 0, performanceOptimizations: 0, productionReleases: 0, architectureDesigns: 0, restApis: 0, sqlPipelines: 0, cdc: 0, monitoring: 0, completed: [] };
 
 export function readCareer() {
   try {
     const raw = localStorage.getItem(CAREER_KEY);
-    return { ...EMPTY_CAREER, ...(raw ? JSON.parse(raw) : {}) };
+    const merged = { ...EMPTY_CAREER, ...(raw ? JSON.parse(raw) : {}) };
+    if (!Array.isArray(merged.completed)) merged.completed = [];
+    return merged;
   } catch {
-    return { ...EMPTY_CAREER };
+    return { ...EMPTY_CAREER, completed: [] };
   }
+}
+
+function writeCareer(career) {
+  try { localStorage.setItem(CAREER_KEY, JSON.stringify(career)); } catch { /* ignore */ }
+  return career;
+}
+
+// Apply a ticket's career credit exactly once. Replaying a ticket that is already
+// in `completed` is a no-op for career stats and level — only unique completions count.
+export function logTicketCompletion(ticketId, careerDelta = {}) {
+  const current = readCareer();
+  if (ticketId && current.completed.includes(ticketId)) return current;
+  const next = {
+    ...current,
+    ticketsCompleted: current.ticketsCompleted + 1,
+    completed: ticketId ? [...current.completed, ticketId] : current.completed,
+  };
+  for (const [k, v] of Object.entries(careerDelta)) next[k] = (next[k] ?? 0) + v;
+  return writeCareer(next);
 }
 
 // Log a completed Customer Events (REST + monitoring) ticket. Returns updated stats.
@@ -110,13 +142,10 @@ export function awardProject() {
   return next;
 }
 
-// Log a resolved incident — updates career only (incidents are not sprint tickets).
-export function logIncident(delta = {}) {
-  const current = readCareer();
-  const next = { ...current, ticketsCompleted: current.ticketsCompleted + 1 };
-  for (const [k, v] of Object.entries(delta)) next[k] = (next[k] ?? 0) + v;
-  try { localStorage.setItem(CAREER_KEY, JSON.stringify(next)); } catch { /* ignore */ }
-  return next;
+// Log a resolved incident / standalone ticket — career only (not a sprint ticket).
+// Deduped by ticket id so replays do not inflate the level or stat counts.
+export function logIncident(ticketId, delta = {}) {
+  return logTicketCompletion(ticketId, delta);
 }
 
 // ── Sprint Delivery Mode ──────────────────────────────────────────────────
@@ -197,10 +226,8 @@ export function sprintProgress(done) {
 // Mark a sprint ticket done, update career, and return { sprint, career, notice }.
 // careerDelta: per-sim experience increments (e.g. { restApis: 1, monitoring: 1 }).
 export function completeSprintTicket(ticketId, careerDelta = {}) {
-  let career = readCareer();
-  career = { ...career, ticketsCompleted: career.ticketsCompleted + 1 };
-  for (const [k, v] of Object.entries(careerDelta)) career[k] = (career[k] ?? 0) + v;
-  try { localStorage.setItem(CAREER_KEY, JSON.stringify(career)); } catch { /* ignore */ }
+  // Career credit applies once per unique ticket; replaying is a no-op for stats.
+  let career = logTicketCompletion(ticketId, careerDelta);
 
   const s = readSprint();
   if (!s.done.includes(ticketId)) s.done = [...s.done, ticketId];

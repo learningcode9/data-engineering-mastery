@@ -17,7 +17,7 @@ export const coreNavItems = [
   { id: 'topics',         label: 'Learning Path',       icon: '▦' },
   { id: 'sql-lab',        label: 'SQL Lab',             icon: '▤' },
   { id: 'projects',       label: 'Projects',            icon: '▣' },
-  { id: 'workplace',      label: 'Workplace Simulator', icon: '🖥' },
+  { id: 'workplace',      label: 'Workplace',           icon: '🖥' },
   { id: 'interview-prep', label: 'Interview Prep',      icon: '◌' },
   { id: 'roadmap',        label: 'Roadmaps',            icon: '◇' },
   { id: 'ai-learning',    label: 'AI Coach',            icon: '✦' },

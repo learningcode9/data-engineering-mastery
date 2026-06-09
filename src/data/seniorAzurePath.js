@@ -498,7 +498,7 @@ export const seniorAzureLearningPathTemplate = [
         lessons: [
           { id: 'sql-fundamentals', title: 'SQL Fundamentals', topicId: 'sql', label: 'SQL', difficulty: 'Beginner' },
           { id: 'advanced-sql', title: 'Advanced SQL', topicId: 'advanced-sql', label: 'SQL', difficulty: 'Intermediate' },
-          { id: 'python-data-engineering', title: 'Python for Data Engineering', topicId: 'python', label: 'Python', difficulty: 'Beginner' },
+          { id: 'python-data-engineering', title: 'Python for Data Engineering', topicId: 'python', label: 'Python', difficulty: 'Beginner', labPage: 'python-lab' },
         ],
       },
     ],

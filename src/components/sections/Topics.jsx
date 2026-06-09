@@ -2,6 +2,7 @@ import { memo, useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { EmptyState } from '../ui/EmptyState.jsx';
 import { learningPathPhases } from '../../data/learningPath.js';
 import { computeLearningPathProgress } from '../../utils/learningPathProgress.js';
+import { recommendSimulator } from '../../data/adfLearning.js';
 
 // ─── Phase visual metadata ────────────────────────────────────────────────────
 const PHASE_META = {
@@ -46,7 +47,7 @@ const CTA_LABEL = {
 };
 
 // ─── Module Card ──────────────────────────────────────────────────────────────
-function ModuleCard({ mod, isRecommended, onCTA, currentLessonId, onToggle, isExpanded, lessonStatus }) {
+function ModuleCard({ mod, isRecommended, onCTA, currentLessonId, onToggle, isExpanded, lessonStatus, onNavigate }) {
   const phase  = PHASE_META[mod.phaseId] ?? { label: mod.phaseTitle, color: '#10b981', icon: '◎' };
   const cta    = CTA_LABEL[mod.state] ?? 'Start';
   const isLocked = mod.state === 'locked';
@@ -143,7 +144,7 @@ function ModuleCard({ mod, isRecommended, onCTA, currentLessonId, onToggle, isEx
                   `lp-card-lesson--${status}`,
                   isActive && 'lp-card-lesson--active',
                 ].filter(Boolean).join(' ')}
-                onClick={() => !isLocked && onCTA(mod, lesson)}
+                onClick={() => !isLocked && !lesson.labPage && onCTA(mod, lesson)}
               >
                 <span className="lp-card-lesson-dot" aria-hidden="true">
                   {status === 'completed' || status === 'mastered' ? '✓' :
@@ -151,6 +152,16 @@ function ModuleCard({ mod, isRecommended, onCTA, currentLessonId, onToggle, isEx
                 </span>
                 <span className="lp-card-lesson-title">{lesson.title}</span>
                 {lesson.label && <span className="lp-card-lesson-label">{lesson.label}</span>}
+                {lesson.labPage && (
+                  <button
+                    type="button"
+                    className="lp-card-lesson-lab-btn"
+                    onClick={e => { e.stopPropagation(); onNavigate?.(lesson.labPage); }}
+                    aria-label={`Open practice lab for ${lesson.title}`}
+                  >
+                    Practice Lab →
+                  </button>
+                )}
               </li>
             );
           })}
@@ -411,6 +422,28 @@ const Topics = memo(function Topics({
         </div>
       )}
 
+      {/* ── Next Recommended Simulator (Learn → Simulate bridge) ───────────────── */}
+      {!searchTerm && (() => {
+        const rec = recommendSimulator(completed);
+        if (!rec) return null;
+        return (
+          <div className="lp-next-banner lp-sim-banner">
+            <div className="lp-next-banner-left">
+              <span className="lp-next-kicker">Next recommended simulator · {rec.pct}% ready</span>
+              <strong className="lp-next-title">{rec.title}</strong>
+              <span className="lp-next-meta">Practice what you've learned in the Workplace Simulator</span>
+            </div>
+            <button
+              type="button"
+              className="lp-next-cta"
+              onClick={() => onNavigate?.('workplace')}
+            >
+              Open Simulator →
+            </button>
+          </div>
+        );
+      })()}
+
       {/* ── Filter pills ────────────────────────────────────────────────────── */}
       <div className="lp-filter-bar" role="group" aria-label="Filter by category">
         {FILTER_CHIPS.map(chip => (
@@ -446,6 +479,7 @@ const Topics = memo(function Topics({
               onToggle={key => setExpandedKey(p => p === key ? null : key)}
               isExpanded={expandedKey === mod._key}
               lessonStatus={lessonStatus}
+              onNavigate={onNavigate}
             />
           ))}
         </div>

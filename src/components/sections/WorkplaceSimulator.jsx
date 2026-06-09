@@ -31,7 +31,7 @@ function SimulatorCard({ sim, active, onSelect }) {
         ))}
       </div>
       <span className="workplace-sim-card-cta">
-        {isAvailable ? (active ? 'Selected — scroll down to work →' : 'Open simulator →') : 'Not yet available'}
+        {isAvailable ? (active ? 'Selected — open it in your inbox below →' : 'Open in your inbox below →') : 'Not yet available'}
       </span>
     </AppCard>
   );
@@ -50,8 +50,7 @@ const WorkplaceSimulator = memo(function WorkplaceSimulator() {
             <p>Open your virtual office laptop and practice real Azure Data Engineering work — ticket in, working pipeline out.</p>
           </div>
           <div className="workplace-stats">
-            <StatPill label="Live simulator" value="1" icon="▣" variant="success" />
-            <StatPill label="In build" value="3" icon="⚙" variant="info" />
+            <StatPill label="Live simulators" value={String(workplaceSimulators.filter(s => s.status === 'available').length)} icon="▣" variant="success" />
           </div>
         </div>
 
