@@ -56,7 +56,7 @@ export const fabricModule = {
           expectedOutput: 'End-to-end pipeline from raw data to Power BI in a single platform with no external storage configuration',
           interview: {
             question: 'How does Microsoft Fabric differ from Azure Synapse Analytics, and when would you recommend migrating?',
-            answer: 'Fabric is a complete SaaS platform built on OneLake — it includes Synapse-like capabilities (Spark, SQL) plus Power BI, Data Factory, and Real-Time Intelligence under one roof with unified governance and billing. Synapse requires you to wire together separate storage accounts, compute pools, linked services, and Power BI workspaces. Fabric removes that infrastructure overhead and adds Direct Lake mode for near-instant Power BI queries without import. Recommend migrating when: the team wants reduced operational overhead, you\'re already deep in Power BI and Azure, or you need to eliminate the Synapse → Power BI refresh latency. Keep Synapse if you have heavy dedicated SQL pool workloads or complex existing pipelines not yet supported in Fabric.',
+            answer: 'Fabric is a unified SaaS analytics platform that brings Lakehouses, Warehouses, notebooks, pipelines, event streaming, semantic models, and Power BI into one governed OneLake workspace. Synapse is still a better fit when you need mature dedicated SQL pool workloads, tighter infrastructure control, or an existing estate that is cheaper to keep than migrate.',
           },
           commonMistakes: [
             'Treating Fabric as just "Synapse with a new UI" — Fabric is a fundamentally different architecture. OneLake eliminates storage silos; Direct Lake eliminates import refresh. These change how you design your data estate.',
@@ -98,7 +98,7 @@ df = spark.read.format("delta").table("customers")`,
           expectedOutput: 'Spark DataFrame loaded from Delta table on OneLake',
           interview: {
             question: 'What is a OneLake Shortcut and when would you use one over copying data?',
-            answer: 'A Shortcut is a virtual pointer to data stored in another location — another OneLake path, ADLS Gen2, S3, or GCS — without physically copying the data. Use Shortcuts when: (1) data already exists in ADLS or S3 and you want to query it from Fabric immediately without a migration, (2) multiple Lakehouses in different workspaces need to share the same dataset without duplication, (3) you want to bring external data under Fabric governance and query it with Spark or SQL Analytics Endpoint. Copy data into OneLake when: you need full Delta ACID semantics, OPTIMIZE/ZORDER, or write access from Fabric pipelines — Shortcuts are read-only for S3/ADLS sources.',
+            answer: 'A Shortcut is a virtual pointer to data stored in another location — another OneLake path, ADLS Gen2, S3, or GCS — without physically copying the data. Use Shortcuts when the data should stay in place, multiple teams need the same dataset, or you want a low-risk Fabric migration path. Copy data into OneLake when you need full Delta semantics, write access, or the best possible query performance from compact native tables.',
           },
           commonMistakes: [
             'Assuming Shortcuts give write access to external storage — S3 and ADLS Shortcuts are read-only. Only OneLake-to-OneLake Shortcuts can be writable.',
@@ -142,7 +142,7 @@ spark.sql("OPTIMIZE employees ZORDER BY (department)")`,
           expectedOutput: 'Delta table created in Lakehouse Tables folder, queryable via SQL Analytics Endpoint',
           interview: {
             question: 'What is the difference between a Fabric Lakehouse and a Fabric Warehouse, and how do you choose?',
-            answer: 'A Lakehouse stores Delta files in OneLake and exposes them via a read-only SQL Analytics Endpoint — writes happen through Spark/notebooks. A Warehouse is a fully managed T-SQL environment with full read/write SQL support, including CREATE TABLE, INSERT, UPDATE, stored procedures, and views. The key decision: choose Lakehouse when your team writes code (Python/Spark) and the Spark notebook workflow is the primary transformation path. Choose Warehouse when your team is SQL-first, needs T-SQL stored procedures, or has BI analysts who need to write SQL to create views and derived tables directly. Both sit on OneLake, so you can join across them.',
+            answer: 'Use a Lakehouse for Spark-first engineering on Delta tables in OneLake and a Warehouse for SQL-first serving, full DML, views, and stored procedures. Many senior Fabric designs use both: Lakehouse for Bronze and Silver transforms, Warehouse for Gold serving or analyst-owned SQL.',
           },
           commonMistakes: [
             'Writing to Lakehouse Tables via the SQL Analytics Endpoint — it\'s read-only for T-SQL. Use Spark (saveAsTable) or the Lakehouse Files API to write.',
@@ -503,7 +503,7 @@ YoY Growth % =
           expectedOutput: 'Power BI dashboard with live data from Lakehouse Delta tables, no import refresh required',
           interview: {
             question: 'What is Direct Lake mode and what are its limitations compared to Import mode?',
-            answer: 'Direct Lake reads Delta Parquet files directly from OneLake — no import copy, no refresh schedule. Queries are as fast as Import mode for warm (framing-cached) data because Fabric caches Delta column segments in memory. Limitations: (1) Direct Lake falls back to DirectQuery when memory pressure occurs or when querying columns not yet cached — this is called "fallback" and can slow dashboards. (2) Direct Lake only works with Fabric Lakehouses and Warehouses, not external sources. (3) Complex DAX queries that can\'t be pushed to the underlying engine fall back to in-memory evaluation. (4) Calculated columns in DAX are not supported in Direct Lake (use computed columns in the Lakehouse instead). Monitor for fallbacks using the Fabric capacity metrics app.',
+            answer: 'Direct Lake reads Delta data in OneLake directly from Power BI without an import refresh. It is the right choice when the Gold layer is already in Delta, the model follows a clean star schema, and the report needs low-latency access without a separate import dataset.',
           },
           commonMistakes: [
             'Not running OPTIMIZE on Gold tables — Direct Lake reads individual Parquet files; many small files slow down framing (column loading). OPTIMIZE compacts files for faster Direct Lake reads.',
@@ -560,7 +560,7 @@ JOIN GoldLakehouse.dbo.customer_lifetime_value g
           expectedOutput: 'CRM changes appear in OneLake within seconds; Power BI dashboards show near-real-time operational data',
           interview: {
             question: 'How does Fabric Mirroring work under the hood, and what are its limitations?',
-            answer: 'Mirroring uses Change Data Capture (CDC) — it reads the source database\'s transaction log, not the tables themselves, which minimizes source load. Changes are streamed to OneLake as Delta Parquet files continuously. Initial load does a full snapshot, then applies CDC changes incrementally. Limitations: (1) Not all source databases are supported (Azure SQL, Snowflake, Cosmos DB, Azure SQL MI — check current docs for latest). (2) Mirrored tables are read-only in Fabric — you can\'t write back to the source via OneLake. (3) Schema changes in the source (new columns, renamed tables) require a re-sync. (4) Mirroring requires the source database to have CDC enabled and sufficient transaction log retention. (5) It\'s not a replacement for ETL transformations — mirrored data is raw operational schema, not a clean analytics model.',
+            answer: 'Mirroring uses change data capture from the source transaction log and streams the changes into OneLake as Delta tables. It is useful when you want near-real-time operational analytics with minimal source impact, but it still produces raw operational data that usually needs Silver and Gold shaping.',
           },
           commonMistakes: [
             'Treating mirrored tables as analytics-ready — operational tables have denormalized structures, cryptic column names, and technical fields not meant for BI. You still need Silver/Gold transformation on top of mirrored Bronze data.',
@@ -611,7 +611,7 @@ JOIN GoldLakehouse.dbo.customer_lifetime_value g
           expectedOutput: 'Code-reviewed notebook and pipeline promoted from Dev to Production with full audit trail',
           interview: {
             question: 'How would you implement a full CI/CD workflow for a Fabric data platform with 5 engineers?',
-            answer: 'Three-layer approach: (1) Git Integration — connect each Fabric workspace to a branch (Dev → feature/* branches, Test → develop branch, Prod → main branch). Engineers open PRs to develop; notebook code is reviewed as Python diff in the PR. (2) Fabric Deployment Pipelines — configure Dev → Test → Prod. Merge to develop auto-syncs Test workspace. (3) Automated validation — a Deployment Pipeline pre-promotion rule runs a data quality Notebook against Test; if DQ checks fail, promotion is blocked. Manual approval gate before Prod promotion. Use workspace parameters to swap data sources between environments. This eliminates the "it works in Dev but not in Prod" problem by making environments identical except for data source parameters.',
+            answer: 'Use Git integration for source control, deployment pipelines for stage promotion, and workspace parameters plus managed identity or Key Vault for environment-specific values. Keep notebooks and pipelines parameterized so Dev, Test, and Prod run the same logic, and validate semantic-model bindings after schema changes.',
           },
           commonMistakes: [
             'Not using workspace parameters for environment-specific connections — hardcoded Lakehouse names break when items are promoted to Prod. Use parameters to dynamically resolve workspace/Lakehouse names.',
@@ -683,7 +683,7 @@ FROM changes c;`,
             'Forgetting that cross-database queries are possible — teams build unnecessary data copies instead of using the SQL Analytics Endpoint cross-reference to query Lakehouse data from the Warehouse.',
           ],
           productionContext: 'Enterprise patterns: Bronze/Silver in Lakehouse (Spark transforms), Gold dimension and fact tables in Warehouse (T-SQL SCD logic, stored procedures for complex business rules). Power BI reports connect to Warehouse via DirectQuery for write-back scenarios. Migration from Azure Synapse Dedicated SQL Pool to Fabric Warehouse is the most common Synapse exit path — Fabric Warehouse is serverless so there is no capacity to pre-provision.',
-          performanceTip: 'Fabric Warehouse scales compute automatically — you do not set a DWU count like Synapse. For concurrent user workloads, the Warehouse distributes queries across nodes. To optimize: use round-robin distribution for fact tables, replicated distribution for small dimension tables, and always filter on partitioned columns in WHERE clauses. Statistics are auto-generated but you can run CREATE STATISTICS manually for complex query plans.',
+          performanceTip: 'Fabric Warehouse tuning is closer to SQL serving design than Synapse distribution tuning. Focus on the right grain, selective filters, sensible keys, and statistics rather than trying to manage round-robin or replicated distributions. Compact Gold tables and good query shape matter more than engine micromanagement.',
           juniorMistake: 'Treating Fabric Warehouse as a Synapse Dedicated SQL Pool replacement by trying to manage distribution keys manually — Fabric Warehouse handles distribution automatically. Focus on query design and indexing, not distribution strategy.',
           productionTradeoff: 'Fabric Warehouse has no Delta Lake format — you gain full T-SQL DML but lose Delta time travel, Delta MERGE with complex conditions, and OPTIMIZE/ZORDER. For teams that rely heavily on Delta Lake features, Lakehouse + SQL Analytics Endpoint is a better long-term architecture even if it requires learning Spark.',
           whenNotToUse: 'Do not use Fabric Warehouse for: (1) Streaming ingestion — use Lakehouse Delta tables with Spark Structured Streaming. (2) Unstructured or semi-structured data processing — use Notebooks. (3) Teams already fluent in PySpark — the Lakehouse Spark path is more powerful and flexible. (4) Cost-sensitive workloads where Delta Lakehouse compute is cheaper for batch transforms.',
@@ -739,7 +739,7 @@ GRANT SELECT ON gold.dim_customer TO analyst_role;`,
           expectedOutput: 'Row-level and column-level security enforced at the data layer, with workspace RBAC controlling platform access',
           interview: {
             question: 'A Fabric workspace has 20 analysts who should only see their region\'s data in Power BI. How do you implement this without managing individual user permissions?',
-            answer: 'Three-layer approach: (1) Entra ID Security Groups — create groups per region (group: "APAC-Analysts", "EMEA-Analysts"). Assign groups to workspace Viewer role, not individuals. (2) Row-Level Security in the Fabric Warehouse or Lakehouse SQL layer — create a security policy that filters rows based on the user\'s group membership using IS_MEMBER(). (3) Power BI RLS — add a Dynamic RLS rule on the semantic model that maps the authenticated user to their region. This way: adding a new analyst = add them to the correct Entra group. No individual permission changes needed. OneLake Data Access Roles give fine-grained folder-level control if analysts need Spark notebook access too.',
+            answer: 'I would use Entra ID security groups per region, apply Warehouse or semantic-model RLS at the data layer, and use OneLake data access roles when analysts also need Lakehouse access. That way access is granted by group membership, not by managing individuals one by one.',
           },
           commonMistakes: [
             'Setting workspace role to Admin or Member for all users "for simplicity" — workspace Admin can delete the entire workspace and all its data. Use Viewer for analysts, Contributor for engineers.',
