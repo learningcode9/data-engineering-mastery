@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { normalizeLegacyTopicProgress } from '../data/seniorAzurePath.js';
 
 export const XP_REWARDS = {
   practiceTask: 10,
@@ -58,7 +59,7 @@ const useLearningStore = create(
       streakCount: safeRead('dem-streak-count', 0),
       streakLastDate: safeRead('dem-streak-last', ''),
       completedTopics: Object.fromEntries(
-        Object.entries(safeRead('dem-completed-topics', {})).filter(([, v]) => v === true)
+        Object.entries(normalizeLegacyTopicProgress(safeRead('dem-completed-topics', {}))).filter(([, v]) => v === true)
       ),
       completedProjects: safeRead('dem-completed-projects', {}),
       dailyTasks: safeRead('dem-daily-plan', {}),
@@ -94,9 +95,10 @@ const useLearningStore = create(
           const next = typeof updater === 'function'
             ? updater(s.completedTopics)
             : updater;
+          const normalized = normalizeLegacyTopicProgress(next ?? {});
           // Keep legacy key in sync so AILearning / SkillGraph see completions
-          try { localStorage.setItem('dem-completed-topics', JSON.stringify(next)); } catch {}
-          return { completedTopics: next };
+          try { localStorage.setItem('dem-completed-topics', JSON.stringify(normalized)); } catch {}
+          return { completedTopics: normalized };
         });
       },
 
@@ -208,7 +210,7 @@ const useLearningStore = create(
             ? { ...s.completedProjects, ...completedProjects }
             : s.completedProjects,
           completedTopics: completedTopics
-            ? { ...s.completedTopics, ...completedTopics }
+            ? { ...s.completedTopics, ...normalizeLegacyTopicProgress(completedTopics) }
             : s.completedTopics,
           achievements:   achievements
             ? { ...s.achievements, ...achievements }
@@ -226,9 +228,12 @@ const useLearningStore = create(
     }),
     {
       name: 'dem-learning-store-v1',
-      version: 2,
-      // v1 → v2: remove false values written by React StrictMode double-invoke bug
+      version: 3,
+      // v1 → v3: remove false values and normalize legacy topic ids to canonical curriculum ids
       migrate(persisted, fromVersion) {
+        if (persisted?.completedTopics) {
+          persisted.completedTopics = normalizeLegacyTopicProgress(persisted.completedTopics);
+        }
         if (fromVersion < 2 && persisted?.completedTopics) {
           persisted.completedTopics = Object.fromEntries(
             Object.entries(persisted.completedTopics).filter(([, v]) => v === true)

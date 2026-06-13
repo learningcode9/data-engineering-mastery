@@ -9,6 +9,7 @@ import ResumeStoryBuilder from './ResumeStoryBuilder.jsx';
 
 // ─── Level metadata ───────────────────────────────────────────────────────────
 const LEVEL_META = {
+  foundation:   { label: 'Foundation',   color: '#64748b' },
   beginner:     { label: 'Beginner',     color: '#059669' },
   intermediate: { label: 'Intermediate', color: '#d97706' },
   advanced:     { label: 'Advanced',     color: '#dc2626' },
@@ -53,13 +54,14 @@ function buildAllQuestions() {
   const qs = [];
   const sqlCat = deInterviewCategories.find(c => c.id === 'sql');
   Object.entries(sqlInterviewQuestions).forEach(([level, items]) => {
+    const normalizedLevel = level === 'beginner' ? 'foundation' : level;
     items.forEach((q, i) => {
       qs.push({
         id: `sql-${level}-${i}`,
         categoryId: 'sql',
         categoryName: sqlCat?.name ?? 'SQL & Analytics',
         categoryColor: sqlCat?.color ?? '#10b981',
-        level,
+        level: normalizedLevel,
         q: q.q,
         a: q.a,
         scenario: q.scenario ?? null,
@@ -75,13 +77,14 @@ function buildAllQuestions() {
   Object.entries(categoryQuestions).forEach(([catId, levels]) => {
     const cat = deInterviewCategories.find(c => c.id === catId);
     Object.entries(levels).forEach(([level, items]) => {
+      const normalizedLevel = level === 'beginner' ? 'foundation' : level;
       items.forEach((q, i) => {
         qs.push({
           id: `${catId}-${level}-${i}`,
           categoryId: catId,
           categoryName: cat?.name ?? catId,
           categoryColor: cat?.color ?? '#64748b',
-          level,
+          level: normalizedLevel,
           q: q.q,
           a: q.a,
           scenario: q.scenario ?? null,
@@ -437,6 +440,16 @@ const InterviewPrep = memo(function InterviewPrep() {
     return qs;
   }, [filterChip, search]);
 
+  const seniorQuestions = useMemo(
+    () => ALL_QUESTIONS.filter(q => q.level !== 'foundation'),
+    []
+  );
+
+  const filteredSeniorQuestions = useMemo(
+    () => filteredQuestions.filter(q => q.level !== 'foundation'),
+    [filteredQuestions]
+  );
+
   // Progress summary counts across ALL questions (not just filtered)
   const {
     reviewedCount,
@@ -471,7 +484,7 @@ const InterviewPrep = memo(function InterviewPrep() {
       <section className="section" id="interview-prep">
         <div className="ipv2-page">
           <MockInterviewPanel
-            questions={filteredQuestions.length >= 5 ? filteredQuestions : ALL_QUESTIONS}
+            questions={filteredSeniorQuestions.length >= 5 ? filteredSeniorQuestions : seniorQuestions}
             onExit={() => setMockMode(false)}
           />
         </div>

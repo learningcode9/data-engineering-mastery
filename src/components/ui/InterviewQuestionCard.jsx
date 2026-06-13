@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { toast } from '../../utils/toast.js';
 
 const LEVEL_LABELS = {
+  foundation:   'FND',
   beginner:     'BEG',
   intermediate: 'INT',
   advanced:     'ADV',

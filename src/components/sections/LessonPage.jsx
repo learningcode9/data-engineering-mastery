@@ -1,10 +1,16 @@
 import { memo, useState, useMemo } from 'react';
 import TopicDetails from './TopicDetails.jsx';
-import { learningPathPhases } from '../../data/learningPath.js';
+import {
+  aiLearningPathPhases,
+  learningPathPhases,
+  optionalTechnologyPhases,
+} from '../../data/learningPath.js';
+
+const allLearningPhases = [...learningPathPhases, ...aiLearningPathPhases, ...optionalTechnologyPhases];
 
 // Build a full lesson context object from a lesson ID by searching the path data
 function findLessonCtx(lessonId) {
-  for (const phase of learningPathPhases) {
+  for (const phase of allLearningPhases) {
     for (const module of phase.modules) {
       const lesson = module.lessons.find(l => l.id === lessonId);
       if (lesson) {
@@ -38,16 +44,16 @@ function findLessonCtx(lessonId) {
 // ── Lesson position helper ─────────────────────────────────────────────────────
 function useLessonPosition(lessonId, phaseId) {
   return useMemo(() => {
-    const phase = learningPathPhases.find(p => p.id === phaseId);
-    if (!phase) return { lessonIndex: 0, totalLessons: 0, phaseIndex: 0, totalPhases: learningPathPhases.length };
+    const phase = allLearningPhases.find(p => p.id === phaseId);
+    if (!phase) return { lessonIndex: 0, totalLessons: 0, phaseIndex: 0, totalPhases: allLearningPhases.length };
     const allLessons = phase.modules.flatMap(m => m.lessons);
     const lessonIndex = allLessons.findIndex(l => l.id === lessonId);
-    const phaseIndex  = learningPathPhases.indexOf(phase);
+    const phaseIndex  = allLearningPhases.indexOf(phase);
     return {
       lessonIndex: lessonIndex >= 0 ? lessonIndex : 0,
       totalLessons: allLessons.length,
       phaseIndex,
-      totalPhases: learningPathPhases.length,
+      totalPhases: allLearningPhases.length,
     };
   }, [lessonId, phaseId]);
 }

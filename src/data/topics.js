@@ -14,9 +14,12 @@ import { azureSecurityModule }   from './modules/azure-security.js';
 import { newTopics }             from './newTopics.js';
 import { phases }           from './phases.js';
 import {
+  curriculumMigrationMap,
   getSeniorAzureNextStep,
+  getCurriculumPhaseByTopicId,
+  getCurriculumTrackByTopicId,
+  createGenericTopic,
   getSeniorAzureTopicMeta,
-  seniorAzureAdditionalTopics,
   seniorAzureTopicOrder,
 } from './seniorAzurePath.js';
 
@@ -187,9 +190,41 @@ const coreTopics = [
       projectLink: 'CDC Pipeline and Sales Lakehouse Pipeline — both use PySpark/Spark Streaming for large-scale transformation.',
     },
     nextStep: {
+      id: 'spark-sql',
+      title: 'Spark SQL',
+      reason: 'PySpark covers the distributed programming model — Spark SQL shows how the same engine is used with SQL syntax for analytics and transformations.',
+    },
+    docs: ['apache-spark', 'delta-lake'],
+  },
+  {
+    ...createGenericTopic('spark-sql'),
+    id: 'spark-sql',
+    title: 'Spark SQL',
+    label: 'Big Data',
+    category: 'Spark',
+    difficulty: 'Intermediate',
+    progress: '0%',
+    body: 'Write SQL on top of Spark and Delta tables.',
+    step: 12,
+    prerequisites: ['pyspark'],
+    timeEstimate: '2–3 weeks',
+    interviewImportance: 'high',
+    commonMistakes: [
+      'Assuming Spark SQL behaves exactly like a single-node database — joins, shuffles, and partitioning still matter at cluster scale.',
+      'Ignoring data skew — Spark SQL can be slower than PySpark if you do not watch partitions and broadcast joins.',
+      'Using SQL without checking the physical plan — senior DEs inspect EXPLAIN and Spark UI for shuffle costs.',
+    ],
+    resumeRelevance: 'Mention Spark SQL when you want to show large-scale transformation work over Delta tables, not just notebook scripting.',
+    careerContext: {
+      whyItMatters: 'Spark SQL is the fastest way for many teams to express large-scale transformations and analytics on Delta Lake tables.',
+      realWorldUseCase: 'A DE writes Spark SQL to cleanse 400M rows from ADLS Bronze into Silver, deduplicate records with window functions, and power downstream Gold aggregates.',
+      interviewTip: 'Explain how Spark SQL still runs on the distributed engine: predicate pushdown, partition pruning, broadcast joins, and EXPLAIN plans are all fair game in senior interviews.',
+      projectLink: 'Lakehouse Optimization / Medallion Patterns and CDC Pipeline both use Spark SQL heavily.',
+    },
+    nextStep: {
       id: 'azure-data-factory',
       title: 'Azure Data Factory',
-      reason: 'Once you can write Spark code, the next step is orchestrating it on a schedule — ADF is how Azure DEs trigger and chain their Spark jobs.',
+      reason: 'Once you can write Spark code and Spark SQL, the next step is orchestrating it on a schedule — ADF is how Azure DEs trigger and chain their jobs.',
     },
     docs: ['apache-spark', 'delta-lake'],
   },
@@ -619,7 +654,8 @@ function normalizeTopic(topic) {
   return {
     ...normalizedBase,
     title,
-    phase: pathMeta.phase ?? topic.phase ?? phaseByTopicId[topic.id] ?? 'foundation',
+    phase: pathMeta.phase ?? topic.phase ?? getCurriculumPhaseByTopicId(topic.id)?.id ?? phaseByTopicId[topic.id] ?? 'foundation',
+    trackType: pathMeta.trackType ?? topic.trackType ?? getCurriculumTrackByTopicId(topic.id) ?? 'legacy',
     category: pathMeta.category ?? topic.category ?? 'General',
     difficulty: pathMeta.difficulty ?? topic.difficulty ?? 'Beginner',
     step: pathMeta.step ?? topic.step,
@@ -634,25 +670,24 @@ function normalizeTopic(topic) {
     interviewQuestions: normalizedBase.interviewQuestions ?? normalizedBase.questions ?? [],
     miniProject: miniProjectFor(normalizedBase, practiceTasks),
     nextStep: topic.nextStep ?? null,
+    route: pathMeta.route ?? topic.route ?? routeForTopic(topic.id),
   };
 }
 
-const normalizedTopics = uniqueById([...coreTopics, ...newTopics, ...seniorAzureAdditionalTopics])
-  .map(normalizeTopic)
-  .sort((a, b) => {
-    const aPathIndex = seniorAzureTopicOrder.indexOf(a.id);
-    const bPathIndex = seniorAzureTopicOrder.indexOf(b.id);
-    if (aPathIndex >= 0 || bPathIndex >= 0) {
-      if (aPathIndex < 0) return 1;
-      if (bPathIndex < 0) return -1;
-      return aPathIndex - bPathIndex;
-    }
-    return (a.step ?? 999) - (b.step ?? 999);
-  });
+const canonicalTopicSeeds = [...coreTopics, ...newTopics].reduce((acc, topic) => {
+  const canonicalId = curriculumMigrationMap[topic.id] ?? topic.id;
+  if (!acc.has(canonicalId)) acc.set(canonicalId, topic);
+  return acc;
+}, new Map());
 
-export const topics = normalizedTopics.map((topic, index, allTopics) => {
+const canonicalTopicList = seniorAzureTopicOrder.map(topicId => {
+  const seed = canonicalTopicSeeds.get(topicId);
+  const baseTopic = seed ? { ...seed, id: topicId } : createGenericTopic(topicId);
+  return normalizeTopic(baseTopic);
+});
+
+export const topics = canonicalTopicList.map((topic, index, allTopics) => {
   const pathNextStep = getSeniorAzureNextStep(topic.id);
-  if (seniorAzureTopicOrder.includes(topic.id)) return { ...topic, nextStep: pathNextStep };
   if (pathNextStep) return { ...topic, nextStep: pathNextStep };
   if (topic.nextStep || index === allTopics.length - 1) return topic;
   const next = allTopics[index + 1];

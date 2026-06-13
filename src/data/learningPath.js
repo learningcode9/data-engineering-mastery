@@ -1,4 +1,8 @@
-import { seniorAzureLearningPathTemplate } from './seniorAzurePath.js';
+import {
+  aiLearningPathTemplate,
+  optionalTechnologiesTemplate,
+  seniorAzureLearningPathTemplate,
+} from './seniorAzurePath.js';
 
 // ─── Legacy lesson content retained for hydration ─────────────────────────────
 // Phase 1: all orientation guide lessons — never locked, always open.
@@ -1435,8 +1439,24 @@ export const learningPathPhases = seniorAzureLearningPathTemplate.map(phase => (
   })),
 }));
 
+export const aiLearningPathPhases = aiLearningPathTemplate.map(phase => ({
+  ...phase,
+  modules: phase.modules.map(module => ({
+    ...module,
+    lessons: module.lessons.map(hydrateLesson),
+  })),
+}));
+
+export const optionalTechnologyPhases = optionalTechnologiesTemplate.map(phase => ({
+  ...phase,
+  modules: phase.modules.map(module => ({
+    ...module,
+    lessons: module.lessons.map(hydrateLesson),
+  })),
+}));
+
 export function getLearningPathLessons() {
-  return learningPathPhases.flatMap(phase =>
+  return [...learningPathPhases, ...aiLearningPathPhases, ...optionalTechnologyPhases].flatMap(phase =>
     phase.modules.flatMap(module =>
       module.lessons.map(lesson => ({ ...lesson, phaseId: phase.id, moduleId: module.id }))
     )

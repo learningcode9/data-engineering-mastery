@@ -1,4 +1,8 @@
-import { learningPathPhases } from '../data/learningPath.js';
+import {
+  aiLearningPathPhases,
+  learningPathPhases,
+  optionalTechnologyPhases,
+} from '../data/learningPath.js';
 
 export function getLearningPathLessonStatus(lesson, completedMap = {}, topicStates = {}) {
   if (!lesson) return 'available';
@@ -65,5 +69,31 @@ export function computeLearningPathProgress({
     completedLessons,
     inProgressLessons,
     overallPct,
+  };
+}
+
+export function computeTrackProgress(trackPhases, { completedMap = {}, topicStates = {} } = {}) {
+  return computeLearningPathProgress({
+    phases: trackPhases ?? [],
+    completedMap,
+    topicStates,
+  });
+}
+
+export function computeCurriculumProgress({
+  completedMap = {},
+  topicStates = {},
+} = {}) {
+  const core = computeTrackProgress(learningPathPhases, { completedMap, topicStates });
+  const ai = computeTrackProgress(aiLearningPathPhases, { completedMap, topicStates });
+  const optional = computeTrackProgress(optionalTechnologyPhases, { completedMap, topicStates });
+
+  return {
+    core,
+    ai,
+    optional,
+    overallPct: core.overallPct,
+    totalLessons: core.totalLessons + ai.totalLessons + optional.totalLessons,
+    completedLessons: core.completedLessons + ai.completedLessons + optional.completedLessons,
   };
 }

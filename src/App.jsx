@@ -20,8 +20,9 @@ import { useStreak } from './hooks/useStreak.js';
 import { useUserProgressSync } from './hooks/useUserProgressSync.js';
 import { computeSearchResults } from './utils/searchUtils.js';
 import { computeAllTopicStates, getNextRecommendedAction, computeOverallReadiness } from './utils/learningState.js';
-import { computeLearningPathProgress } from './utils/learningPathProgress.js';
+import { computeCurriculumProgress } from './utils/learningPathProgress.js';
 import { topics } from './data/topics.js';
+import { curriculumMigrationMap } from './data/seniorAzurePath.js';
 import { checklist } from './data/appData.js';
 import { projectDetails } from './data/projectDetails.js';
 import { toast } from './utils/toast.js';
@@ -116,6 +117,14 @@ const App = memo(function App() {
   // ─── Learning data ─────────────────────────────────────────────────────────────
   const [selectedTopicId, setSelectedTopicId] = useLocalStorage('dem-selected-topic', topics[0].id);
   const [lastOpenTopicId, setLastOpenTopicId] = useLocalStorage('dem-last-topic', topics[0].id);
+  const [learningFocusTarget, setLearningFocusTarget] = useState(null);
+  const canonicalTopicIds = useMemo(() => new Set(topics.map(topic => topic.id)), []);
+
+  const normalizeTopicId = useCallback((topicId) => {
+    if (!topicId) return topics[0].id;
+    const migrated = curriculumMigrationMap[topicId] ?? topicId;
+    return canonicalTopicIds.has(migrated) ? migrated : topics[0].id;
+  }, [canonicalTopicIds]);
 
   const completedTopics    = useLearningStore(s => s.completedTopics);
   const completedProjects  = useLearningStore(s => s.completedProjects);
@@ -147,8 +156,19 @@ const App = memo(function App() {
 
   useEffect(() => {
     if (!selectedTopicId) return;
-    setLastOpenTopicId(selectedTopicId);
-  }, [selectedTopicId, setLastOpenTopicId]);
+    const normalized = normalizeTopicId(selectedTopicId);
+    if (normalized !== selectedTopicId) {
+      setSelectedTopicId(normalized);
+      return;
+    }
+    setLastOpenTopicId(normalized);
+  }, [selectedTopicId, setLastOpenTopicId, setSelectedTopicId, normalizeTopicId]);
+
+  useEffect(() => {
+    if (!lastOpenTopicId) return;
+    const normalized = normalizeTopicId(lastOpenTopicId);
+    if (normalized !== lastOpenTopicId) setLastOpenTopicId(normalized);
+  }, [lastOpenTopicId, normalizeTopicId, setLastOpenTopicId]);
 
   // ─── Merged completion map ─────────────────────────────────────────────────────
   const allCompletedTopics = useMemo(
@@ -158,12 +178,11 @@ const App = memo(function App() {
   );
 
   // ─── Derived data ──────────────────────────────────────────────────────────────
-  const completedCount = useMemo(
-    () => topics.filter(t => (completedTopics ?? {})[t.id]).length,
-    [completedTopics]
-  );
+  const coreTopics = useMemo(() => topics.filter(topic => topic.trackType === 'core'), []);
+  const aiTopics = useMemo(() => topics.filter(topic => topic.trackType === 'ai'), []);
+  const optionalTopics = useMemo(() => topics.filter(topic => topic.trackType === 'optional'), []);
 
-  const sqlSections = useMemo(() => topics.find(t => t.id === 'sql')?.module?.sections, []);
+  const sqlSections = useMemo(() => coreTopics.find(t => t.id === 'sql')?.module?.sections, [coreTopics]);
   const sqlProgress = useSqlProgress(sqlSections, practiceProgress);
 
   const nextLesson = useMemo(() => {
@@ -192,39 +211,61 @@ const App = memo(function App() {
     return result;
   }, [practiceProgress]);
 
-  const inProgressCount = useMemo(
-    () => topics.filter(t => (allTopicsProgress[t.id] ?? 0) > 0 && !(completedTopics ?? {})[t.id]).length,
-    [allTopicsProgress, completedTopics]
+  const coreTopicStates = useMemo(
+    () => computeAllTopicStates(coreTopics, completedTopics, practiceProgress),
+    [coreTopics, completedTopics, practiceProgress]
+  );
+  const aiTopicStates = useMemo(
+    () => computeAllTopicStates(aiTopics, completedTopics, practiceProgress),
+    [aiTopics, completedTopics, practiceProgress]
+  );
+  const optionalTopicStates = useMemo(
+    () => computeAllTopicStates(optionalTopics, completedTopics, practiceProgress),
+    [optionalTopics, completedTopics, practiceProgress]
   );
 
   const topicStates = useMemo(
-    () => computeAllTopicStates(topics, completedTopics, practiceProgress),
-    [completedTopics, practiceProgress]
+    () => ({
+      ...coreTopicStates,
+      ...aiTopicStates,
+      ...optionalTopicStates,
+    }),
+    [coreTopicStates, aiTopicStates, optionalTopicStates]
   );
 
-  const learningPathProgress = useMemo(
-    () => computeLearningPathProgress({
+  const curriculumProgress = useMemo(
+    () => computeCurriculumProgress({
       completedMap: allCompletedTopics,
       topicStates,
     }),
     [allCompletedTopics, topicStates]
   );
 
+  const learningPathProgress = useMemo(
+    () => curriculumProgress.core,
+    [curriculumProgress]
+  );
+
   const nextAction = useMemo(
-    () => getNextRecommendedAction(topics, topicStates),
-    [topicStates]
+    () => getNextRecommendedAction(coreTopics, coreTopicStates),
+    [coreTopics, coreTopicStates]
   );
 
   const overallReadiness = useMemo(
-    () => computeOverallReadiness(topics, topicStates),
-    [topicStates]
+    () => computeOverallReadiness(coreTopics, coreTopicStates),
+    [coreTopics, coreTopicStates]
+  );
+
+  const coreProgress = useMemo(
+    () => Object.fromEntries(coreTopics.map(topic => [topic.id, allTopicsProgress[topic.id] ?? 0])),
+    [allTopicsProgress, coreTopics]
   );
 
   const personalizedRec = useMemo(
     () => onboardingProfile
-      ? getRecommendation(onboardingProfile, allTopicsProgress)
+      ? getRecommendation(onboardingProfile, coreProgress)
       : DEFAULT_RECOMMENDATION,
-    [onboardingProfile, allTopicsProgress]
+    [onboardingProfile, coreProgress]
   );
 
   const userProgressSnapshot = useMemo(() => ({
@@ -378,8 +419,14 @@ const App = memo(function App() {
 
   // ─── Page navigation ──────────────────────────────────────────────────────────
   // Page-based nav: switching page replaces the view, no scroll-to-section needed
-  const navigate = useCallback(page => {
+  const navigate = useCallback((page, options = {}) => {
     setActivePage(page);
+    if (page === 'topics') {
+      setLearningFocusTarget(options.focusTarget ?? null);
+      if (options.clearSearch) setSearchTerm('');
+    } else {
+      setLearningFocusTarget(null);
+    }
     setSidebarOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [setActivePage]);
@@ -516,6 +563,7 @@ const App = memo(function App() {
               onNavigate={navigate}
               searchTerm={searchTerm}
               currentLessonId={lessonContext?.lessonId}
+              focusTarget={learningFocusTarget}
             />
             <Suspense fallback={<PageFallback />}>
               <ResumeOutput />
@@ -580,7 +628,10 @@ const App = memo(function App() {
         {activePage === 'roadmap' && (
           <div className="page page--roadmap">
             <Suspense fallback={<PageFallback />}>
-              <RoadmapTracks />
+              <RoadmapTracks
+                topicStates={topicStates}
+                onNavigate={navigate}
+              />
               <ArchDiagrams />
             </Suspense>
           </div>
@@ -621,7 +672,7 @@ const App = memo(function App() {
           <div className="page">
             <Suspense fallback={<PageFallback />}>
               <Analytics
-                topics={enrichedTopics} progress={allTopicsProgress}
+                topics={enrichedTopics.filter(topic => topic.trackType === 'core')} progress={coreProgress}
                 practiceProgress={practiceProgress} activityLog={activityLog}
                 xp={xp} streak={streak} learnedCount={learnedCount}
               />

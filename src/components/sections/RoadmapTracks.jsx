@@ -1,105 +1,89 @@
-import { memo, useState } from 'react';
-import { roadmapTracks } from '../../data/roadmaps.js';
-import { getPhaseByTopicIds, getPhaseMentorship } from '../../data/careerGuidance.js';
+import { memo, useMemo, useState } from 'react';
+import { curriculumPhaseGroups, getCurriculumTopicMeta } from '../../data/curriculum.js';
 
-function PhaseTimeline({ phases, trackProgress }) {
-  const [expanded, setExpanded] = useState(null);
+const TRACK_CONFIG = {
+  core: {
+    id: 'core',
+    title: 'Core Azure Data Engineer Path',
+    icon: '☁',
+    color: '#0f766e',
+    description: 'Mandatory phases for Senior Azure Data Engineer readiness in 2026.',
+    badge: 'Core',
+  },
+  ai: {
+    id: 'ai',
+    title: 'AI for Data Engineers',
+    icon: '◉',
+    color: '#6b7cdb',
+    description: 'A separate specialization track for LLM fundamentals, RAG, and AI-assisted data pipelines.',
+    badge: 'AI specialization',
+  },
+  optional: {
+    id: 'optional',
+    title: 'Optional Technologies',
+    icon: '◎',
+    color: '#64748b',
+    description: 'Adjacent tools to broaden your toolkit without changing the core Azure learning path.',
+    badge: 'Optional',
+  },
+};
 
-  return (
-    <div className="rt-phases">
-      {phases.map((phase, i) => {
-        const isOpen = expanded === i;
-        const isDone = (trackProgress?.[phase.id] ?? 0) >= 100;
-        return (
-          <div key={phase.id} className={`rt-phase${isDone ? ' rt-phase--done' : ''}`}>
-            <button
-              type="button"
-              className="rt-phase-header"
-              onClick={() => setExpanded(isOpen ? null : i)}
-              aria-expanded={isOpen}
-            >
-              <div className="rt-phase-left">
-                <span className={`rt-phase-dot${isDone ? ' rt-phase-dot--done' : ''}`}>
-                  {isDone ? '✓' : i + 1}
-                </span>
-                <div className="rt-phase-info">
-                  <strong className="rt-phase-title">{phase.title}</strong>
-                  <span className="rt-phase-duration">{phase.duration}</span>
-                </div>
-              </div>
-              <div className="rt-phase-right">
-                <span className="rt-phase-milestone-count">{phase.milestones.length} milestones</span>
-                <span className="rt-phase-chevron">{isOpen ? '▲' : '▼'}</span>
-              </div>
-            </button>
+const TRACK_ORDER = ['core', 'ai', 'optional'];
 
-            {isOpen && (
-              <div className="rt-phase-body">
-                {(() => {
-                  const mentor = getPhaseMentorship(getPhaseByTopicIds(phase.topicIds));
-                  return (
-                    <div className="rt-phase-mentor">
-                      <div>
-                        <span>Why this matters</span>
-                        <p>{mentor.why}</p>
-                      </div>
-                      <div>
-                        <span>Jobs require it</span>
-                        <p>{mentor.jobs}</p>
-                      </div>
-                      <div>
-                        <span>Used in companies for</span>
-                        <p>{mentor.companiesUse}</p>
-                      </div>
-                      <div>
-                        <span>Confidence milestone</span>
-                        <p>{mentor.confidence}</p>
-                      </div>
-                    </div>
-                  );
-                })()}
-                <p className="rt-phase-desc">{phase.description}</p>
-                <div className="rt-phase-skills">
-                  {phase.skills.map(s => (
-                    <span key={s} className="rt-skill-chip">{s}</span>
-                  ))}
-                </div>
-                <div className="rt-milestones">
-                  <p className="rt-milestones-label">Milestones</p>
-                  <ul>
-                    {phase.milestones.map((m, j) => (
-                      <li key={j} className="rt-milestone">
-                        <span className="rt-milestone-check" aria-hidden="true">◎</span>
-                        {m}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            )}
-            {i < phases.length - 1 && <div className="rt-phase-connector" />}
-          </div>
-        );
-      })}
-    </div>
+function isCompletedTopic(topicStates, topicId) {
+  const state = topicStates?.[topicId]?.state;
+  return state === 'completed' || state === 'mastered';
+}
+
+function getPhaseProgress(phase, topicStates) {
+  const topicIds = phase.topicIds ?? [];
+  if (!topicIds.length) return 0;
+  const completed = topicIds.filter(topicId => isCompletedTopic(topicStates, topicId)).length;
+  return Math.round((completed / topicIds.length) * 100);
+}
+
+function buildTrack(trackType, topicStates) {
+  const config = TRACK_CONFIG[trackType];
+  const phaseSummaries = curriculumPhaseGroups[trackType] ?? [];
+  const phases = phaseSummaries.map((phase, index) => {
+    const topicMetas = (phase.topicIds ?? [])
+      .map(topicId => getCurriculumTopicMeta(topicId))
+      .filter(Boolean);
+
+    return {
+      ...phase,
+      index: index + 1,
+      topics: topicMetas,
+      progress: getPhaseProgress(phase, topicStates),
+      topicCount: topicMetas.length,
+    };
+  });
+
+  const totalHours = phaseSummaries.reduce((sum, phase) => sum + (phase.estimatedHours ?? 0), 0);
+  const totalTopics = phaseSummaries.reduce((sum, phase) => sum + (phase.topicIds?.length ?? 0), 0);
+  const completedTopics = phaseSummaries.reduce(
+    (sum, phase) => sum + (phase.topicIds ?? []).filter(topicId => isCompletedTopic(topicStates, topicId)).length,
+    0
   );
+
+  return {
+    ...config,
+    trackType,
+    phases,
+    phaseCount: phases.length,
+    totalHours,
+    totalTopics,
+    completedTopics,
+    progressPct: totalTopics > 0 ? Math.round((completedTopics / totalTopics) * 100) : 0,
+  };
 }
 
 function TrackCard({ track, onSelect, isSelected }) {
-  const difficulty = track.difficulty ?? 'All levels';
-  const difficultyColor = {
-    'Beginner → Intermediate': '#2f756e',
-    'Beginner → Advanced': '#f59e0b',
-    'Intermediate → Advanced': '#e25a1c',
-    'Advanced': '#dc2626',
-    'All levels': '#6b7cdb',
-  }[difficulty] ?? '#687a76';
-
   return (
     <button
       type="button"
       className={`rt-track-card${isSelected ? ' rt-track-card--active' : ''}`}
-      onClick={() => onSelect(track.id)}
+      onClick={() => onSelect(track.trackType)}
       style={isSelected ? { borderColor: track.color, boxShadow: `0 0 0 2px ${track.color}30` } : {}}
     >
       <div className="rt-track-icon" style={{ background: `${track.color}18`, color: track.color }}>
@@ -107,18 +91,98 @@ function TrackCard({ track, onSelect, isSelected }) {
       </div>
       <div className="rt-track-info">
         <strong className="rt-track-title">{track.title}</strong>
-        <span className="rt-track-duration">{track.duration}</span>
+        <span className="rt-track-duration">{track.phaseCount} phases · {track.totalHours}h</span>
       </div>
-      <span className="rt-track-difficulty" style={{ color: difficultyColor }}>
-        {difficulty.split(' → ').pop()}
+      <span className="rt-track-difficulty" style={{ color: track.color }}>
+        {track.progressPct}%
       </span>
     </button>
   );
 }
 
-function TrackDetail({ track }) {
-  const prerequisites = track.prerequisites ?? [];
-  const skills = track.skills ?? [];
+function PhaseList({ phases, onPhaseOpen, onTopicOpen }) {
+  return (
+    <div className="rt-phases">
+      {phases.map((phase, index) => (
+        <div key={phase.id} className={`rt-phase${phase.progress >= 100 ? ' rt-phase--done' : ''}`}>
+          <div className="rt-phase-header rt-phase-header--static">
+            <button
+              type="button"
+              className="rt-phase-header-btn"
+              onClick={() => onPhaseOpen(phase)}
+            >
+              <div className="rt-phase-left">
+                <span className={`rt-phase-dot${phase.progress >= 100 ? ' rt-phase-dot--done' : ''}`}>
+                  {phase.progress >= 100 ? '✓' : index + 1}
+                </span>
+                <div className="rt-phase-info">
+                  <strong className="rt-phase-title">{phase.title}</strong>
+                  <span className="rt-phase-duration">{phase.estimatedHours}h · {phase.topicCount} topics</span>
+                </div>
+              </div>
+            </button>
+            <div className="rt-phase-right">
+              <span className="rt-phase-milestone-count">{phase.progress}%</span>
+              <button
+                type="button"
+                className="rt-phase-open-btn"
+                onClick={() => onPhaseOpen(phase)}
+              >
+                Open
+              </button>
+            </div>
+          </div>
+
+          <div className="rt-phase-body">
+            <p className="rt-phase-desc">{phase.description}</p>
+            <div className="rt-phase-mentor">
+              <div>
+                <span>Exit criteria</span>
+                <p>{phase.exitCriteria}</p>
+              </div>
+              <div>
+                <span>Prerequisites</span>
+                <p>{(phase.prerequisites ?? []).join(' · ') || 'None'}</p>
+              </div>
+            </div>
+            <div className="rt-skills-row">
+              <span className="rt-skills-label">Topics</span>
+              <div className="rt-skills-chips">
+                {phase.topics.map(topic => (
+                  <button
+                    key={topic.id}
+                    type="button"
+                    className="rt-topic-chip"
+                    onClick={() => onTopicOpen(topic, phase)}
+                  >
+                    {topic.title}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {index < phases.length - 1 && <div className="rt-phase-connector" />}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function TrackDetail({ track, onNavigate }) {
+  const handlePhaseOpen = phase => {
+    onNavigate?.('topics', {
+      focusTarget: { type: 'phase', id: phase.id },
+      clearSearch: true,
+    });
+  };
+
+  const handleTopicOpen = (topic, phase) => {
+    onNavigate?.('topics', {
+      focusTarget: { type: 'topic', id: topic.id, phaseId: phase.id },
+      clearSearch: true,
+    });
+  };
 
   return (
     <div className="rt-track-detail">
@@ -133,46 +197,58 @@ function TrackDetail({ track }) {
       <div className="rt-detail-meta">
         <div className="rt-meta-item">
           <span className="rt-meta-label">Duration</span>
-          <span className="rt-meta-value">{track.duration}</span>
-        </div>
-        <div className="rt-meta-item">
-          <span className="rt-meta-label">Level</span>
-          <span className="rt-meta-value">{track.difficulty ?? 'All levels'}</span>
+          <span className="rt-meta-value">{track.totalHours}h</span>
         </div>
         <div className="rt-meta-item">
           <span className="rt-meta-label">Phases</span>
-          <span className="rt-meta-value">{track.phases.length}</span>
+          <span className="rt-meta-value">{track.phaseCount}</span>
+        </div>
+        <div className="rt-meta-item">
+          <span className="rt-meta-label">Topics</span>
+          <span className="rt-meta-value">{track.totalTopics}</span>
+        </div>
+        <div className="rt-meta-item">
+          <span className="rt-meta-label">Complete</span>
+          <span className="rt-meta-value">{track.progressPct}%</span>
         </div>
       </div>
 
-      {prerequisites.length > 0 && (
-        <div className="rt-prerequisites">
-          <span className="rt-prereq-label">Prerequisites</span>
-          <div className="rt-prereq-chips">
-            {prerequisites.map(p => (
-              <span key={p} className="rt-prereq-chip">{p}</span>
-            ))}
-          </div>
+      <div className="rt-detail-progress">
+        <div className="progress-track">
+          <div style={{ width: `${track.progressPct}%` }} />
         </div>
-      )}
+        <span className="rt-detail-progress-label">
+          {track.completedTopics}/{track.totalTopics} topics complete
+        </span>
+      </div>
 
-      <div className="rt-skills-row">
-        <span className="rt-skills-label">Key skills</span>
-        <div className="rt-skills-chips">
-          {skills.map(s => (
-            <span key={s} className="rt-skill-chip">{s}</span>
-          ))}
+      <div className="rt-prerequisites">
+        <span className="rt-prereq-label">Track type</span>
+        <div className="rt-prereq-chips">
+          <span className="rt-prereq-chip" style={{ color: track.color, borderColor: `${track.color}55`, background: `${track.color}12` }}>
+            {track.badge}
+          </span>
         </div>
       </div>
 
-      <PhaseTimeline phases={track.phases} />
+      <PhaseList
+        phases={track.phases}
+        onPhaseOpen={handlePhaseOpen}
+        onTopicOpen={handleTopicOpen}
+      />
     </div>
   );
 }
 
-const RoadmapTracks = memo(function RoadmapTracks() {
-  const [selectedId, setSelectedId] = useState(roadmapTracks[0].id);
-  const selectedTrack = roadmapTracks.find(t => t.id === selectedId);
+const RoadmapTracks = memo(function RoadmapTracks({ topicStates = {}, onNavigate }) {
+  const [selectedTrackType, setSelectedTrackType] = useState('core');
+
+  const roadmapTracks = useMemo(
+    () => TRACK_ORDER.map(trackType => buildTrack(trackType, topicStates)),
+    [topicStates]
+  );
+
+  const selectedTrack = roadmapTracks.find(track => track.trackType === selectedTrackType) ?? roadmapTracks[0];
 
   return (
     <section className="section" id="roadmap">
@@ -184,22 +260,27 @@ const RoadmapTracks = memo(function RoadmapTracks() {
         <span className="rt-track-count">{roadmapTracks.length} tracks</span>
       </div>
       <p className="rt-intro">
-        Choose a specialisation track and follow the structured learning path with phases, milestones, and skill checklists.
+        Follow the same phase-based curriculum used by Learning Path so the roadmap and learning flow stay in sync.
       </p>
 
       <div className="rt-layout">
         <div className="rt-sidebar">
           {roadmapTracks.map(track => (
             <TrackCard
-              key={track.id}
+              key={track.trackType}
               track={track}
-              onSelect={setSelectedId}
-              isSelected={track.id === selectedId}
+              onSelect={setSelectedTrackType}
+              isSelected={track.trackType === selectedTrackType}
             />
           ))}
         </div>
         <div className="rt-main">
-          {selectedTrack && <TrackDetail track={selectedTrack} />}
+          {selectedTrack && (
+            <TrackDetail
+              track={selectedTrack}
+              onNavigate={onNavigate}
+            />
+          )}
         </div>
       </div>
     </section>

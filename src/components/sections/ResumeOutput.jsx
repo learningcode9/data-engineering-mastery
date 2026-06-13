@@ -71,12 +71,17 @@ const ResumeOutput = memo(function ResumeOutput() {
       </div>
 
       {isEmpty ? (
-        <div className="resume-empty-state">
-          <span aria-hidden="true">▣</span>
-          <p>Complete your first topic to generate resume content.</p>
-          <p style={{ fontSize: 13, color: 'var(--muted)' }}>
-            Mark a topic as completed in the Learning Path above to unlock skills, project bullets, and interview talking points.
-          </p>
+        <div className="resume-empty-state resume-empty-state--locked">
+          <span className="resume-empty-state-lock" aria-hidden="true">🔒</span>
+          <div className="resume-empty-state-copy">
+            <strong>Complete your first topic to unlock Resume &amp; Interview Output</strong>
+            <p>Mark a topic as completed to generate resume bullet points, interview talking points, and skill summaries.</p>
+            <ul>
+              <li>Resume bullet points</li>
+              <li>Interview talking points</li>
+              <li>Skill summaries</li>
+            </ul>
+          </div>
         </div>
       ) : (
         <div className="resume-output-grid">
