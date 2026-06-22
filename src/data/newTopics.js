@@ -1001,11 +1001,11 @@ export const newTopics = [
       interviewTip: 'Bring printed copies to interviews. Be ready to walk through every bullet point — interviewers use your resume as an interview script, asking follow-up questions on anything you mention.',
       projectLink: 'Resume Output section in this app generates bullet points for your completed projects.',
     },
-    nextStep: { id: 'interview-preparation', title: 'Interview Preparation', reason: 'With a strong resume getting you interviews, structured preparation is what gets you the offer.' },
+    nextStep: { id: 'interview-preparation', title: 'Interview Prep', reason: 'With a strong resume getting you interviews, structured preparation is what gets you the offer.' },
   },
   {
     id: 'interview-preparation',
-    title: 'Interview Preparation',
+    title: 'Interview Prep',
     label: 'Interview Prep',
     category: 'Career',
     difficulty: 'Intermediate',

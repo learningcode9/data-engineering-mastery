@@ -651,6 +651,277 @@ Pipeline "MetadataDrivenLoad":
       ],
     },
     {
+      title: 'Senior ADF Production Patterns',
+      subtopics: [
+        {
+          id: 'adf-rest-pagination-throttling',
+          title: 'REST API Pagination & Throttling',
+          difficulty: 'Advanced',
+          explanation: 'ADF REST ingestion must handle pagination, rate limits, retries, authentication, and replay boundaries so API loads can run unattended in production.',
+          what: 'A production REST pipeline reads one page at a time, persists the next cursor or watermark, respects HTTP 429 throttling, and lands raw responses into ADLS Bronze before transformation.',
+          why: 'Many enterprise sources expose SaaS data through REST APIs. Senior Azure data engineers are expected to build restartable ingestion, not fragile one-off API copies.',
+          realWorldUsage: 'A CRM API returns 1,000 contacts per page and throttles after 100 calls per minute. ADF must paginate until no nextLink remains, back off on 429 responses, and record the high watermark only after the Bronze write succeeds.',
+          azureUsage: 'Use ADF REST connector, Copy Activity pagination rules, Web Activity for token refresh or metadata calls, ADLS Gen2 Bronze as the landing zone, and Key Vault for client secrets.',
+          azureRelevance: 'This is a common Azure ingestion pattern for Salesforce, ServiceNow, Workday, HubSpot, payment APIs, and vendor systems.',
+          databricksUsage: 'Databricks usually picks up the Bronze JSON payloads for schema enforcement, deduplication, and Silver normalization.',
+          databricksRelevance: 'Keep complex response flattening and schema handling in Databricks when API payloads are nested or frequently evolving.',
+          syntax: `ADF REST Copy pattern:
+  Source: REST dataset
+  Pagination: $.nextLink or query parameter page/token
+  Retry: 429/5xx with backoff
+  Sink: ADLS Bronze path by source/date/run_id
+  Audit: rows/files/pages copied, status code, watermark`,
+          example: `Pipeline: ingest_crm_contacts
+1. Web Activity: request OAuth2 token from Key Vault-backed credentials
+2. Copy Activity: GET /contacts?updated_after=@{pipeline().parameters.watermark}
+3. Pagination rule: AbsoluteUrl = $.nextLink
+4. Sink path: bronze/crm/contacts/run_id=@{pipeline().RunId}/
+5. Stored Proc: update watermark only when Copy succeeds`,
+          expectedOutput: `Bronze contains replayable raw API pages.
+Audit table records page count, row count, run_id, status, and next watermark.`,
+          interview: {
+            question: 'How would you design an ADF REST API ingestion pipeline that is safe to rerun?',
+            answer: 'Use OAuth/Key Vault, parameterized endpoints, pagination rules, retry/backoff for throttling, raw Bronze landing by run_id, audit counts, and update the watermark only after a successful write and validation.',
+          },
+          interviewQuestion: 'How would you design an ADF REST API ingestion pipeline that is safe to rerun?',
+          practice: 'Design an ADF pipeline for a paginated CRM API with OAuth2, 429 throttling, and ADLS Bronze landing.',
+          practiceTask: 'List activities, parameters, retry policy, audit columns, and the point where the watermark should update.',
+          hint: 'The watermark should move after the raw landing and validation succeed, not before.',
+          solution: `Activities:
+- Lookup old watermark
+- Web Activity for OAuth token
+- Copy Activity with pagination and retry policy
+- Stored Proc or Function to write audit metrics
+- Stored Proc to update watermark on success only
+- Failure path to Teams/Email and incident table`,
+          commonMistakes: [
+            'Updating the watermark before data lands successfully.',
+            'Ignoring API throttling and causing intermittent production failures.',
+            'Flattening complex JSON in ADF when Databricks should own schema logic.',
+          ],
+          productionContext: 'REST ingestion must be replayable. Raw API responses, run IDs, and watermarks are operational controls, not optional logging.',
+          performanceTip: 'Tune request concurrency carefully. More parallelism can increase throttling and total runtime if the API enforces limits.',
+          performanceConsiderations: 'API limits, network latency, and file count in Bronze drive runtime more than ADF compute. Batch small pages into sane Bronze file sizes where possible.',
+          seniorEngineeringInsights: 'Strong interview answers mention idempotency, pagination state, backoff, raw preservation, secrets, and auditability.',
+        },
+        {
+          id: 'adf-integration-runtime-networking',
+          title: 'Integration Runtime & Private Networking',
+          difficulty: 'Advanced',
+          explanation: 'Integration Runtime (IR) is the compute and network bridge ADF uses to move data. Choosing Azure IR, Managed VNet IR, or Self-hosted IR affects security, throughput, and connectivity.',
+          what: 'Production ADF designs place IR close to the source/sink, restrict public access where possible, and use private endpoints or self-hosted runtimes for protected networks.',
+          why: 'Many senior Azure interviews test whether you understand that ADF is not just a visual pipeline tool; it has network, security, and data-transfer architecture choices.',
+          realWorldUsage: 'An on-prem SQL Server behind a firewall must load to ADLS. A Self-hosted IR runs inside the corporate network and pushes data to Azure using approved outbound routes.',
+          azureUsage: 'Use Azure IR for cloud-to-cloud copies, Managed VNet IR with private endpoints for locked-down Azure resources, and Self-hosted IR for on-prem or private network sources.',
+          azureRelevance: 'IR selection influences throughput, firewall rules, private endpoint design, data residency, and operational ownership.',
+          databricksUsage: 'ADF often orchestrates Databricks after ingestion. Keep network boundaries clear: ADF copies data, Databricks transforms data in the lakehouse.',
+          databricksRelevance: 'When Databricks uses private networking, coordinate storage firewalls, managed identities, and private endpoints across ADF and Databricks.',
+          syntax: `IR selection:
+  Azure IR: cloud sources/sinks, simple setup
+  Managed VNet IR: private endpoints to Azure PaaS
+  Self-hosted IR: on-prem/private networks
+
+Security baseline:
+  Managed Identity + Key Vault + Private Endpoint + least privilege`,
+          example: `Scenario: On-prem Oracle to ADLS
+1. Install Self-hosted IR on a hardened VM near Oracle
+2. Register IR with ADF
+3. Linked Service uses SHIR for Oracle
+4. Sink uses ADLS with Managed Identity
+5. Monitor SHIR health and throughput`,
+          expectedOutput: `ADF can copy from private/on-prem sources without exposing the database publicly.`,
+          interview: {
+            question: 'When would you use Self-hosted Integration Runtime instead of Azure IR?',
+            answer: 'Use Self-hosted IR when the source or sink is inside an on-premises or private network that Azure IR cannot reach. It runs close to the source, respects firewall rules, and securely connects to ADF for orchestration.',
+          },
+          interviewQuestion: 'When would you use Self-hosted Integration Runtime instead of Azure IR?',
+          practice: 'Choose an IR strategy for copying from an on-prem SQL Server to ADLS Gen2 when the database cannot be exposed publicly.',
+          practiceTask: 'Describe network placement, credential handling, monitoring, and failure mode.',
+          hint: 'The runtime must run inside or near the protected network.',
+          solution: `Use Self-hosted IR:
+- Install on a managed VM in the corporate network.
+- Use Key Vault for credentials where possible.
+- Restrict outbound traffic to Azure endpoints.
+- Monitor SHIR node health, CPU, memory, and queue.
+- Document failover with multiple SHIR nodes if SLA requires it.`,
+          commonMistakes: [
+            'Using public endpoints when private networking is required.',
+            'Ignoring IR region and creating avoidable latency/egress cost.',
+            'Deploying only one SHIR node for critical production loads.',
+          ],
+          productionContext: 'IR is part of the production architecture. It needs monitoring, patching, sizing, and disaster recovery ownership.',
+          performanceTip: 'Place IR close to the data source and increase parallel copy only after confirming source-system capacity.',
+          performanceConsiderations: 'Network bandwidth, source database limits, and IR node resources can bottleneck copy performance.',
+          seniorEngineeringInsights: 'A senior answer should include connectivity, security, operational ownership, scaling, and failover.',
+        },
+        {
+          id: 'adf-cdc-orchestration',
+          title: 'CDC Orchestration with ADF',
+          difficulty: 'Advanced',
+          explanation: 'ADF commonly orchestrates CDC pipelines by managing extract windows, state tables, dependencies, notebook execution, and validation rather than implementing all CDC logic inside ADF.',
+          what: 'ADF reads CDC metadata, triggers extraction or Databricks processing, passes watermarks or LSNs, and updates state only after target validation succeeds.',
+          why: 'CDC pipelines are high-risk because retries can duplicate data and missed state updates can skip changes. Senior Azure DE interviews often test CDC orchestration.',
+          realWorldUsage: 'A sales OLTP system produces inserts, updates, and soft deletes. ADF passes the last successful LSN to the extraction job, Databricks applies MERGE to Silver/Gold, and ADF updates the checkpoint after reconciliation.',
+          azureUsage: 'ADF can orchestrate SQL CDC, Change Tracking, API delta endpoints, Databricks notebooks, stored procedures, and audit-table updates.',
+          azureRelevance: 'This connects ADF, ADLS, Databricks, Synapse/Fabric, SQL Server, and audit tables in a real enterprise flow.',
+          databricksUsage: 'Databricks typically performs deduplication, MERGE logic, SCD Type 2, and Delta writes once ADF lands or passes the changed data.',
+          databricksRelevance: 'Keep transformation semantics in Spark/Delta while ADF owns orchestration, dependency handling, and operational notifications.',
+          syntax: `CDC orchestration order:
+  1. Read last checkpoint
+  2. Extract changes > checkpoint
+  3. Land raw change batch
+  4. Apply MERGE/SCD logic
+  5. Reconcile counts
+  6. Update checkpoint on success only`,
+          example: `Pipeline: cdc_customer_load
+1. Lookup: last_lsn from cdc_state
+2. Copy: source changes where lsn > last_lsn
+3. Databricks Notebook: deduplicate and MERGE to Silver
+4. Stored Proc: reconcile source changes vs target applied rows
+5. Stored Proc: update cdc_state with max_lsn`,
+          expectedOutput: `Each CDC batch is replayable. State advances only after merge and reconciliation succeed.`,
+          interview: {
+            question: 'Where should the CDC checkpoint update happen in an ADF-orchestrated pipeline?',
+            answer: 'After the changed data is landed, transformed/merged, and reconciled successfully. Updating the checkpoint before target success risks skipped records; updating it after every partial step risks inconsistent recovery.',
+          },
+          interviewQuestion: 'Where should the CDC checkpoint update happen in an ADF-orchestrated pipeline?',
+          practice: 'Design the activity order for a CDC load that writes changed customer records to Delta and supports safe reruns.',
+          practiceTask: 'Define the state table columns and success criteria for updating the checkpoint.',
+          hint: 'Include checkpoint, run_id, status, row counts, and max source sequence.',
+          solution: `State table:
+- source_name
+- entity_name
+- last_successful_lsn_or_watermark
+- last_run_id
+- status
+- source_count
+- applied_count
+- updated_at
+
+Update only after target MERGE and reconciliation pass.`,
+          commonMistakes: [
+            'Updating checkpoint before MERGE succeeds.',
+            'Treating deletes like inserts and losing tombstone semantics.',
+            'Not recording run_id and counts for replay/debugging.',
+          ],
+          productionContext: 'CDC orchestration is about correctness under failure. Every step should be replayable or auditable.',
+          performanceTip: 'Pass bounded CDC windows to Spark so MERGE scans are pruned by date/partition where possible.',
+          performanceConsiderations: 'Large CDC merges can be expensive; partition target tables and optimize merge predicates.',
+          seniorEngineeringInsights: 'Senior candidates should distinguish orchestration state from transformation logic and explain recovery when a batch fails halfway.',
+        },
+        {
+          id: 'adf-backfill-rerun-runbooks',
+          title: 'Backfill and Rerun Runbooks',
+          difficulty: 'Advanced',
+          explanation: 'Backfills and reruns are controlled operational workflows for reprocessing historical data without duplicating rows or breaking downstream dashboards.',
+          what: 'A good ADF runbook defines parameters, date ranges, dependency checks, validation, rollback, notification, and when to pause regular triggers.',
+          why: 'Production teams regularly need to reload failed days, fix bad source data, or reprocess changed business rules. This is a senior reliability skill.',
+          realWorldUsage: 'Finance discovers that tax logic was wrong for the last 14 days. The team disables the daily trigger, backfills affected partitions, validates totals, then resumes the schedule.',
+          azureUsage: 'ADF supports manual trigger runs with parameters, tumbling-window reruns, dependency paths, and audit tables for backfill tracking.',
+          azureRelevance: 'Backfills often touch ADLS partitions, Databricks notebooks, Synapse/Fabric tables, and Power BI refresh timing.',
+          databricksUsage: 'Databricks jobs should accept load_date or date_range parameters and write idempotently using replaceWhere or MERGE.',
+          databricksRelevance: 'A backfill run should use the same business logic as daily processing, with controlled parameters and audit separation.',
+          syntax: `Backfill controls:
+  load_start_date
+  load_end_date
+  run_mode = backfill
+  disable_regular_trigger = true/false
+  validation_required = true
+  downstream_refresh_policy`,
+          example: `Backfill run:
+adf_pipeline = daily_sales_pipeline
+parameters:
+  load_start_date = 2026-06-01
+  load_end_date   = 2026-06-14
+  run_mode        = backfill
+
+Validation:
+  source_count = target_count
+  revenue checksum matches finance extract
+  Power BI refresh delayed until validation passes`,
+          expectedOutput: `Affected partitions are replaced or merged safely. Audit table distinguishes backfill runs from scheduled daily runs.`,
+          interview: {
+            question: 'How do you safely rerun or backfill an ADF pipeline?',
+            answer: 'Parameterize the load window, use idempotent writes, pause conflicting triggers if needed, log run mode and run_id, validate counts/checksums, notify stakeholders, and only refresh downstream reports after validation.',
+          },
+          interviewQuestion: 'How do you safely rerun or backfill an ADF pipeline?',
+          practice: 'Write a runbook outline for reprocessing 14 days of sales data after a business logic fix.',
+          practiceTask: 'Include trigger handling, parameters, validation checks, and stakeholder communication.',
+          hint: 'Backfills affect downstream users, not just pipeline code.',
+          solution: `Runbook:
+1. Confirm impacted date range and downstream reports.
+2. Disable or coordinate daily trigger.
+3. Run pipeline with backfill parameters.
+4. Use replaceWhere/MERGE to avoid duplicates.
+5. Validate counts, sums, and key metrics.
+6. Refresh semantic model/report only after validation.
+7. Resume trigger and publish incident/change note.`,
+          commonMistakes: [
+            'Appending backfill rows without removing the old partition.',
+            'Refreshing reports before validation completes.',
+            'Running backfill while regular trigger processes the same dates.',
+          ],
+          productionContext: 'Backfills should be treated like controlled changes with auditability and communication.',
+          performanceTip: 'Chunk large backfills by date range to avoid overloading source systems and Spark clusters.',
+          performanceConsiderations: 'Historical reprocessing can cost more than daily loads; schedule during lower-usage windows and monitor capacity.',
+          seniorEngineeringInsights: 'Senior answers should include business coordination, idempotency, validation, rollback, and downstream report timing.',
+        },
+        {
+          id: 'adf-production-validation-gates',
+          title: 'Production Validation Gates',
+          difficulty: 'Advanced',
+          explanation: 'Validation gates are automated checks that decide whether a pipeline can publish curated data, update state, or trigger downstream refreshes.',
+          what: 'ADF can run row-count, schema, freshness, duplicate, null-key, and reconciliation checks before updating watermarks or calling downstream jobs.',
+          why: 'Data pipelines can technically succeed while producing wrong data. Senior engineers build quality gates so bad data is stopped early.',
+          realWorldUsage: 'A pipeline copies zero rows because the source API returned a temporary empty response. The validation gate prevents the Gold table from being overwritten with empty data.',
+          azureUsage: 'Use Lookup, Stored Procedure, Databricks Notebook output, Web Activity, Azure Monitor alerts, and audit tables to implement gates.',
+          azureRelevance: 'Validation gates protect ADLS, Synapse/Fabric Warehouse, Power BI semantic models, and stakeholder trust.',
+          databricksUsage: 'Databricks can return validation metrics to ADF through notebook exit values or write results to a shared audit table.',
+          databricksRelevance: 'Spark is better suited for large data quality checks; ADF should orchestrate pass/fail decisions and notifications.',
+          syntax: `Gate examples:
+  source_count > 0
+  abs(source_count - target_count) <= threshold
+  duplicate_business_keys = 0
+  null_required_keys = 0
+  freshness_minutes <= SLA
+  schema_version is compatible`,
+          example: `Pipeline validation flow:
+1. Copy raw batch to Bronze
+2. Databricks validates Silver output
+3. ADF Lookup reads validation_result
+4. If pass: update watermark and trigger Gold refresh
+5. If fail: stop pipeline, alert team, keep previous Gold data`,
+          expectedOutput: `Bad or incomplete batches fail closed. The previous trusted data remains available to reporting users.`,
+          interview: {
+            question: 'What validation checks would you add before publishing a daily Gold table?',
+            answer: 'Check row counts, required keys, duplicate business keys, schema compatibility, freshness SLA, reconciliation totals, and critical metric thresholds. Fail the publish if checks breach agreed tolerances.',
+          },
+          interviewQuestion: 'What validation checks would you add before publishing a daily Gold table?',
+          practice: 'Design validation gates for a daily orders pipeline where the source sometimes returns partial data.',
+          practiceTask: 'Define at least five checks and what the pipeline should do on failure.',
+          hint: 'Think source, target, freshness, uniqueness, and business totals.',
+          solution: `Checks:
+- source_count above minimum threshold
+- target_count within tolerance
+- no null order_id/customer_id
+- no duplicate order_id for the batch
+- revenue sum within expected range
+- source extract timestamp within SLA
+
+On failure: do not update watermark, do not refresh Gold/Power BI, alert support, keep raw batch for debugging.`,
+          commonMistakes: [
+            'Treating Copy Activity success as data quality success.',
+            'Updating downstream reports before validation.',
+            'Using hardcoded thresholds that are never reviewed with business owners.',
+          ],
+          productionContext: 'Validation gates convert data quality from manual inspection into an operational control.',
+          performanceTip: 'Compute validation metrics incrementally on the changed batch when possible, then compare to target aggregates.',
+          performanceConsiderations: 'Large full-table validations can be expensive. Use partition-level checks and sampled profiling where appropriate.',
+          seniorEngineeringInsights: 'Senior answers should describe fail-closed behavior, business tolerances, audit metrics, and recovery paths.',
+        },
+      ],
+    },
+    {
       title: 'CI/CD for ADF',
       subtopics: [
         {
@@ -956,3 +1227,39 @@ print(f"Gold loaded for {load_date}: {gold_day.count()} rows")`,
     },
   ],
 };
+
+function normalizeAdfLesson(lesson) {
+  const title = lesson.title || 'this ADF pattern';
+  return {
+    ...lesson,
+    azureUsage:
+      lesson.azureUsage ??
+      `In Azure, ${title} is typically part of ADF pipeline orchestration across ADLS, Synapse, Fabric, Key Vault, and operational alerting services.`,
+    databricksUsage:
+      lesson.databricksUsage ??
+      `In Databricks-centric platforms, ADF often uses ${title} to parameterize notebook runs, coordinate Bronze-to-Gold movement, and pass operational context into Spark jobs.`,
+    productionContext:
+      lesson.productionContext ??
+      `${title} matters in production because ingestion pipelines need retries, parameterization, audit logging, and safe promotion across dev, test, and prod.`,
+    commonMistakes:
+      lesson.commonMistakes ??
+      [`Using ${title} without parameterization, validation gates, or a documented rerun path for support teams.`],
+    performanceTip:
+      lesson.performanceTip ??
+      lesson.performanceConsiderations ??
+      `Tune concurrency, integration runtime placement, and source pressure when using ${title} so orchestration stays reliable under scale.`,
+    performanceConsiderations:
+      lesson.performanceConsiderations ??
+      lesson.performanceTip ??
+      `Balance parallelism, connector limits, and retry policies so ${title} does not overload source systems or inflate pipeline duration.`,
+    resumeTips:
+      lesson.resumeTips ??
+      lesson.resumeFraming ??
+      `Highlight ${title} as part of production ADF orchestration with retries, monitoring, parameterization, and controlled Azure deployments.`,
+  };
+}
+
+adfModule.sections = adfModule.sections.map((section) => ({
+  ...section,
+  subtopics: section.subtopics.map(normalizeAdfLesson),
+}));

@@ -24,10 +24,12 @@ const FILTER_CHIPS = [
   { id: 'spark',         label: 'PySpark' },
   { id: 'fabric',        label: 'Fabric' },
   { id: 'cloud',         label: 'Azure / Cloud' },
+  { id: 'finops',        label: 'FinOps' },
   { id: 'databricks',    label: 'Databricks' },
   { id: 'orchestration', label: 'ADF / Airflow' },
   { id: 'etl',           label: 'ETL' },
   { id: 'data-modeling', label: 'Data Modeling' },
+  { id: 'data-contracts', label: 'Data Contracts' },
   { id: 'streaming',     label: 'Kafka' },
   { id: 'system-design', label: 'System Design' },
   { id: 'scenario',      label: 'Scenarios' },
@@ -41,10 +43,12 @@ const DOC_SOURCES = {
   spark:         { label: 'Apache Spark Docs',    url: 'https://spark.apache.org/docs/latest/' },
   fabric:        { label: 'Microsoft Learn — Fabric', url: 'https://learn.microsoft.com/en-us/fabric/' },
   cloud:         { label: 'Microsoft Learn — Azure',  url: 'https://learn.microsoft.com/en-us/azure/' },
+  finops:        { label: 'Azure Cost Management',   url: 'https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/overview-cost-management' },
   databricks:    { label: 'Databricks Docs',      url: 'https://docs.databricks.com/' },
   orchestration: { label: 'Apache Airflow Docs',  url: 'https://airflow.apache.org/docs/' },
   etl:           { label: 'dbt Docs',             url: 'https://docs.getdbt.com/' },
   'data-modeling': { label: 'Kimball Group',      url: 'https://www.kimballgroup.com/data-warehouse-business-intelligence-resources/kimball-techniques/dimensional-modeling-techniques/' },
+  'data-contracts': { label: 'Azure Architecture Center', url: 'https://learn.microsoft.com/en-us/azure/architecture/data-guide/' },
   streaming:     { label: 'Apache Kafka Docs',    url: 'https://kafka.apache.org/documentation/' },
   'system-design': { label: 'AWS Architecture',  url: 'https://aws.amazon.com/architecture/' },
 };
@@ -500,7 +504,7 @@ const InterviewPrep = memo(function InterviewPrep() {
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <div className="ipv2-header">
           <div className="ipv2-header-left">
-            <h2 className="ipv2-title">Interview Preparation</h2>
+            <h2 className="ipv2-title">Interview Prep</h2>
             <p className="ipv2-subtitle">
               Topic-wise questions, scenarios, coding, and mock interviews.
             </p>

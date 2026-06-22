@@ -5,12 +5,35 @@ import { pythonModule }     from './modules/python.js';
 import { pysparkModule }    from './modules/pyspark.js';
 import { adfModule }        from './modules/azure-data-factory.js';
 import { databricksModule } from './modules/azure-databricks.js';
+import { finopsModule }     from './modules/finops.js';
+import { cicdDataEngineeringModule } from './modules/cicd-data-engineering.js';
+import { dataObservabilityModule }   from './modules/data-observability.js';
+import { productionOperationsModule } from './modules/production-operations.js';
+import { dataContractsModule } from './modules/data-contracts.js';
+import {
+  gitFundamentalsModule,
+  linuxBasicsModule,
+  etlFundamentalsModule,
+  dataQualityModule,
+  interviewPreparationModule,
+} from './modules/core-quality-modules.js';
+import {
+  apiFileIngestionModule,
+  metadataDrivenPipelinesModule,
+  fabricEventstreamModule,
+  fabricRealTimeAnalyticsModule,
+  pythonProductionQualityModule,
+} from './modules/production-readiness-modules.js';
 import { awsGlueModule }    from './modules/aws-glue.js';
 import { aiModule }         from './modules/ai-for-data-engineers.js';
 import { fabricModule }          from './modules/fabric.js';
 import { kafkaStreamingModule }  from './modules/kafka-streaming.js';
 import { systemDesignModule }    from './modules/system-design.js';
 import { azureSecurityModule }   from './modules/azure-security.js';
+import { adlsGen2Module }        from './modules/adls-gen2.js';
+import { synapseModule }         from './modules/azure-synapse.js';
+import { deltaLakeModule }       from './modules/delta-lake.js';
+import { cdcModule }             from './modules/cdc.js';
 import { newTopics }             from './newTopics.js';
 import { phases }           from './phases.js';
 import {
@@ -645,9 +668,32 @@ function normalizeTopic(topic) {
   const pathMeta = getSeniorAzureTopicMeta(topic.id) ?? {};
   const title = pathMeta.title ?? REQUIRED_TITLE_OVERRIDES[topic.id] ?? topic.title;
   const estimatedTime = pathMeta.estimatedTime ?? topic.estimatedTime ?? topic.timeEstimate ?? '1–2 weeks';
-  const module = topic.id === 'data-modeling'
-    ? dataModelingModule
-    : topic.module;
+  const moduleOverrides = {
+    git: gitFundamentalsModule,
+    python: pythonProductionQualityModule,
+    'linux-cli': linuxBasicsModule,
+    'data-modeling': dataModelingModule,
+    'etl-vs-elt': etlFundamentalsModule,
+    'api-file-ingestion': apiFileIngestionModule,
+    'data-quality': dataQualityModule,
+    'metadata-driven-pipelines': metadataDrivenPipelinesModule,
+    finops: finopsModule,
+    'data-contracts': dataContractsModule,
+    'azure-data-lake-gen2': adlsGen2Module,
+    'azure-synapse': synapseModule,
+    'delta-lake': deltaLakeModule,
+    'cicd-de': cicdDataEngineeringModule,
+    'infrastructure-as-code': cicdDataEngineeringModule,
+    'monitoring-logging': dataObservabilityModule,
+    'data-observability': dataObservabilityModule,
+    'cost-optimization': finopsModule,
+    'production-operations': productionOperationsModule,
+    'interview-preparation': interviewPreparationModule,
+    'fabric-eventstream': fabricEventstreamModule,
+    'fabric-real-time-analytics': fabricRealTimeAnalyticsModule,
+    cdc: cdcModule,
+  };
+  const module = moduleOverrides[topic.id] ?? topic.module;
   const normalizedBase = { ...topic, ...pathMeta, title, estimatedTime, module };
   const practiceTasks = practiceTasksFor(normalizedBase);
 

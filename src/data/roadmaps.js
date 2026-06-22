@@ -605,7 +605,7 @@ const legacyRoadmapTracks = [
   },
   {
     id: 'interview-track',
-    title: 'Interview Preparation',
+    title: 'Interview Prep',
     icon: '🎯',
     color: '#dc2626',
     description: 'Prepare systematically for data engineering interviews covering SQL, coding, system design, and behavioral questions. Structured for 4–6 weeks of focused prep.',

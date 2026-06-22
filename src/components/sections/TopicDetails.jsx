@@ -190,6 +190,405 @@ function SubtopicCard({ subtopic, practiceCompleted, onTogglePractice, sqlMode }
   );
 }
 
+function LessonInfoCard({ label, value, code = false, accent = false, bodyClass = '' }) {
+  if (!value) return null;
+  return (
+    <article className={`lesson-info-card${accent ? ' lesson-info-card--accent' : ''}`}>
+      <span className="lesson-info-label">{label}</span>
+      {code ? (
+        <CodeBlock code={value} />
+      ) : (
+        <p className={`lesson-info-value ${bodyClass}`.trim()}>{value}</p>
+      )}
+    </article>
+  );
+}
+
+function LessonAccordionBlock({ title, badge, badgeVariant, children, defaultOpen = false }) {
+  return (
+    <AccordionItem
+      title={title}
+      badge={badge}
+      badgeVariant={badgeVariant}
+      defaultOpen={defaultOpen}
+      level="h4"
+    >
+      {children}
+    </AccordionItem>
+  );
+}
+
+function getTopicLessons(topic) {
+  return (topic?.module?.sections ?? []).flatMap(section =>
+    (section.subtopics ?? []).map(subtopic => ({
+      ...subtopic,
+      sectionTitle: section.title,
+    }))
+  );
+}
+
+function getActiveLesson(topic, lessonId) {
+  const lessons = getTopicLessons(topic);
+  if (!lessons.length) return null;
+  return lessons.find(lesson => lesson.id === lessonId) ?? lessons[0];
+}
+
+function textFromList(value) {
+  if (!value) return '';
+  if (Array.isArray(value)) return value.filter(Boolean).join('\n');
+  return String(value);
+}
+
+function firstText(...values) {
+  return values.find(value => {
+    if (Array.isArray(value)) return value.length > 0;
+    return Boolean(value);
+  });
+}
+
+function buildLessonItem(key, label, lesson, fallback = {}) {
+  return {
+    key,
+    label,
+    type: 'lesson',
+    lesson,
+    title: fallback.title ?? lesson?.title ?? label,
+    explanation: firstText(lesson?.explanation, lesson?.why, fallback.explanation),
+    syntax: lesson?.syntax ?? fallback.syntax,
+    example: lesson?.example ?? fallback.example,
+    expectedOutput: lesson?.expectedOutput ?? fallback.expectedOutput,
+    useCase: firstText(lesson?.productionContext, lesson?.databricksRelevance, lesson?.azureRelevance, fallback.useCase),
+    commonMistake: textFromList(firstText(lesson?.commonMistakes, lesson?.productionMistakes, lesson?.commonMistake, fallback.commonMistake)),
+    azureNotes: lesson?.azureRelevance ?? fallback.azureNotes,
+    databricksUsage: lesson?.databricksRelevance ?? fallback.databricksUsage,
+    productionContext: textFromList(firstText(lesson?.productionContext, lesson?.productionConcern, fallback.productionContext)),
+    performanceTips: textFromList(firstText(
+      lesson?.performanceTip,
+      lesson?.optimizationTips,
+      lesson?.costConsiderations,
+      fallback.performanceTips
+    )),
+    seniorInsights: textFromList(firstText(
+      lesson?.seniorEngineerNote,
+      lesson?.scalabilityConcerns,
+      lesson?.debuggingTips,
+      fallback.seniorInsights
+    )),
+    resumeTips: fallback.resumeTips,
+    interviewTip: lesson?.interview
+      ? `${lesson.interview.question}\n\n${lesson.interview.answer}`
+      : fallback.interviewTip,
+    practice: firstText(lesson?.practice, fallback.practice),
+    hint: lesson?.hint ?? fallback.hint,
+    solution: lesson?.solution ?? fallback.solution,
+  };
+}
+
+function isRenderableTutorialItem(item) {
+  if (!item) return false;
+  if (item.type === 'group') return (item.children ?? []).some(isRenderableTutorialItem);
+  return item.type !== 'lesson' || item.lesson || item.explanation || item.syntax || item.example;
+}
+
+function buildTutorialGroup(key, label, children) {
+  return {
+    key,
+    label,
+    type: 'group',
+    children: children.filter(isRenderableTutorialItem),
+  };
+}
+
+function flattenTutorialItems(items) {
+  return items.flatMap(item => (item.type === 'group' ? flattenTutorialItems(item.children ?? []) : [item]));
+}
+
+function getSqlTutorialItems(topic, activeLesson, lessonSummary, whatYouLearn) {
+  const lessons = getTopicLessons(topic);
+  const byId = id => lessons.find(lesson => lesson.id === id);
+  const byTitle = pattern => lessons.find(lesson => pattern.test(lesson.title ?? '') || pattern.test(lesson.id ?? ''));
+  const overview = {
+    key: 'overview',
+    label: 'SQL Foundations',
+    type: 'overview',
+    title: 'SQL Foundations',
+    lesson: null,
+    explanation: 'SQL Foundations is your starting point for reading, filtering, joining, aggregating, and validating production data. Work through one concept at a time: SELECT, WHERE, joins, aggregations, windows, CTEs, MERGE, and reconciliation SQL.',
+    learnItems: whatYouLearn,
+    useCase: topic.careerContext?.realWorldUseCase ?? 'Production data engineers use SQL to validate Bronze and Silver tables, build Gold reporting models, debug pipeline issues, and answer stakeholder questions with trusted data.',
+    interviewTip: topic.careerContext?.interviewTip ?? topic.questions?.[0]?.question,
+    practice: 'Start with SELECT, then move one topic at a time through filters, joins, aggregations, window functions, CTEs, and production validation patterns.',
+  };
+
+  return [
+    overview,
+    buildLessonItem('select', 'SELECT', byId('sql-foundation-select') ?? byTitle(/select/i)),
+    buildLessonItem('where', 'WHERE', byId('sql-foundation-where') ?? byTitle(/where/i)),
+    buildTutorialGroup('joins', 'JOINs', [
+      buildLessonItem('inner-join', 'INNER JOIN', byId('sql-join-inner') ?? byTitle(/inner join/i)),
+      buildLessonItem('left-join', 'LEFT JOIN', byId('sql-join-left') ?? byTitle(/left join/i)),
+      buildLessonItem('right-join', 'RIGHT JOIN', byId('sql-join-right-full') ?? byTitle(/right join/i)),
+      buildLessonItem('full-outer-join', 'FULL OUTER JOIN', byId('sql-join-full-outer') ?? byTitle(/full outer|full join/i)),
+      buildLessonItem('cross-join', 'CROSS JOIN', byId('sql-join-cross') ?? byTitle(/cross join/i)),
+      buildLessonItem('self-join', 'SELF JOIN', byId('sql-join-self') ?? byTitle(/self join/i)),
+    ]),
+    buildLessonItem('aggregate-functions', 'Aggregate Functions', byId('sql-agg-aggregate-functions') ?? byTitle(/aggregate|count|sum|avg/i)),
+    buildLessonItem('group-by', 'GROUP BY', byId('sql-agg-group-by') ?? byTitle(/group/i)),
+    buildLessonItem('having', 'HAVING', byId('sql-agg-having') ?? byTitle(/having/i)),
+    buildTutorialGroup('window-functions', 'Window Functions', [
+      buildLessonItem('row-number', 'ROW_NUMBER', byId('sql-window-row-number') ?? byTitle(/row_number|row number/i)),
+      buildLessonItem('rank', 'RANK', byId('sql-window-rank') ?? byTitle(/^rank$/i)),
+      buildLessonItem('dense-rank', 'DENSE_RANK', byId('sql-window-dense-rank') ?? byTitle(/dense/i)),
+      buildLessonItem('ntile', 'NTILE', byId('sql-window-ntile') ?? byTitle(/ntile/i)),
+      buildLessonItem('lag', 'LAG', byId('sql-window-lag') ?? byTitle(/^lag$/i)),
+      buildLessonItem('lead', 'LEAD', byId('sql-window-lead') ?? byTitle(/^lead$/i)),
+      buildLessonItem('first-value', 'FIRST_VALUE', byId('sql-window-first-value') ?? byTitle(/first_value|first value/i)),
+      buildLessonItem('last-value', 'LAST_VALUE', byId('sql-window-last-value') ?? byTitle(/last_value|last value/i)),
+      buildLessonItem('running-totals', 'Running Totals', byId('sql-window-running-totals') ?? byTitle(/running/i)),
+      buildLessonItem('partition-by-order-by', 'PARTITION BY vs ORDER BY', byId('sql-window-partitioning-logic') ?? byTitle(/partitioning/i), { title: 'PARTITION BY vs ORDER BY' }),
+      buildLessonItem('dedup-row-number', 'Deduplication with ROW_NUMBER', byId('sql-window-deduplication-patterns') ?? byTitle(/dedup/i)),
+    ]),
+    buildLessonItem('ctes', 'CTEs', byId('sql-intermediate-ctes') ?? byTitle(/cte/i), { title: 'CTEs' }),
+    buildLessonItem('recursive-ctes', 'Recursive CTEs', byId('sql-intermediate-recursive-ctes') ?? byTitle(/recursive/i)),
+    buildLessonItem('subqueries', 'Subqueries', byId('sql-intermediate-subqueries') ?? byTitle(/subquer/i)),
+    buildTutorialGroup('case-nulls', 'CASE / NULLs', [
+      buildLessonItem('case-when', 'CASE WHEN', byId('sql-foundation-case-when') ?? byTitle(/case/i)),
+      buildLessonItem('null-handling', 'NULL Handling', byId('sql-foundation-null-handling') ?? byTitle(/null/i)),
+      buildLessonItem('date-functions', 'Date Functions', byId('sql-foundation-date-functions') ?? byTitle(/date function/i)),
+      buildLessonItem('string-functions', 'String Functions', byId('sql-foundation-string-functions') ?? byTitle(/string function/i)),
+      buildLessonItem('union', 'UNION vs UNION ALL', byId('sql-union') ?? byTitle(/union/i)),
+    ]),
+    buildTutorialGroup('views-temp-tables', 'Views / Temp Tables', [
+      buildLessonItem('views', 'Views', byId('sql-intermediate-views') ?? byTitle(/views?/i)),
+      buildLessonItem('temp-tables', 'Temp Tables', byId('sql-intermediate-temp-tables') ?? byTitle(/temp/i)),
+      buildLessonItem('indexes', 'Index Basics', byId('sql-perf-indexes') ?? byTitle(/index/i), { title: 'Index Basics' }),
+    ]),
+    buildLessonItem('sql-functions', 'SQL Functions', byId('sql-intermediate-functions') ?? byTitle(/function/i)),
+    buildLessonItem('stored-procedures', 'Stored Procedures', byId('sql-intermediate-stored-procedures') ?? byTitle(/stored/i)),
+    buildLessonItem('merge-upsert', 'MERGE / UPSERT', byId('sql-intermediate-merge') ?? byTitle(/merge|upsert/i), { title: 'MERGE / UPSERT' }),
+    buildTutorialGroup('validation-reconciliation', 'Validation & Reconciliation', [
+      buildLessonItem('cdc-merge-logic', 'CDC Merge Logic', byId('sql-de-cdc-merge-logic') ?? byTitle(/cdc/i)),
+      buildLessonItem('incremental-loads', 'Incremental Load Patterns', byId('sql-de-incremental-loads') ?? byTitle(/incremental/i)),
+      buildLessonItem('reconciliation', 'Reconciliation Checks', byId('sql-de-reconciliation-queries') ?? byTitle(/reconciliation/i)),
+      buildLessonItem('duplicate-detection', 'Duplicate Detection', byId('sql-de-duplicate-detection') ?? byTitle(/duplicate detection/i)),
+    ]),
+  ].filter(isRenderableTutorialItem);
+}
+
+function getGenericTutorialItems(topic, activeLesson, lessonSummary, whatYouLearn) {
+  const lessons = getTopicLessons(topic).slice(0, 10);
+  return [
+    {
+      key: 'overview',
+      label: topic.title,
+      type: 'overview',
+      title: topic.title,
+      lesson: activeLesson,
+      explanation: topic.body ?? lessonSummary,
+      learnItems: whatYouLearn,
+      syntax: activeLesson?.syntax,
+      example: activeLesson?.example,
+      expectedOutput: activeLesson?.expectedOutput,
+      useCase: topic.careerContext?.realWorldUseCase ?? activeLesson?.productionContext,
+      interviewTip: topic.careerContext?.interviewTip ?? activeLesson?.interview?.question,
+      practice: activeLesson?.practice ?? 'Complete the topic practice and explain the tradeoffs in interview language.',
+    },
+    ...lessons.map(lesson => buildLessonItem(lesson.id, lesson.title, lesson)),
+    {
+      key: 'practice',
+      label: 'Practice',
+      type: 'practice',
+      title: 'Practice task',
+      explanation: 'Apply this lesson to a realistic data engineering workflow.',
+      lesson: activeLesson,
+      practice: activeLesson?.practice,
+      hint: activeLesson?.hint,
+      solution: activeLesson?.solution,
+    },
+    {
+      key: 'interview',
+      label: 'Interview Q&A',
+      type: 'interview',
+      title: 'Interview Q&A',
+      explanation: 'Turn the concept into a concise, senior-ready interview answer.',
+      lesson: activeLesson,
+      interviewTip: activeLesson?.interview
+        ? `${activeLesson.interview.question}\n\n${activeLesson.interview.answer}`
+        : topic.questions?.[0]
+          ? `${topic.questions[0].question}\n\n${topic.questions[0].answer}`
+          : '',
+      questions: topic.questions ?? [],
+    },
+  ].filter(item => item.title || item.explanation || item.practice || item.interviewTip);
+}
+
+function LessonTextSection({ title, children, code = false }) {
+  if (!children) return null;
+  return (
+    <section className={`lesson-tutorial-section${code ? ' lesson-tutorial-section--code' : ''}`}>
+      <h4>{title}</h4>
+      {code ? <CodeBlock code={children} /> : <p>{children}</p>}
+    </section>
+  );
+}
+
+function LessonAdvancedDetails({ title, children }) {
+  if (!children) return null;
+  return (
+    <details className="lesson-tutorial-detail">
+      <summary>{title}</summary>
+      <p>{children}</p>
+    </details>
+  );
+}
+
+function TryItYourself({ item, topic, practiceCompleted, onTogglePractice }) {
+  const lesson = item.lesson;
+  if (!lesson?.practice) {
+    return (
+      <section className="lesson-try-panel">
+        <div>
+          <span className="lesson-try-kicker">Try it yourself</span>
+          <h4>Practice the idea</h4>
+          <p>{item.practice ?? 'Use this concept in a small query or implementation step before moving to the next lesson.'}</p>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="lesson-try-panel">
+      <div className="lesson-try-header">
+        <span className="lesson-try-kicker">Try it yourself</span>
+        <h4>{topic.id === 'sql' ? 'Run the SQL practice' : 'Practice the task'}</h4>
+        <p>Make one small change, validate the result, then continue.</p>
+      </div>
+      {topic.id === 'sql' ? (
+        <SQLWorkspace
+          subtopic={lesson}
+          completed={practiceCompleted}
+          onToggleComplete={onTogglePractice}
+        />
+      ) : (
+        <PracticeCard
+          subtopic={lesson}
+          completed={practiceCompleted}
+          onToggleComplete={onTogglePractice}
+          sqlMode={false}
+        />
+      )}
+    </section>
+  );
+}
+
+function LessonTutorialContent({ item, topic, completed, isLocked, practiceProgress, onTogglePractice }) {
+  const practiceCompleted = item.lesson?.id ? !!practiceProgress?.[item.lesson.id] : false;
+
+  if (item.type === 'practice') {
+    return (
+      <div className="lesson-tutorial-content-stack">
+        <LessonTextSection title="Practice task">{item.practice}</LessonTextSection>
+        <LessonTextSection title="Hint">{item.hint}</LessonTextSection>
+        <LessonTextSection title="Solution">{item.solution}</LessonTextSection>
+        {item.lesson?.practice && (
+          <div className="lesson-tutorial-practice-card">
+            <PracticeCard
+              subtopic={item.lesson}
+              completed={practiceCompleted}
+              onToggleComplete={onTogglePractice}
+              sqlMode={topic.id === 'sql'}
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (item.type === 'interview') {
+    return (
+      <div className="lesson-tutorial-content-stack">
+        <LessonTextSection title="Common interview question">{item.interviewTip}</LessonTextSection>
+        {(item.questions ?? []).slice(0, 4).map((question, index) => (
+          <section key={`${question.question}-${index}`} className="lesson-tutorial-section">
+            <h4>{question.question}</h4>
+            <p>{question.answer}</p>
+          </section>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="lesson-tutorial-content-stack">
+      <LessonTextSection title="What is it?">{item.explanation}</LessonTextSection>
+      <LessonTextSection title="Syntax" code>{item.syntax}</LessonTextSection>
+      <LessonTextSection title="Example" code>{item.example}</LessonTextSection>
+      <LessonTextSection title="Expected output">{item.expectedOutput}</LessonTextSection>
+      <TryItYourself
+        item={item}
+        topic={topic}
+        practiceCompleted={practiceCompleted}
+        onTogglePractice={onTogglePractice}
+      />
+      <LessonTextSection title="Practice task">{item.practice}</LessonTextSection>
+      <LessonTextSection title="One interview question">{item.interviewTip}</LessonTextSection>
+      <div className="lesson-tutorial-details-stack">
+        <LessonAdvancedDetails title="Real Data Engineering Usage">{item.useCase}</LessonAdvancedDetails>
+        <LessonAdvancedDetails title="Azure / Fabric Notes">{item.azureNotes}</LessonAdvancedDetails>
+        <LessonAdvancedDetails title="Databricks Usage">{item.databricksUsage}</LessonAdvancedDetails>
+        <LessonAdvancedDetails title="Production Context">{item.productionContext}</LessonAdvancedDetails>
+        <LessonAdvancedDetails title="Performance Tips">{item.performanceTips}</LessonAdvancedDetails>
+        <LessonAdvancedDetails title="Senior Engineering Insights">{textFromList([
+          item.seniorInsights,
+          item.commonMistake,
+        ].filter(Boolean))}</LessonAdvancedDetails>
+        <LessonAdvancedDetails title="Resume Tips">{item.resumeTips ?? topic.resumeRelevance}</LessonAdvancedDetails>
+      </div>
+      {item.type === 'overview' && (
+        <section className="lesson-tutorial-section lesson-tutorial-status">
+          <h4>Lesson progress</h4>
+          <p>{completed ? 'This lesson is marked complete.' : isLocked ? 'Complete prerequisites first to mark this lesson complete.' : 'Read the basics, practice the task, then mark the lesson complete when you are comfortable.'}</p>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function TutorialMenuEntry({ item, selectedKey, onSelect }) {
+  if (item.type === 'group') {
+    const isGroupActive = (item.children ?? []).some(child => child.key === selectedKey);
+    const openProps = isGroupActive ? { open: true } : {};
+
+    return (
+      <details className={`lesson-tutorial-group${isGroupActive ? ' is-active' : ''}`} {...openProps}>
+        <summary>{item.label}</summary>
+        <div className="lesson-tutorial-sublist">
+          {(item.children ?? []).map(child => (
+            <TutorialMenuEntry
+              key={child.key}
+              item={child}
+              selectedKey={selectedKey}
+              onSelect={onSelect}
+            />
+          ))}
+        </div>
+      </details>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={selectedKey === item.key}
+      className={`lesson-tutorial-tab${selectedKey === item.key ? ' is-active' : ''}${item.type === 'lesson' ? ' lesson-tutorial-tab--lesson' : ''}`}
+      onClick={() => onSelect(item.key)}
+    >
+      {item.label}
+    </button>
+  );
+}
+
 // ── Sticky section navigation ──────────────────────────────────────────────────
 function TopicNavBar({ sections, topicId }) {
   const [activeIdx, setActiveIdx] = useState(0);
@@ -808,6 +1207,10 @@ function NotesBox({ topicId, notes, onNotesChange }) {
 // ── Main component ─────────────────────────────────────────────────────────────
 const TopicDetails = memo(function TopicDetails({
   topic,
+  lessonId,
+  lessonTitle,
+  previousLesson,
+  nextLesson,
   completed,
   notes,
   onNotesChange,
@@ -815,102 +1218,248 @@ const TopicDetails = memo(function TopicDetails({
   searchTerm,
   practiceProgress,
   onTogglePractice,
-  onSelectTopic,
+  onNavigateLesson,
 }) {
   if (!topic) return null;
   const mod = topic.module;
-
-  const totalSubtopics = mod?.sections?.reduce(
-    (acc, s) => acc + s.subtopics.length, 0
-  ) ?? 0;
-
-  const completedPractice = mod?.sections
-    ? mod.sections.reduce(
-        (acc, s) => acc + s.subtopics.filter(st => practiceProgress?.[st.id]).length,
-        0
-      )
-    : 0;
-
+  const activeLesson = useMemo(() => getActiveLesson(topic, lessonId), [topic, lessonId]);
+  const lessonName = lessonTitle ?? activeLesson?.title ?? topic.title;
+  const lessonSummary =
+    activeLesson?.explanation ??
+    activeLesson?.why ??
+    topic.body ??
+    topic.careerContext?.whyItMatters ??
+    '';
+  const estimatedTime = topic.timeEstimate ?? topic.estimatedTime ?? '20 min';
   const topicState = topic.topicState;
   const masteryPct = topic.masteryPct ?? 0;
   const isLocked   = topicState === 'locked';
+  const relatedLessons = getTopicLessons(topic);
+  const totalSubtopics = relatedLessons.length;
+  const completedPractice = relatedLessons.reduce(
+    (acc, lesson) => acc + (practiceProgress?.[lesson.id] ? 1 : 0),
+    0
+  );
+  const whyThisMatters =
+    topic.careerContext?.whyItMatters ??
+    topic.whyItMatters ??
+    lessonSummary;
+  const whatYouLearn = [
+    {
+      title: 'Concept',
+      body: activeLesson?.explanation ?? topic.overview?.[0]?.body ?? lessonSummary,
+    },
+    {
+      title: 'Real-world usage',
+      body: topic.careerContext?.realWorldUseCase ?? activeLesson?.productionContext ?? topic.overview?.[1]?.body ?? '',
+    },
+    {
+      title: 'Interview angle',
+      body: topic.careerContext?.interviewTip ?? activeLesson?.interview?.question ?? topic.questions?.[0]?.question ?? '',
+    },
+    {
+      title: 'Hands-on practice',
+      body: activeLesson?.practice ?? topic.overview?.[3]?.body ?? 'Practice this lesson in the workspace below.',
+    },
+  ].filter(item => item.body);
+
+  const coreCards = [
+    { title: 'Definition', body: activeLesson?.explanation ?? lessonSummary },
+    { title: 'Syntax', code: activeLesson?.syntax },
+    { title: 'Simple example', code: activeLesson?.example },
+    { title: 'Expected output', body: activeLesson?.expectedOutput },
+    {
+      title: 'Real data engineering example',
+      body: activeLesson?.productionContext ?? activeLesson?.databricksRelevance ?? topic.careerContext?.realWorldUseCase,
+    },
+    {
+      title: 'Common interview question',
+      body: activeLesson?.interview
+        ? `${activeLesson.interview.question}\n\n${activeLesson.interview.answer}`
+        : topic.questions?.[0]
+          ? `${topic.questions[0].question}\n\n${topic.questions[0].answer}`
+          : '',
+    },
+    { title: 'Practice task', body: activeLesson?.practice ?? topic.overview?.find(item => /practice/i.test(item.title))?.body ?? '' },
+  ].filter(card => card.body || card.code);
+
+  const advancedCards = [
+    activeLesson?.azureRelevance && {
+      title: 'Azure / Fabric Notes',
+      body: activeLesson.azureRelevance,
+    },
+    activeLesson?.databricksRelevance && {
+      title: 'Databricks Usage',
+      body: activeLesson.databricksRelevance,
+    },
+    (activeLesson?.productionContext || activeLesson?.productionConcern) && {
+      title: 'Production Context',
+      body: [activeLesson.productionContext, activeLesson.productionConcern].filter(Boolean).join('\n\n'),
+    },
+    (activeLesson?.performanceTip || activeLesson?.optimizationTips?.length || activeLesson?.costConsiderations?.length) && {
+      title: 'Performance Tips',
+      body: [
+        activeLesson.performanceTip,
+        ...(activeLesson.optimizationTips ?? []),
+        ...(activeLesson.costConsiderations ?? []),
+      ].filter(Boolean).join('\n'),
+    },
+    (activeLesson?.seniorEngineerNote || activeLesson?.productionMistakes?.length || activeLesson?.scalabilityConcerns?.length || activeLesson?.debuggingTips?.length) && {
+      title: 'Senior Engineering Insights',
+      body: [
+        activeLesson.seniorEngineerNote,
+        ...(activeLesson.productionMistakes ?? []),
+        ...(activeLesson.scalabilityConcerns ?? []),
+        ...(activeLesson.debuggingTips ?? []),
+      ].filter(Boolean).join('\n'),
+    },
+    (activeLesson?.commonMistake || activeLesson?.commonMistakes?.length) && {
+      title: 'Common Mistakes',
+      body: [
+        activeLesson.commonMistake,
+        ...(activeLesson.commonMistakes ?? []),
+      ].filter(Boolean).join('\n'),
+    },
+    (activeLesson?.medallionLayer || activeLesson?.pipelineStage || activeLesson?.businessPurpose) && {
+      title: 'Medallion Placement',
+      body: [
+        activeLesson.medallionLayer ? `Layer: ${activeLesson.medallionLayer}` : null,
+        activeLesson.pipelineStage ? `Stage: ${activeLesson.pipelineStage}` : null,
+        activeLesson.businessPurpose ? `Business purpose: ${activeLesson.businessPurpose}` : null,
+      ].filter(Boolean).join('\n'),
+    },
+    ((activeLesson?.interview?.question || activeLesson?.interview?.answer) || (topic.questions?.length ?? 0) > 0) && {
+      title: 'Additional Interview Questions',
+      body: [
+        activeLesson?.interview?.question ? `Q: ${activeLesson.interview.question}\nA: ${activeLesson.interview.answer}` : null,
+        ...(topic.questions ?? []).map(q => `Q: ${q.question}\nA: ${q.answer}`),
+      ].filter(Boolean).join('\n\n'),
+    },
+    (mod?.queryExamples?.length ?? 0) > 0 && {
+      title: 'Worked examples',
+      body: mod.queryExamples.map(ex => `${ex.title}\n${ex.sql}`).join('\n\n'),
+    },
+    mod?.miniProject && {
+      title: 'Mini project',
+      body: `${mod.miniProject.title}\n${mod.miniProject.goal}\n${(mod.miniProject.steps ?? []).join('\n')}\n\nExpected output: ${mod.miniProject.output}`,
+    },
+    (mod?.miniProjects?.length ?? 0) > 0 && {
+      title: 'Mini projects',
+      body: mod.miniProjects.map(project => `${project.title}\n${project.goal}`).join('\n\n'),
+    },
+  ].filter(Boolean);
+  const tutorialItems = useMemo(
+    () => topic.id === 'sql'
+      ? getSqlTutorialItems(topic, activeLesson, lessonSummary, whatYouLearn)
+      : getGenericTutorialItems(topic, activeLesson, lessonSummary, whatYouLearn),
+    [topic, activeLesson, lessonSummary, whatYouLearn]
+  );
+  const flatTutorialItems = useMemo(() => flattenTutorialItems(tutorialItems), [tutorialItems]);
+  const [selectedTutorialKey, setSelectedTutorialKey] = useState('overview');
+  const selectedTutorial =
+    flatTutorialItems.find(item => item.key === selectedTutorialKey) ??
+    flatTutorialItems[0];
 
   return (
-    <article className="topic-details">
-      <div className="topic-details-header">
-        <div>
-          <p className="eyebrow">Step {topic.step ?? ''} · {topic.category ?? 'Topic'}</p>
-          <h3>{topic.title}</h3>
-          {totalSubtopics > 0 && (
-            <p className="topic-stats">
-              {completedPractice} / {totalSubtopics} practice tasks completed
-            </p>
-          )}
+    <article className="topic-details topic-details--lesson">
+      <section className="lesson-hero-card">
+        <div className="lesson-hero-top">
+          <div className="lesson-hero-copy">
+            <div className="lesson-hero-meta">
+              <span className="lesson-meta-chip">{topic.category ?? 'Topic'}</span>
+              <span className="lesson-meta-chip lesson-meta-chip--diff">{topic.difficulty ?? 'Beginner'}</span>
+              <span className="lesson-meta-chip lesson-meta-chip--muted">{estimatedTime}</span>
+            </div>
+            <h3 className="lesson-hero-title">{lessonName}</h3>
+            <p className="lesson-hero-summary">{lessonSummary}</p>
+          </div>
+          <button
+            type="button"
+            className={`secondary-button lesson-hero-complete${completed ? ' completed' : ''}${isLocked ? ' disabled' : ''}`}
+            onClick={() => !isLocked && onToggleComplete(topic.id)}
+            disabled={isLocked}
+            title={isLocked ? 'Complete prerequisites first' : undefined}
+          >
+            {completed ? '✓ Completed' : 'Mark complete'}
+          </button>
         </div>
-        <button
-          type="button"
-          className={`secondary-button${completed ? ' completed' : ''}${isLocked ? ' disabled' : ''}`}
-          onClick={() => !isLocked && onToggleComplete(topic.id)}
-          disabled={isLocked}
-          title={isLocked ? 'Complete prerequisites first' : undefined}
-        >
-          {completed ? '✓ Completed' : 'Mark completed'}
-        </button>
-      </div>
+
+        <div className="lesson-hero-progress">
+          <div className="lesson-hero-progress-text">
+            <strong>{masteryPct}% Complete</strong>
+            <span>{completedPractice} / {Math.max(1, totalSubtopics)} practice tasks completed</span>
+          </div>
+          <div className="lesson-hero-track">
+            <div className="lesson-hero-fill" style={{ width: `${masteryPct}%` }} />
+          </div>
+        </div>
+      </section>
 
       {isLocked && <LockedBanner prerequisites={topic.prerequisites} />}
-      <MasteryMeter masteryPct={masteryPct} topicState={topicState} />
-      <InterviewImportanceBanner importance={topic.interviewImportance} />
-      <TopicGuidanceSnapshot topic={topic} />
-      <OverviewSection overview={topic.overview} />
-      <CareerContextPanel careerContext={topic.careerContext} step={topic.step} />
-      <CommonMistakes mistakes={topic.commonMistakes} />
-      <QuickQuestions questions={topic.questions} />
 
-      {mod?.sections?.length > 0 && (
-        <section className="deep-dive-section">
-          <div className="deep-dive-heading">
-            <div>
-              <h4>Deep Dive Sections</h4>
-              <p>Open one section at a time to keep the lesson focused.</p>
-            </div>
-            <span>{mod.sections.length} sections</span>
+      <section className="lesson-tutorial-shell" aria-label={`${topic.title} tutorial reader`}>
+        <aside className="lesson-tutorial-menu" aria-label="Lesson topics">
+          <div className="lesson-tutorial-menu-title">
+            <span>Tutorial menu</span>
+            <strong>{topic.title}</strong>
           </div>
-          {mod.sections.length > 4 && (
-            <TopicNavBar sections={mod.sections} topicId={topic.id} />
-          )}
-          <TopicSections
-            sections={mod.sections}
-            topicId={topic.id}
-            sqlMode={topic.id === 'sql'}
-            searchTerm={searchTerm}
+          <div className="lesson-tutorial-list" role="tablist" aria-label="Select a lesson topic">
+            {tutorialItems.map(item => (
+              <TutorialMenuEntry
+                key={item.key}
+                item={item}
+                selectedKey={selectedTutorial.key}
+                onSelect={setSelectedTutorialKey}
+              />
+            ))}
+          </div>
+        </aside>
+
+        <div className="lesson-tutorial-pane" role="tabpanel">
+          <div className="lesson-tutorial-pane-header">
+            <span className="lesson-tutorial-eyebrow">{selectedTutorial.type === 'overview' ? 'Start here' : selectedTutorial.label}</span>
+            <h3>{selectedTutorial.title}</h3>
+          </div>
+          <LessonTutorialContent
+            item={selectedTutorial}
+            topic={topic}
+            completed={completed}
+            isLocked={isLocked}
             practiceProgress={practiceProgress}
             onTogglePractice={onTogglePractice}
           />
-        </section>
-      )}
+          <details className="lesson-tutorial-reference-row">
+            <summary>Notes and references</summary>
+            <div className="lesson-tutorial-reference-inner">
+              <NotesBox topicId={topic.id} notes={notes} onNotesChange={onNotesChange} />
+              <div className="lesson-tutorial-reference-links">
+                <ResumeRelevance text={topic.resumeRelevance} />
+                <DocLinksPanel docIds={topic.docs} />
+                <SourceMappingPanel mappings={mod?.documentationMapping} />
+              </div>
+            </div>
+          </details>
+        </div>
+      </section>
 
-      {mod?.queryExamples?.length > 0 && (
-        <QueryExamples examples={mod.queryExamples} />
-      )}
-
-      {mod?.miniProjects?.length > 0 && mod.miniProjects.map((p, i) => (
-        <MiniProject key={i} project={p} />
-      ))}
-      {!mod?.miniProjects?.length && mod?.miniProject && <MiniProject project={mod.miniProject} />}
-
-      <InterviewGroups groups={mod?.interviewGroups} />
-      <AppliedScenarios groups={mod?.interviewGroups} />
-
-      <NotesBox topicId={topic.id} notes={notes} onNotesChange={onNotesChange} />
-      <ResumeRelevance text={topic.resumeRelevance} />
-      <DocLinksPanel docIds={topic.docs} />
-      <SourceMappingPanel mappings={mod?.documentationMapping} />
-      <NextStepCard
-        nextStep={topic.nextStep}
-        currentStep={topic.step}
-        onSelectTopic={onSelectTopic}
-      />
+      <nav className="lesson-footer-nav" aria-label="Previous and next topic">
+        <button
+          type="button"
+          className="lesson-back-btn lesson-back-btn--nav"
+          onClick={() => previousLesson && onNavigateLesson?.(previousLesson.id)}
+          disabled={!previousLesson}
+        >
+          ← Previous Topic
+        </button>
+        <button
+          type="button"
+          className="lesson-next-btn lesson-next-btn--nav"
+          onClick={() => nextLesson ? onNavigateLesson?.(nextLesson.id) : null}
+          disabled={!nextLesson}
+        >
+          Next Topic →
+        </button>
+      </nav>
     </article>
   );
 });

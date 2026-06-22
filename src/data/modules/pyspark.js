@@ -881,6 +881,294 @@ result = skewed_orders.join(customers, on="customer_id")
         },
       ],
     },
+    {
+      title: 'Production PySpark Engineering',
+      subtopics: [
+        {
+          id: 'pyspark-schema-enforcement-corrupt-records',
+          title: 'Schema Enforcement & Corrupt Records',
+          difficulty: 'Advanced',
+          explanation: 'Schema enforcement means trusted Spark jobs read data with explicit column names, data types, and validation rules instead of allowing raw files to define the shape of Silver or Gold tables.',
+          what: 'A production PySpark pipeline should preserve raw data in Bronze, validate it before Silver, and quarantine malformed rows with enough metadata to debug the producer issue.',
+          why: 'Senior data engineers are expected to prevent one malformed file, API payload, or unexpected column from corrupting downstream Power BI, Fabric, Synapse, or Databricks reporting layers.',
+          realWorldUsage: 'A vendor sends an orders file where amount contains "N/A" and a new promo_code column appears without notice. Bronze stores the raw file, Silver enforces the contract, invalid rows go to a quarantine table, and the producer receives an actionable error report.',
+          azureUsage: 'ADF can land files into ADLS Gen2 Bronze and trigger a Databricks job that validates schemas, writes rejected rows to an error path, and publishes audit counts for operations teams.',
+          azureRelevance: 'In Azure projects, this protects ADLS Silver/Gold zones, Synapse external tables, Fabric Lakehouse shortcuts, and semantic model refreshes from schema drift.',
+          databricksUsage: 'Databricks Auto Loader supports schema locations, rescued data columns, and controlled schema evolution. Use these to detect drift while keeping raw data recoverable.',
+          databricksRelevance: 'In Databricks, schema enforcement is commonly paired with Delta constraints, expectations, bad-record paths, and table-level audit metrics.',
+          syntax: `spark.read.schema(order_schema) \\
+    .option("mode", "PERMISSIVE") \\
+    .option("badRecordsPath", bad_path) \\
+    .json(input_path)`,
+          example: `from pyspark.sql.types import StructType, StructField, StringType, DecimalType, TimestampType
+from pyspark.sql.functions import col, input_file_name, current_timestamp
+
+order_schema = StructType([
+    StructField("order_id", StringType(), False),
+    StructField("customer_id", StringType(), False),
+    StructField("amount", DecimalType(12, 2), True),
+    StructField("updated_at", TimestampType(), False)
+])
+
+raw_orders = (
+    spark.read.schema(order_schema)
+    .option("mode", "PERMISSIVE")
+    .json("/mnt/bronze/orders/")
+    .withColumn("_source_file", input_file_name())
+    .withColumn("_ingested_at", current_timestamp())
+)
+
+valid_orders = raw_orders.filter(col("order_id").isNotNull() & col("updated_at").isNotNull())
+rejected_orders = raw_orders.exceptAll(valid_orders)`,
+          expectedOutput: `valid_orders: typed rows ready for Silver
+rejected_orders: invalid rows with source file and ingestion timestamp for support`,
+          interview: {
+            question: 'How do you handle corrupt records and schema drift in a PySpark production pipeline?',
+            answer: 'Keep Bronze raw and append-only, enforce explicit schemas before Silver, quarantine invalid rows with source metadata, publish audit counts, and only allow governed schema evolution through a data contract or release process.',
+          },
+          interviewQuestion: 'How do you handle corrupt records and schema drift in a PySpark production pipeline?',
+          practice: 'Design a Bronze-to-Silver validation pattern for API order events where amount may arrive as text and a new optional field can appear.',
+          practiceTask: 'Create valid and rejected DataFrames, include source file metadata, and define where each output should be written in ADLS/Delta.',
+          hint: 'Think raw preservation first, then explicit schema, quarantine, audit metrics, and alerting.',
+          solution: `# Production pattern
+# 1. Land raw JSON unchanged in Bronze.
+# 2. Read with explicit schema for Silver.
+# 3. Split valid and rejected rows.
+# 4. Write valid rows to Silver Delta.
+# 5. Write rejected rows to a quarantine Delta table with _source_file and _ingested_at.
+# 6. Alert if rejected count exceeds the agreed threshold.`,
+          commonMistakes: [
+            'Using inferSchema in scheduled production jobs.',
+            'Dropping corrupt rows without an audit trail.',
+            'Allowing raw Bronze schema drift to flow directly into Gold tables.',
+          ],
+          productionContext: 'Schema enforcement is a reliability boundary between ingestion and curated data. It should be observable, audited, and tied to producer ownership.',
+          performanceTip: 'Explicit schemas avoid extra file scans for inference and reduce inconsistent type handling across batches.',
+          performanceConsiderations: 'Avoid expensive full-table validations when incremental partition-level checks are enough. Validate the changed batch and publish batch-level metrics.',
+          seniorEngineeringInsights: 'A senior answer should mention contracts, quarantine, lineage, alert thresholds, and how to recover after a bad producer release.',
+        },
+        {
+          id: 'pyspark-skew-salting',
+          title: 'Data Skew & Salting',
+          difficulty: 'Advanced',
+          explanation: 'Data skew happens when a few keys own a disproportionate amount of data, causing one or two Spark tasks to run much longer than the rest.',
+          what: 'Salting splits a hot key into multiple artificial buckets so Spark can process the heavy key across multiple tasks instead of one overloaded reducer.',
+          why: 'Skew is one of the most common reasons senior data engineers are asked to debug slow Spark jobs. It affects joins, aggregations, CDC merges, and dimensional lookups.',
+          realWorldUsage: 'A retail platform has one marketplace store with 40% of all orders. A join on store_id stalls because one shuffle partition receives hundreds of millions of rows.',
+          azureUsage: 'Azure Databricks jobs reading ADLS Delta tables often expose skew in the Spark UI SQL tab. ADF may only show the notebook activity as slow, so Spark UI diagnosis matters.',
+          azureRelevance: 'Skew fixes reduce Databricks DBU consumption, missed SLA risk, and downstream refresh delays for Synapse/Fabric reporting.',
+          databricksUsage: 'Use AQE skew handling first, then targeted salting for known hot keys. Validate improvements in Spark UI stage duration and shuffle metrics.',
+          databricksRelevance: 'Databricks Runtime includes AQE and skew join optimizations, but severe business-key skew still often needs data-model or salting changes.',
+          syntax: `from pyspark.sql.functions import rand, floor, concat_ws, col, lit
+
+salted_fact = fact.withColumn("salt", floor(rand() * 16))
+expanded_dim = dim.crossJoin(spark.range(16).withColumnRenamed("id", "salt"))
+
+result = salted_fact.join(expanded_dim, ["customer_id", "salt"])`,
+          example: `from pyspark.sql.functions import rand, floor, col
+
+hot_orders = orders.withColumn("salt", floor(rand(seed=42) * 8))
+salt_values = spark.range(8).withColumnRenamed("id", "salt")
+
+salted_customers = customers.crossJoin(salt_values)
+
+joined = hot_orders.join(
+    salted_customers,
+    on=["customer_id", "salt"],
+    how="left"
+)`,
+          expectedOutput: `Before: one skewed task processes the hot customer/store key.
+After: the hot key is split across 8 salted buckets and multiple tasks finish more evenly.`,
+          interview: {
+            question: 'How do you diagnose and fix data skew in Spark?',
+            answer: 'Use Spark UI to find stages with a few long-running tasks and large shuffle reads. Try AQE skew handling, broadcast small dimensions, filter early, or salt known hot keys. Validate with task duration, shuffle size, and output correctness.',
+          },
+          interviewQuestion: 'How do you diagnose and fix data skew in Spark?',
+          practice: 'A customer_id join has one customer with 80M rows while most have fewer than 1K. Propose a salting strategy and explain how you would prove it worked.',
+          practiceTask: 'Define the salt bucket count, show how the large fact and dimension side change, and list Spark UI metrics you would compare before and after.',
+          hint: 'The fact side gets a random salt. The small dimension side must be expanded across all salt values.',
+          solution: `# Use 8-32 buckets depending on skew severity.
+# Compare:
+# - max task duration
+# - shuffle read per task
+# - number of skewed partitions
+# - total job runtime
+# - row counts before/after join to avoid duplication bugs`,
+          commonMistakes: [
+            'Adding salt only to one side of the join.',
+            'Using too many salt buckets and creating unnecessary expansion.',
+            'Fixing skew without validating row counts and duplicates.',
+          ],
+          productionContext: 'Skew fixes should be documented because they encode business-specific data distribution knowledge.',
+          performanceTip: 'Always check whether broadcast join or AQE solves the problem before introducing custom salting logic.',
+          performanceConsiderations: 'Salting can increase dimension rows and shuffle width. Use it only for known hot keys or severe skew.',
+          seniorEngineeringInsights: 'Strong interview answers connect skew to Spark UI evidence, AQE, business-key distribution, correctness validation, and cost impact.',
+        },
+        {
+          id: 'pyspark-spark-ui-debugging',
+          title: 'Spark UI Debugging Workflow',
+          difficulty: 'Advanced',
+          explanation: 'The Spark UI is the primary tool for understanding why a Spark job is slow, expensive, failed, or unstable.',
+          what: 'A senior debugging workflow follows the SQL tab, jobs, stages, tasks, executors, storage, and event logs to isolate whether the issue is skew, shuffle, memory, spill, input size, or bad query planning.',
+          why: 'In real production incidents, "the notebook is slow" is not enough. Hiring managers expect evidence-based diagnosis using Spark UI metrics.',
+          realWorldUsage: 'A Databricks job that normally runs in 18 minutes now takes 90 minutes. Spark UI reveals one stage with huge shuffle spill and a sort-merge join caused by a missing broadcast hint.',
+          azureUsage: 'ADF and Azure Monitor may show pipeline duration, but the root cause for Databricks compute issues usually lives in Spark UI and cluster event logs.',
+          azureRelevance: 'Spark UI debugging improves SLA response, DBU cost control, and incident communication for Azure production pipelines.',
+          databricksUsage: 'In Databricks, inspect SQL query plans, stage timelines, executor memory, shuffle read/write, spill, failed tasks, and event logs.',
+          databricksRelevance: 'Databricks job runs preserve Spark UI links and cluster metrics that should be attached to incident notes or postmortems.',
+          syntax: `Debug order:
+1. SQL tab: query plan and expensive operators
+2. Stages: slow stages and shuffle boundaries
+3. Tasks: skew, spill, failed attempts
+4. Executors: memory pressure and lost executors
+5. Storage: cache usage and eviction`,
+          example: `# Use explain before and after optimization
+joined = orders.join(customers, "customer_id")
+joined.explain("formatted")
+
+# Spark UI checks:
+# - Does the plan show SortMergeJoin or BroadcastHashJoin?
+# - Which stage has the largest shuffle read?
+# - Are a few tasks much slower than the median?
+# - Is there memory or disk spill?`,
+          expectedOutput: `Root cause statement:
+Stage 14 consumed 82% of runtime. Four tasks had 20x larger shuffle read than median, indicating skew on customer_id. AQE skew handling was disabled for this cluster.`,
+          interview: {
+            question: 'Walk me through how you debug a slow Spark job.',
+            answer: 'Start with the business symptom and SLA, then inspect Spark UI SQL plan, stage durations, task skew, shuffle read/write, spill, executor memory, and failed attempts. Form a root cause, apply one targeted fix, and validate runtime, cost, and row-count correctness.',
+          },
+          interviewQuestion: 'Walk me through how you debug a slow Spark job.',
+          practice: 'Given a stage where 195 tasks finish in 20 seconds and 5 tasks run for 18 minutes with heavy shuffle read, identify the likely issue and next action.',
+          practiceTask: 'Write a short incident note that includes symptom, Spark UI evidence, root cause, fix, and validation metric.',
+          hint: 'Long-tail tasks usually point to skew or uneven input partitions.',
+          solution: `Likely root cause: data skew on the shuffle key.
+Next actions:
+- Identify hot key distribution.
+- Enable AQE skew join handling if unavailable.
+- Consider broadcast join or salting.
+- Re-run and compare max task duration and shuffle read distribution.`,
+          commonMistakes: [
+            'Only increasing cluster size without identifying the bottleneck.',
+            'Ignoring row-count correctness after performance changes.',
+            'Looking only at notebook duration instead of stage/task metrics.',
+          ],
+          productionContext: 'Spark UI findings should be included in incident notes so future engineers can recognize the same pattern quickly.',
+          performanceTip: 'The highest runtime stage is not always the root cause; inspect shuffle and task distribution to understand why it is slow.',
+          performanceConsiderations: 'Scaling compute may hide bad query plans temporarily and increase cost. Fix the plan when possible.',
+          seniorEngineeringInsights: 'Senior engineers communicate Spark UI evidence clearly to non-Spark stakeholders: what failed, why, what changed, and how the SLA will be protected.',
+        },
+        {
+          id: 'pyspark-partition-file-tuning',
+          title: 'Partition and File Size Tuning',
+          difficulty: 'Advanced',
+          explanation: 'Partition and file-size tuning controls how Spark reads, shuffles, writes, and prunes data.',
+          what: 'Good tuning balances parallelism, file sizes, partition columns, and compaction so jobs are fast without creating thousands of tiny files or a few oversized tasks.',
+          why: 'Poor partitioning is a common cause of slow Databricks jobs, expensive scans, and poor Power BI/Fabric/Synapse query performance over lake data.',
+          realWorldUsage: 'A daily sales pipeline writes 30,000 tiny files to the Gold table. Power BI refresh becomes slow because every query opens thousands of small files.',
+          azureUsage: 'ADLS Gen2 stores the physical files. Databricks writes Delta tables and Synapse/Fabric may query them. Bad file layout affects the whole Azure analytics stack.',
+          azureRelevance: 'Partition strategy should align with common filters, retention, and ingestion cadence, not arbitrary columns.',
+          databricksUsage: 'Use repartition/coalesce carefully before writes, Delta OPTIMIZE for compaction, and partition columns only when cardinality and query filters justify them.',
+          databricksRelevance: 'Databricks provides file pruning, data skipping, OPTIMIZE, ZORDER/liquid clustering options, and Delta table history to monitor layout changes.',
+          syntax: `# Control write parallelism
+df.repartition("business_date").write.format("delta").partitionBy("business_date").save(path)
+
+# Reduce tiny output files after narrow transformations
+df.coalesce(16).write.format("delta").mode("append").save(path)`,
+          example: `from pyspark.sql.functions import col
+
+silver_orders = orders.filter(col("business_date") >= "2026-01-01")
+
+(
+    silver_orders
+    .repartition("business_date")
+    .write
+    .format("delta")
+    .mode("append")
+    .partitionBy("business_date")
+    .save("/mnt/silver/orders")
+)`,
+          expectedOutput: `Silver orders are written in date partitions with enough files for parallel reads, but not thousands of tiny files per day.`,
+          interview: {
+            question: 'How do you choose partition columns and file sizes for a Delta table?',
+            answer: 'Choose low-to-medium cardinality columns frequently used in filters, usually dates or business domains. Avoid high-cardinality partitions. Tune output files to a practical size, compact small files, and validate with query filters, file counts, and scan metrics.',
+          },
+          interviewQuestion: 'How do you choose partition columns and file sizes for a Delta table?',
+          practice: 'A Gold fact table is queried mostly by business_date and region. It has 20,000 tiny files per day. Propose a tuning plan.',
+          practiceTask: 'List partition choice, compaction approach, and metrics to monitor after the change.',
+          hint: 'Think date partitioning, compaction, file count, file size, and query scan reduction.',
+          solution: `Plan:
+- Partition by business_date if most queries filter by date.
+- Avoid partitioning by high-cardinality customer_id.
+- Compact historical partitions using Delta OPTIMIZE.
+- Tune job output partitions before write.
+- Track file count, average file size, query duration, and bytes scanned.`,
+          commonMistakes: [
+            'Partitioning by high-cardinality keys such as customer_id.',
+            'Calling repartition randomly without considering output files.',
+            'Creating one giant file that kills parallelism.',
+          ],
+          productionContext: 'File layout is an operational concern. It affects ingestion runtime, BI query latency, cost, and maintenance jobs.',
+          performanceTip: 'Aim for predictable file counts and sizes per partition rather than maximum parallelism everywhere.',
+          performanceConsiderations: 'Compaction costs compute. Schedule it where it reduces enough downstream query cost or SLA risk to justify the job.',
+          seniorEngineeringInsights: 'A senior answer should tie partitioning to business query patterns, physical layout, compaction cadence, and cost tradeoffs.',
+        },
+        {
+          id: 'pyspark-idempotent-delta-writes',
+          title: 'Idempotent Delta Writes',
+          difficulty: 'Advanced',
+          explanation: 'An idempotent Spark write can be safely retried without creating duplicate rows, corrupting state, or double-counting metrics.',
+          what: 'Production pipelines should use deterministic batch IDs, merge keys, watermarks, partition overwrite patterns, or transaction metadata so reruns produce the same final table state.',
+          why: 'ADF retries, Databricks job retries, cluster failures, and manual backfills are normal. Senior engineers design writes that survive retries.',
+          realWorldUsage: 'A job fails after writing half of a daily partition. The rerun must replace or merge the same business_date deterministically instead of appending duplicate sales rows.',
+          azureUsage: 'ADF can rerun an activity or trigger; Databricks should write using a retry-safe pattern to Delta in ADLS Gen2.',
+          azureRelevance: 'Idempotency protects Fabric/Synapse/Power BI metrics from duplicate rows after operational retries.',
+          databricksUsage: 'Use Delta MERGE for keyed upserts, replaceWhere for partition replacement, checkpointed streams, and audit tables to record processed batch IDs.',
+          databricksRelevance: 'Delta transaction logs make idempotent patterns easier, but the job logic still must define keys, partitions, and retry boundaries correctly.',
+          syntax: `# Partition replacement for a deterministic batch
+df.write.format("delta") \\
+  .mode("overwrite") \\
+  .option("replaceWhere", "business_date = '2026-06-14'") \\
+  .save(path)`,
+          example: `business_date = "2026-06-14"
+daily_orders = orders.filter(f"business_date = '{business_date}'")
+
+(
+    daily_orders.write
+    .format("delta")
+    .mode("overwrite")
+    .option("replaceWhere", f"business_date = '{business_date}'")
+    .save("/mnt/gold/fact_orders_daily")
+)`,
+          expectedOutput: `Every rerun for 2026-06-14 replaces only that partition. The final row count remains stable instead of increasing on each retry.`,
+          interview: {
+            question: 'How do you make PySpark batch pipelines retry-safe?',
+            answer: 'Define the processing boundary, use deterministic keys or partitions, write with MERGE or partition replacement, track batch IDs/watermarks, and reconcile row counts after reruns. Avoid blind append for retryable jobs.',
+          },
+          interviewQuestion: 'How do you make PySpark batch pipelines retry-safe?',
+          practice: 'A daily Gold aggregation appends duplicate rows whenever an ADF retry occurs. Redesign the write pattern.',
+          practiceTask: 'Choose between MERGE and replaceWhere, define the idempotency key or partition, and list validation checks.',
+          hint: 'If the full daily partition is recomputed, replaceWhere is often simpler. If individual keys change, MERGE is safer.',
+          solution: `For a full daily recompute:
+- Filter to one business_date.
+- Overwrite only that partition with replaceWhere.
+- Record run_id, source row count, target row count, and checksum.
+- Rerun the same date and verify the row count does not grow.
+
+For row-level incremental changes:
+- Use MERGE on a stable business key plus effective timestamp.
+- Track watermark and batch_id in an audit table.`,
+          commonMistakes: [
+            'Using append mode for retryable daily facts.',
+            'Not defining a stable merge key.',
+            'Updating watermark before the target write succeeds.',
+          ],
+          productionContext: 'Idempotency is part of pipeline reliability. It should be documented in runbooks and tested during backfill drills.',
+          performanceTip: 'Prefer partition replacement for bounded daily recomputes; MERGE is more flexible but can be more expensive on large target tables.',
+          performanceConsiderations: 'MERGE can scan many files if predicates are weak. Partition pruning and optimized file layout matter for cost and runtime.',
+          seniorEngineeringInsights: 'A senior answer should mention retries, backfills, watermark order, audit tables, partition replacement, MERGE tradeoffs, and reconciliation.',
+        },
+      ],
+    },
   ],
 
   interviewGroups: [
@@ -973,3 +1261,39 @@ result = skewed_orders.join(customers, on="customer_id")
     },
   ],
 };
+
+function normalizePysparkLesson(lesson) {
+  const title = lesson.title || 'this PySpark pattern';
+  return {
+    ...lesson,
+    azureUsage:
+      lesson.azureUsage ??
+      `In Azure, ${title} is commonly used in Databricks jobs reading from ADLS Gen2 and orchestrated by Azure Data Factory or Fabric pipelines.`,
+    databricksUsage:
+      lesson.databricksUsage ??
+      `In Databricks, engineers apply ${title} inside notebooks, workflows, and Delta Lake transformations that publish Bronze, Silver, or Gold tables.`,
+    productionContext:
+      lesson.productionContext ??
+      `${title} shows up in production when Spark jobs must process large files safely, preserve schema quality, and publish retry-safe outputs for downstream analytics.`,
+    commonMistakes:
+      lesson.commonMistakes ??
+      [`Using ${title} without validating row counts, schema changes, and partition behavior before publishing results.`],
+    performanceTip:
+      lesson.performanceTip ??
+      lesson.performanceConsiderations ??
+      `Measure ${title} with Spark UI, partition counts, and shuffle metrics before assuming the code is production-ready.`,
+    performanceConsiderations:
+      lesson.performanceConsiderations ??
+      lesson.performanceTip ??
+      `Watch partition sizes, shuffle volume, and driver memory when using ${title} on large datasets.`,
+    resumeTips:
+      lesson.resumeTips ??
+      lesson.resumeFraming ??
+      `Describe how you used ${title} in PySpark to improve correctness, scale, or reliability in a production Azure lakehouse pipeline.`,
+  };
+}
+
+pysparkModule.sections = pysparkModule.sections.map((section) => ({
+  ...section,
+  subtopics: section.subtopics.map(normalizePysparkLesson),
+}));

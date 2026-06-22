@@ -215,6 +215,7 @@ function sqlLesson({
     commonMistakes: [commonMistake],
     performanceTip: performanceWarning,
     seniorEngineerNote: seniorUse,
+    resumeTips: `Frame ${title} as production SQL you used to validate data, implement business rules, or improve reliability in Azure, Fabric, or Databricks pipelines.`,
     interview: {
       question: interviewQuestion,
       answer: interviewAnswer,
@@ -425,12 +426,70 @@ export const sqlModule = {
           interviewAnswer: 'Usually in Silver, where raw Bronze data is cleaned, typed, validated, and quarantined if invalid.',
           seniorUse: 'Seniors separate raw preservation from typed contracts and add reject-path logic for records that cannot be cast.',
         }),
+        foundationLesson({
+          id: 'sql-foundation-date-functions',
+          title: 'Date Functions',
+          what: 'Date functions extract, compare, truncate, and calculate time-based values used in incremental loads and reporting.',
+          why: 'Data engineers use them for load windows, partition filters, SLA checks, fiscal calendars, and late-arriving event analysis.',
+          syntax: "DATEADD(day, -1, run_date); -- engine syntax varies: DATE_TRUNC, DATEDIFF, CURRENT_DATE",
+          example: 'SELECT order_id, created_at\nFROM bronze_orders\nWHERE created_at >= DATEADD(day, -1, CURRENT_DATE);',
+          expectedOutput: 'Only orders created in the latest daily processing window.',
+          practice: 'Filter bronze_orders to the current processing date or last 24 hours.',
+          hint: 'Use the raw timestamp column directly in the predicate when possible.',
+          solution: 'SELECT order_id, created_at\nFROM bronze_orders\nWHERE created_at >= DATEADD(day, -1, CURRENT_DATE);',
+          productionContext: 'ADF, Synapse, Fabric, and Databricks pipelines commonly parameterize date filters with run_date or watermark values.',
+          productionConcern: 'Timezone mismatches between source systems and Azure pipelines can create missing or duplicated daily records.',
+          commonMistake: 'Wrapping a partition column in a date function inside WHERE, which can block partition pruning.',
+          performanceWarning: 'Prefer range predicates on the original timestamp column, such as created_at >= start_ts AND created_at < end_ts.',
+          interviewQuestion: 'How do date functions support incremental loads?',
+          interviewAnswer: 'They define repeatable processing windows, partition filters, and SLA checks, usually driven by pipeline parameters or watermarks.',
+          seniorUse: 'Seniors standardize time zones, use half-open intervals, and log the exact window processed by every run.',
+        }),
+        foundationLesson({
+          id: 'sql-foundation-string-functions',
+          title: 'String Functions',
+          what: 'String functions clean, parse, normalize, and validate text values before they become trusted Silver or Gold fields.',
+          why: 'Data engineers use them for source IDs, email cleanup, code parsing, file-name metadata, and business key standardization.',
+          syntax: "TRIM(column); LOWER(column); SUBSTRING(column, start, length); CONCAT(a, b)",
+          example: 'SELECT customer_id, LOWER(TRIM(email)) AS normalized_email\nFROM bronze_customers;',
+          expectedOutput: 'Customer emails are trimmed and lowercased before matching, deduplication, or quality checks.',
+          practice: 'Normalize email values from bronze_customers using TRIM and LOWER.',
+          hint: 'Clean whitespace first, then standardize casing.',
+          solution: 'SELECT customer_id, LOWER(TRIM(email)) AS normalized_email\nFROM bronze_customers;',
+          productionContext: 'String cleanup is common in Bronze-to-Silver transformations for APIs, CSV extracts, and CRM data.',
+          productionConcern: 'Changing text case or trimming keys can alter matching behavior, so business-key normalization must be documented.',
+          commonMistake: 'Cleaning display text and business keys the same way without checking downstream requirements.',
+          performanceWarning: 'Using string functions in join predicates can prevent index usage and slow large joins. Normalize before joining when possible.',
+          interviewQuestion: 'Why normalize string keys before joining?',
+          interviewAnswer: 'It avoids false non-matches caused by casing, whitespace, or formatting differences and keeps join predicates simpler.',
+          seniorUse: 'Seniors create reusable normalization rules and test them against known dirty source values.',
+        }),
       ],
     },
     {
       title: 'Phase B — Aggregation & Joins',
       outcome: 'Build reliable reporting queries, join dimensions correctly, and spot the join patterns that create missing or duplicated metrics.',
       subtopics: [
+
+        transformLesson({
+          id: 'sql-agg-aggregate-functions',
+          title: 'Aggregate Functions',
+          what: 'Aggregate functions summarize many rows into one value, such as COUNT, SUM, AVG, MIN, and MAX.',
+          why: 'Data engineers use aggregates to build reconciliation checks, KPI tables, anomaly checks, and Gold-layer metrics.',
+          syntax: 'SELECT COUNT(*), SUM(amount), AVG(amount), MIN(created_at), MAX(created_at) FROM table_name;',
+          example: 'SELECT COUNT(*) AS order_count, SUM(net_sales) AS revenue, AVG(net_sales) AS avg_order_value\nFROM fact_sales;',
+          expectedOutput: 'One summary row with order count, total revenue, and average order value.',
+          practice: 'Calculate order count, total revenue, and latest order date from fact_sales.',
+          hint: 'Use COUNT(*), SUM(net_sales), and MAX(created_at).',
+          solution: 'SELECT COUNT(*) AS order_count, SUM(net_sales) AS revenue, MAX(created_at) AS latest_order_ts\nFROM fact_sales;',
+          productionContext: 'Aggregate functions are the backbone of daily reconciliation, Power BI semantic measures, and pipeline audit summaries.',
+          productionConcern: 'Aggregating before confirming grain can hide duplicated facts and inflate revenue.',
+          commonMistake: 'Using AVG over already-aggregated rows, which produces an average of averages instead of the true average.',
+          performanceWarning: 'Aggregates over large facts can shuffle data in Spark and consume warehouse slots in Synapse/Fabric; filter to the required partition first.',
+          interviewQuestion: 'How do you validate a daily fact load with aggregate functions?',
+          interviewAnswer: 'Compare source and target row counts, key metric sums, min/max timestamps, and null/error counts for the same processing window.',
+          seniorUse: 'Seniors pair every important aggregate with a declared grain, tolerance, and reconciliation owner.',
+        }),
         transformLesson({
           id: 'sql-agg-group-by',
           title: 'GROUP BY',
@@ -509,13 +568,32 @@ export const sqlModule = {
         }),
         transformLesson({
           id: 'sql-join-right-full',
-          title: 'RIGHT / FULL JOIN',
-          what: 'RIGHT JOIN keeps all right-side rows; FULL JOIN keeps rows from both sides, matched or unmatched.',
-          why: 'Data engineers use FULL JOIN semantics to compare source vs target tables during reconciliation.',
+          title: 'RIGHT JOIN',
+          what: 'RIGHT JOIN keeps every row from the right table and fills missing left-side matches with NULL.',
+          why: 'Data engineers rarely need RIGHT JOIN, but must understand it when reading vendor SQL or reversing a LEFT JOIN.',
+          syntax: 'SELECT columns FROM left_table l RIGHT JOIN right_table r ON l.key = r.key;',
+          example: 'SELECT s.order_id, b.status AS bronze_status, s.status AS silver_status\nFROM bronze_orders b\nRIGHT JOIN silver_orders s ON b.order_id = s.order_id;',
+          expectedOutput: 'Every Silver order appears, including records that no longer have a matching Bronze row.',
+          practice: 'Use RIGHT JOIN to keep all Silver orders and identify missing Bronze matches.',
+          hint: 'Silver should be on the right side if you want every Silver row preserved.',
+          solution: 'SELECT s.order_id, b.status AS bronze_status, s.status AS silver_status\nFROM bronze_orders b\nRIGHT JOIN silver_orders s ON b.order_id = s.order_id\nWHERE b.order_id IS NULL;',
+          productionContext: 'RIGHT JOIN appears in source-to-target audits, but most teams rewrite it as LEFT JOIN for readability.',
+          productionConcern: 'RIGHT JOIN can confuse reviewers because the preserved table is not the first table in the query.',
+          commonMistake: 'Using RIGHT JOIN when a clearer LEFT JOIN with reversed table order would communicate intent better.',
+          performanceWarning: 'RIGHT JOIN has the same join-risk profile as LEFT JOIN: duplicate keys on the non-preserved side can multiply rows.',
+          interviewQuestion: 'Why do many teams avoid RIGHT JOIN in production SQL?',
+          interviewAnswer: 'LEFT JOIN is usually easier to read because the preserved table appears first, so RIGHT JOIN is often rewritten by swapping table order.',
+          seniorUse: 'Seniors optimize for maintainability: they can read RIGHT JOIN, but usually write the clearer LEFT JOIN equivalent.',
+        }),
+        transformLesson({
+          id: 'sql-join-full-outer',
+          title: 'FULL OUTER JOIN',
+          what: 'FULL OUTER JOIN keeps matched and unmatched rows from both tables.',
+          why: 'Data engineers use it to compare source and target datasets and find missing rows in either direction.',
           syntax: 'SELECT ... FROM source s FULL OUTER JOIN target t ON s.key = t.key;',
-          example: 'SELECT COALESCE(b.order_id, s.order_id) AS order_id\nFROM bronze_orders b\nFULL OUTER JOIN silver_orders s ON b.order_id = s.order_id;',
-          expectedOutput: 'Orders present in either Bronze or Silver, useful for mismatch analysis.',
-          practice: 'Describe how you would compare Bronze and Silver orders to find missing rows.',
+          example: "SELECT COALESCE(b.order_id, s.order_id) AS order_id,\n  CASE\n    WHEN b.order_id IS NULL THEN 'missing_in_bronze'\n    WHEN s.order_id IS NULL THEN 'missing_in_silver'\n    ELSE 'matched'\n  END AS reconciliation_status\nFROM bronze_orders b\nFULL OUTER JOIN silver_orders s ON b.order_id = s.order_id;",
+          expectedOutput: 'One reconciliation result showing matched records plus Bronze-only and Silver-only orders.',
+          practice: 'Compare Bronze and Silver orders to find keys missing from either side.',
           hint: 'Use FULL OUTER JOIN where supported, or two LEFT JOIN anti-checks with UNION ALL.',
           solution: 'SELECT b.order_id AS bronze_only, NULL AS silver_only\nFROM bronze_orders b\nLEFT JOIN silver_orders s ON b.order_id = s.order_id\nWHERE s.order_id IS NULL\nUNION ALL\nSELECT NULL, s.order_id\nFROM silver_orders s\nLEFT JOIN bronze_orders b ON s.order_id = b.order_id\nWHERE b.order_id IS NULL;',
           productionContext: 'FULL comparisons are common in migration validation, Fabric cutovers, and source-to-target audits.',
@@ -627,6 +705,44 @@ export const sqlModule = {
           interviewAnswer: 'When the subquery is large, correlated, reused, or hard to read in the execution plan.',
           seniorUse: 'Seniors keep subqueries simple and promote complex ones to named CTEs.',
         }),
+
+        transformLesson({
+          id: 'sql-intermediate-recursive-ctes',
+          title: 'Recursive CTEs',
+          what: 'A recursive CTE repeatedly references itself to walk hierarchical or graph-shaped data.',
+          why: 'Data engineers use recursive CTEs for product hierarchies, organization trees, bill-of-materials, and parent-child dimension flattening.',
+          syntax: 'WITH recursive_cte AS (anchor_query UNION ALL recursive_query) SELECT * FROM recursive_cte;',
+          example: `WITH category_tree AS (
+  SELECT category_id, parent_category_id, category_name, 0 AS level
+  FROM dim_category
+  WHERE parent_category_id IS NULL
+  UNION ALL
+  SELECT c.category_id, c.parent_category_id, c.category_name, t.level + 1
+  FROM dim_category c
+  JOIN category_tree t ON c.parent_category_id = t.category_id
+)
+SELECT * FROM category_tree;`,
+          expectedOutput: 'A flattened category hierarchy with one row per category and a hierarchy level.',
+          practice: 'Flatten a product category hierarchy from parent to child categories.',
+          hint: 'Start with root categories, then recursively join children to their parent rows.',
+          solution: `WITH category_tree AS (
+  SELECT category_id, parent_category_id, category_name, 0 AS level
+  FROM dim_category
+  WHERE parent_category_id IS NULL
+  UNION ALL
+  SELECT c.category_id, c.parent_category_id, c.category_name, t.level + 1
+  FROM dim_category c
+  JOIN category_tree t ON c.parent_category_id = t.category_id
+)
+SELECT * FROM category_tree;`,
+          productionContext: 'Recursive CTEs are useful in warehouse dimensions when business hierarchies must be expanded for reporting.',
+          productionConcern: 'Cycles in the source hierarchy can create infinite recursion or runaway queries.',
+          commonMistake: 'Forgetting a termination condition or maximum recursion guard.',
+          performanceWarning: 'Recursive CTEs can be expensive on deep hierarchies; precompute stable hierarchies into dimension bridge tables when dashboards use them often.',
+          interviewQuestion: 'When would you use a recursive CTE in data engineering?',
+          interviewAnswer: 'To flatten parent-child hierarchies such as product categories, org structures, or account rollups into reporting-ready dimensions.',
+          seniorUse: 'Seniors validate hierarchy cycles, max depth, orphan nodes, and incremental refresh behavior before using recursion in production.',
+        }),
         transformLesson({
           id: 'sql-intermediate-temp-tables',
           title: 'Temp Tables',
@@ -664,6 +780,49 @@ export const sqlModule = {
           interviewQuestion: 'View vs table?',
           interviewAnswer: 'A view stores query logic; a table stores data. A materialized view stores precomputed data with refresh behavior.',
           seniorUse: 'Seniors use views for contracts and tables/materialized views for heavy repeated computations.',
+        }),
+
+        transformLesson({
+          id: 'sql-intermediate-functions',
+          title: 'SQL Functions',
+          what: 'SQL functions package reusable scalar or table logic behind a named interface.',
+          why: 'Data engineers use functions for standard parsing, masking, normalization, and repeated business calculations.',
+          syntax: 'CREATE FUNCTION function_name(parameters) RETURNS data_type AS ...;',
+          example: `CREATE FUNCTION normalize_email(email STRING)
+RETURNS STRING
+RETURN LOWER(TRIM(email));`,
+          expectedOutput: 'A reusable function that normalizes email values consistently across transformations.',
+          practice: 'Design a function that trims and lowercases email values before customer matching.',
+          hint: 'The function should centralize the rule instead of copying LOWER(TRIM(email)) everywhere.',
+          solution: `CREATE FUNCTION normalize_email(email STRING)
+RETURNS STRING
+RETURN LOWER(TRIM(email));`,
+          productionContext: 'Functions help keep Synapse, Fabric, Databricks SQL, and dbt-style transformations consistent when the same rule appears in many models.',
+          productionConcern: 'Hidden function logic can make lineage, performance, and debugging harder if it is not documented and tested.',
+          commonMistake: 'Putting heavy row-by-row logic inside scalar functions that run against large fact tables.',
+          performanceWarning: 'Scalar UDFs can block optimizer rewrites or vectorized execution in some engines; prefer inline SQL expressions for high-volume transformations unless reuse is worth the cost.',
+          interviewQuestion: 'When should reusable SQL logic become a function?',
+          interviewAnswer: 'When the rule is stable, reused across models, tested, and not performance-critical row-by-row logic over huge tables.',
+          seniorUse: 'Seniors govern functions like shared APIs: documented behavior, test cases, ownership, and versioning.',
+        }),
+        productionLesson({
+          id: 'sql-intermediate-stored-procedures',
+          title: 'Stored Procedures',
+          what: 'Stored procedures package multiple SQL statements into a reusable, parameterized database routine.',
+          why: 'Data engineers use them for warehouse loads, audit logging, reconciliation, and controlled operational SQL in Synapse or SQL Server-style systems.',
+          syntax: 'CREATE PROCEDURE load_silver_orders @run_date DATE AS BEGIN ... END;',
+          example: "CREATE PROCEDURE load_silver_orders @run_date DATE AS\nBEGIN\n  INSERT INTO audit_pipeline_execution(pipeline_name, run_date, status)\n  VALUES ('load_silver_orders', @run_date, 'started');\n\n  MERGE INTO silver_orders AS t\n  USING bronze_orders AS s\n  ON t.order_id = s.order_id\n  WHEN MATCHED THEN UPDATE SET amount = s.amount\n  WHEN NOT MATCHED THEN INSERT (order_id, amount) VALUES (s.order_id, s.amount);\nEND;",
+          expectedOutput: 'A repeatable load routine that applies changes and records operational audit state.',
+          practice: 'Describe a stored procedure that accepts run_date, loads Silver orders, and writes audit counts.',
+          hint: 'Include parameters, MERGE logic, and audit inserts for rows processed.',
+          solution: '-- Pattern: validate input parameters, stage changed rows, MERGE into target, write inserted/updated counts, and raise failures clearly.',
+          productionContext: 'ADF and Synapse pipelines often call stored procedures for warehouse-side transformations and audit-controlled loads.',
+          productionConcern: 'Stored procedures can hide business logic from lineage tools if they are not documented, versioned, and logged.',
+          commonMistake: 'Putting all pipeline logic in one huge procedure with no row-count checkpoints or error handling.',
+          performanceWarning: 'Long procedures should materialize reusable intermediate sets deliberately and avoid repeated scans of large source tables.',
+          interviewQuestion: 'When would you use a stored procedure in Azure data engineering?',
+          interviewAnswer: 'Use it when warehouse-side logic needs parameters, transactions, audit logging, or controlled execution from ADF/Synapse pipelines.',
+          seniorUse: 'Seniors keep procedures modular, observable, source-controlled, and safe to rerun.',
         }),
         transformLesson({
           id: 'sql-intermediate-correlated-subqueries',
@@ -804,6 +963,30 @@ export const sqlModule = {
           interviewAnswer: 'When the business wants continuous rank labels without gaps after ties.',
           seniorUse: 'Seniors document tie behavior so dashboard users understand why top-N counts can vary.',
         }),
+
+        productionLesson({
+          id: 'sql-window-ntile',
+          title: 'NTILE',
+          what: 'NTILE splits ordered rows into a requested number of buckets.',
+          why: 'Data engineers use it to create percentile-style tiers for customers, products, costs, and operational volumes.',
+          syntax: 'NTILE(4) OVER (PARTITION BY group_col ORDER BY metric DESC)',
+          example: `SELECT customer_key, lifetime_value,
+  NTILE(4) OVER (ORDER BY lifetime_value DESC) AS value_quartile
+FROM customer_value;`,
+          expectedOutput: 'Customers assigned to four value quartiles from highest to lowest lifetime value.',
+          practice: 'Bucket customers into four groups by lifetime_value.',
+          hint: 'Use NTILE(4) ordered by lifetime_value DESC.',
+          solution: `SELECT customer_key, lifetime_value,
+  NTILE(4) OVER (ORDER BY lifetime_value DESC) AS value_quartile
+FROM customer_value;`,
+          productionContext: 'NTILE is useful for Gold marts that expose customer or product segmentation without hardcoded thresholds.',
+          productionConcern: 'Buckets are row-count based, not business-threshold based; quartile 1 does not always mean high enough for a campaign.',
+          commonMistake: 'Treating NTILE buckets as stable business segments when the population changes every refresh.',
+          performanceWarning: 'NTILE requires sorting the full partition, so compute it in batch tables instead of repeatedly in dashboard queries.',
+          interviewQuestion: 'How is NTILE different from RANK?',
+          interviewAnswer: 'RANK assigns positions based on values; NTILE distributes ordered rows into a fixed number of buckets.',
+          seniorUse: 'Seniors confirm whether the business wants equal-sized buckets or fixed thresholds before using NTILE.',
+        }),
         productionLesson({
           id: 'sql-window-lag',
           title: 'LAG',
@@ -841,6 +1024,53 @@ export const sqlModule = {
           interviewQuestion: 'How can LEAD help build SCD2 end dates?',
           interviewAnswer: 'The next row start date becomes the previous row end date, often minus one day or timestamp unit.',
           seniorUse: 'Seniors use LEAD to generate reproducible point-in-time intervals from event history.',
+        }),
+
+        productionLesson({
+          id: 'sql-window-first-value',
+          title: 'FIRST_VALUE',
+          what: 'FIRST_VALUE returns the first value in an ordered window frame.',
+          why: 'Data engineers use it to compare each row against the first event, first status, or initial value in a business sequence.',
+          syntax: 'FIRST_VALUE(column) OVER (PARTITION BY key ORDER BY event_time ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)',
+          example: `SELECT customer_id, order_id, created_at,
+  FIRST_VALUE(created_at) OVER (PARTITION BY customer_id ORDER BY created_at) AS first_order_at
+FROM silver_orders;`,
+          expectedOutput: 'Each order row includes that customer’s first order timestamp.',
+          practice: 'Add first_order_at to every customer order row.',
+          hint: 'Partition by customer_id and order by created_at.',
+          solution: `SELECT customer_id, order_id, created_at,
+  FIRST_VALUE(created_at) OVER (PARTITION BY customer_id ORDER BY created_at ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS first_order_at
+FROM silver_orders;`,
+          productionContext: 'FIRST_VALUE supports cohort analysis, customer lifecycle metrics, and first-touch attribution in Gold marts.',
+          productionConcern: 'Default window frames vary by engine and can surprise learners when used with LAST_VALUE.',
+          commonMistake: 'Not specifying the window frame and assuming it covers the whole partition.',
+          performanceWarning: 'Large partitions require sorted windows; pre-aggregate or filter before applying the function.',
+          interviewQuestion: 'Why should you specify a window frame with FIRST_VALUE or LAST_VALUE?',
+          interviewAnswer: 'It makes the frame explicit and avoids engine defaults that may return values only up to the current row.',
+          seniorUse: 'Seniors make window frames explicit so business lifecycle metrics are reproducible across engines.',
+        }),
+        productionLesson({
+          id: 'sql-window-last-value',
+          title: 'LAST_VALUE',
+          what: 'LAST_VALUE returns the last value in an ordered window frame.',
+          why: 'Data engineers use it to find latest known state, latest status, or end-of-period values without collapsing detail rows.',
+          syntax: 'LAST_VALUE(column) OVER (PARTITION BY key ORDER BY event_time ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)',
+          example: `SELECT customer_id, status, effective_start_date,
+  LAST_VALUE(status) OVER (PARTITION BY customer_id ORDER BY effective_start_date ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS latest_status
+FROM dim_customer_history;`,
+          expectedOutput: 'Every historical row includes the latest status for that customer.',
+          practice: 'Return each customer history row with latest_status.',
+          hint: 'Use LAST_VALUE with an explicit full-partition frame.',
+          solution: `SELECT customer_id, status, effective_start_date,
+  LAST_VALUE(status) OVER (PARTITION BY customer_id ORDER BY effective_start_date ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS latest_status
+FROM dim_customer_history;`,
+          productionContext: 'LAST_VALUE is useful for point-in-time analysis, stateful reporting, and validating current SCD2 rows.',
+          productionConcern: 'Without a full window frame, LAST_VALUE often returns the current row value instead of the partition’s final value.',
+          commonMistake: 'Using LAST_VALUE without ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING.',
+          performanceWarning: 'Latest-state selection is often cheaper with ROW_NUMBER filtering when you only need one row per key.',
+          interviewQuestion: 'Why does LAST_VALUE sometimes appear to return the current row?',
+          interviewAnswer: 'Because the default frame may end at the current row. Use an explicit full-partition frame for true last-in-partition logic.',
+          seniorUse: 'Seniors choose between LAST_VALUE for annotation and ROW_NUMBER for survivor selection based on the required output grain.',
         }),
         productionLesson({
           id: 'sql-window-running-totals',

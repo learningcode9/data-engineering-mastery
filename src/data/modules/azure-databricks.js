@@ -718,6 +718,264 @@ DESCRIBE DETAIL gold.orders;
       ],
     },
     {
+      title: 'Production Databricks Operations',
+      subtopics: [
+        {
+          id: 'databricks-cluster-policies-governance',
+          title: 'Cluster Policies & Compute Governance',
+          difficulty: 'Advanced',
+          explanation: 'Cluster policies define guardrails for Databricks compute such as allowed node types, max workers, autotermination, runtime versions, tags, and security mode.',
+          what: 'Production Databricks workspaces use policies to prevent oversized clusters, enforce secure runtimes, apply cost tags, and separate dev from production compute.',
+          why: 'Senior Azure data engineers are expected to control Databricks cost and risk, not let every user create unrestricted all-purpose clusters.',
+          realWorldUsage: 'A platform team allows analysts to create small single-user clusters with 30-minute auto-termination, while production workflows run on approved job-cluster policies with required cost-center tags.',
+          azureUsage: 'Use Azure Databricks account/workspace controls with Azure AD groups, managed identities, Key Vault-backed secrets, private networking, and cost tags that map to Azure cost management.',
+          azureRelevance: 'Cluster governance directly affects Azure spend, security posture, and operational consistency across dev/test/prod workspaces.',
+          databricksUsage: 'Define compute policies for all-purpose, job, SQL warehouse, and serverless patterns. Restrict instance families, worker ranges, auto-termination, and runtime versions.',
+          databricksRelevance: 'Databricks policies are a practical control for FinOps and platform governance.',
+          syntax: `Policy examples:
+  max_workers <= 8
+  autotermination_minutes <= 30
+  runtime_version = approved LTS
+  security_mode = single user or shared UC-enabled
+  custom_tags.cost_center required`,
+          example: `Production job policy:
+  Runtime: LTS only
+  Workers: 2-16 autoscale
+  Auto-terminate: always after job
+  Node types: approved memory/compute families
+  Tags: app, owner, cost_center, environment
+  Libraries: pinned from release artifact`,
+          expectedOutput: `Users can run production jobs, but cannot create untagged, oversized, insecure, or long-idle clusters.`,
+          interview: {
+            question: 'How do you prevent Databricks cost overruns in a large team?',
+            answer: 'Use cluster policies, job clusters for production, auto-termination for interactive clusters, required cost tags, budget monitoring, serverless/classic selection rules, and review expensive jobs using system tables or usage exports.',
+          },
+          interviewQuestion: 'How do you prevent Databricks cost overruns in a large team?',
+          practice: 'Design a Databricks compute policy for a production daily ETL job and an analyst development cluster.',
+          practiceTask: 'List limits, tags, runtime rules, and security mode for both policies.',
+          hint: 'Production wants repeatability and tags; development wants guardrails and auto-termination.',
+          solution: `Production policy:
+- LTS runtime only
+- job cluster only
+- autoscale 2-16 workers
+- required owner/app/cost_center tags
+- Unity Catalog compatible access mode
+
+Development policy:
+- max 4 workers
+- 30-minute auto-termination
+- approved node families only
+- personal/single-user access mode
+- no unrestricted init scripts`,
+          commonMistakes: [
+            'Letting production run on shared all-purpose clusters.',
+            'Missing tags and losing cost attribution.',
+            'Allowing unlimited worker counts for every user.',
+          ],
+          productionContext: 'Compute policy is part of production readiness and platform governance.',
+          performanceTip: 'Policies should not over-constrain performance-critical jobs; allow approved larger profiles with review.',
+          performanceConsiderations: 'Cheapest node type is not always cheapest job. Runtime, worker count, shuffle, and file layout determine total cost.',
+          seniorEngineeringInsights: 'Senior answers connect governance, spend control, security, developer velocity, and exception processes.',
+        },
+        {
+          id: 'databricks-job-cluster-design',
+          title: 'Job Cluster Design',
+          difficulty: 'Advanced',
+          explanation: 'Job cluster design chooses the compute shape, lifecycle, libraries, retries, parameters, and dependencies used by production Databricks Workflows.',
+          what: 'A well-designed workflow uses job clusters for scheduled production, task parameters for reproducibility, retries for transient failures, and audit outputs for downstream validation.',
+          why: 'Production notebooks should not rely on an interactive cluster state. Senior engineers design repeatable jobs that can be deployed, rerun, and debugged.',
+          realWorldUsage: 'A Bronze-Silver-Gold workflow runs three tasks on a shared job cluster, accepts load_date, logs row counts, retries transient source failures, and sends a failure notification with run context.',
+          azureUsage: 'ADF may trigger Databricks Workflows through a notebook/job activity, passing parameters and waiting for completion status.',
+          azureRelevance: 'This keeps orchestration and compute boundaries clear in Azure enterprise pipelines.',
+          databricksUsage: 'Use Databricks Workflows with task dependencies, job clusters, retries, parameters, alerts, and notebook exit values.',
+          databricksRelevance: 'Job clusters reduce idle cost and make production runs isolated from developer notebooks.',
+          syntax: `Production workflow:
+  parameters: load_date, run_mode
+  cluster: job cluster, LTS runtime
+  tasks: bronze -> silver -> gold -> validation
+  retries: transient tasks only
+  alerts: failure + SLA breach
+  outputs: row counts, audit metrics`,
+          example: `Task chain:
+BronzeIngest(load_date)
+  -> SilverTransform(load_date)
+  -> GoldAggregate(load_date)
+  -> ValidateAndPublish(load_date)
+
+Each task writes run_id, input_count, output_count, status, and duration to an audit Delta table.`,
+          expectedOutput: `A rerunnable workflow where each task has deterministic inputs, visible metrics, and isolated production compute.`,
+          interview: {
+            question: 'Why are job clusters preferred for scheduled Databricks production workloads?',
+            answer: 'Job clusters are created for the run and terminated after completion, which avoids idle cost and stale interactive state. They make production runs reproducible and easier to govern with policies and pinned libraries.',
+          },
+          interviewQuestion: 'Why are job clusters preferred for scheduled Databricks production workloads?',
+          practice: 'Design a four-task Databricks Workflow for a daily orders pipeline and list the parameters each task should receive.',
+          practiceTask: 'Include retry strategy, cluster type, and audit outputs.',
+          hint: 'Every task should know load_date and run_id. Validation should decide whether to publish.',
+          solution: `Use a job cluster with LTS runtime.
+Parameters: load_date, run_id, run_mode.
+Tasks: BronzeIngest -> SilverTransform -> GoldAggregate -> ValidateAndPublish.
+Retries: source ingest and transient transform failures; not validation failures.
+Audit: source_count, output_count, duplicate_count, duration, status.`,
+          commonMistakes: [
+            'Scheduling production notebooks on a manually managed all-purpose cluster.',
+            'Relying on notebook widgets with hidden defaults.',
+            'Retrying validation failures instead of stopping bad data.',
+          ],
+          productionContext: 'Workflow configuration is production code and should be versioned, reviewed, and deployed consistently.',
+          performanceTip: 'Use shared job clusters within a workflow when task startup dominates; use separate clusters when tasks need very different compute profiles.',
+          performanceConsiderations: 'Right-size clusters by runtime and SLA, not by habit. Monitor runtime, DBU spend, and executor utilization.',
+          seniorEngineeringInsights: 'Senior answers should mention reproducibility, isolation, parameters, audit outputs, retries, and deployment governance.',
+        },
+        {
+          id: 'databricks-observability-system-tables',
+          title: 'Observability with System Tables',
+          difficulty: 'Advanced',
+          explanation: 'Databricks observability combines workflow run history, audit logs, cluster metrics, query history, lineage, and system tables to explain reliability and cost.',
+          what: 'Production teams monitor freshness, failure rate, duration, row counts, cost, and table/query usage instead of waiting for business users to report stale dashboards.',
+          why: 'Senior Azure data engineers need to diagnose not only failed jobs, but slow, expensive, or silently stale jobs.',
+          realWorldUsage: 'A Gold refresh meets success status but is 45 minutes late. System tables show a compute policy change doubled startup time and a query history spike increased warehouse load.',
+          azureUsage: 'Export Databricks metrics and logs to Azure Monitor/Log Analytics where needed, and connect usage to Azure cost reporting.',
+          azureRelevance: 'Azure operations teams expect dashboards, alerts, and incident evidence that cross ADF, Databricks, ADLS, and reporting systems.',
+          databricksUsage: 'Use workflow metrics, system tables, query history, cluster event logs, and Unity Catalog lineage to debug failures and cost regressions.',
+          databricksRelevance: 'System tables provide governed operational data for monitoring jobs, queries, storage, and access patterns.',
+          syntax: `Operational metrics:
+  job_success_rate
+  p95_job_duration
+  freshness_minutes
+  rows_processed
+  failed_task_count
+  DBU/cost by job and owner
+  top expensive queries`,
+          example: `Daily observability dashboard:
+- Workflows failed in last 24 hours
+- Jobs breaching SLA
+- Tables with stale Gold refresh
+- Top DBU-consuming jobs
+- Repeated notebook failures by error type`,
+          expectedOutput: `Support teams can see what is broken, what is stale, what is expensive, and who owns it.`,
+          interview: {
+            question: 'What would you monitor for a production Databricks pipeline?',
+            answer: 'Monitor success/failure, duration trends, freshness SLA, input/output row counts, validation failures, cluster utilization, shuffle/spill, DBU cost, and downstream table/report impact.',
+          },
+          interviewQuestion: 'What would you monitor for a production Databricks pipeline?',
+          practice: 'Define five alerts for a Databricks Gold pipeline that feeds executive dashboards.',
+          practiceTask: 'Include reliability, freshness, quality, and cost alerts.',
+          hint: 'Think failure, late data, missing rows, validation errors, and cost spikes.',
+          solution: `Alerts:
+- workflow failure
+- duration > SLA threshold
+- Gold table freshness > 60 minutes
+- source-to-target reconciliation failure
+- DBU spend > daily threshold
+- duplicate/null key quality breach`,
+          commonMistakes: [
+            'Monitoring only job failure and ignoring stale successful runs.',
+            'Not tagging jobs, making cost ownership impossible.',
+            'Missing row-count and freshness metrics.',
+          ],
+          productionContext: 'Observability turns Databricks from a notebook platform into an operable production service.',
+          performanceTip: 'Trend duration and shuffle metrics over time; one slow run is less useful than a pattern.',
+          performanceConsiderations: 'Observability itself should be lightweight. Aggregate operational metrics instead of scanning huge logs repeatedly.',
+          seniorEngineeringInsights: 'Senior answers connect monitoring to SLA, cost, ownership, lineage, and incident response.',
+        },
+        {
+          id: 'databricks-photon-serverless-tradeoffs',
+          title: 'Photon, Serverless, and Classic Compute Tradeoffs',
+          difficulty: 'Advanced',
+          explanation: 'Databricks compute choices affect startup latency, performance, governance, isolation, and cost.',
+          what: 'Photon accelerates SQL/DataFrame operations. Serverless reduces cluster management and startup overhead. Classic clusters provide more control for custom libraries, networking, and runtime configuration.',
+          why: 'Senior interviews often test whether you can choose compute based on workload, not brand names or defaults.',
+          realWorldUsage: 'A BI SQL workload benefits from a serverless SQL warehouse with Photon, while a custom PySpark job requiring private libraries may need a governed classic job cluster.',
+          azureUsage: 'Azure Databricks compute cost appears in Azure billing and should be aligned with workload type, security requirements, and SLA.',
+          azureRelevance: 'Compute selection affects DBU spend, startup latency, network controls, and operational ownership in Azure.',
+          databricksUsage: 'Use SQL warehouses for BI/SQL serving, job clusters for scheduled ETL, all-purpose clusters for development, and serverless where governance and networking requirements allow.',
+          databricksRelevance: 'Photon and serverless can improve performance and operations, but they do not fix poor data layout or inefficient joins.',
+          syntax: `Decision guide:
+  SQL BI serving: SQL warehouse + Photon
+  Scheduled ETL: job cluster or serverless jobs
+  Interactive dev: all-purpose with auto-terminate
+  Custom runtime/networking: classic governed cluster`,
+          example: `Workload mapping:
+- Power BI DirectQuery over Gold tables -> SQL warehouse
+- Daily Bronze/Silver ETL -> Databricks Workflow job cluster
+- Ad hoc notebook exploration -> small all-purpose dev cluster
+- SLA-sensitive SQL dashboard -> serverless SQL warehouse if approved`,
+          expectedOutput: `Each workload uses compute that matches latency, cost, security, and operational needs.`,
+          interview: {
+            question: 'When would you use serverless Databricks compute versus classic clusters?',
+            answer: 'Use serverless when you want fast startup and reduced cluster management for supported workloads and governance requirements. Use classic clusters when you need deeper runtime, networking, library, or policy control.',
+          },
+          interviewQuestion: 'When would you use serverless Databricks compute versus classic clusters?',
+          practice: 'Choose compute for three workloads: nightly ETL, executive BI queries, and exploratory development.',
+          practiceTask: 'Explain performance, cost, and governance tradeoffs for each choice.',
+          hint: 'Do not use one cluster type for everything.',
+          solution: `Nightly ETL: job cluster or serverless job depending on library/network needs.
+Executive BI: SQL warehouse with Photon, sized to concurrency and SLA.
+Exploration: small all-purpose cluster with auto-termination and policy limits.`,
+          commonMistakes: [
+            'Assuming serverless is always cheaper.',
+            'Using all-purpose clusters for production schedules.',
+            'Expecting Photon to compensate for bad partitioning or skew.',
+          ],
+          productionContext: 'Compute choices should be reviewed during architecture design and revisited using actual workload metrics.',
+          performanceTip: 'Benchmark representative workloads before standardizing compute profiles.',
+          performanceConsiderations: 'Measure total cost per successful run or query, not hourly rate alone.',
+          seniorEngineeringInsights: 'Senior answers compare latency, control, governance, cost, workload fit, and failure modes.',
+        },
+        {
+          id: 'databricks-secure-deployment',
+          title: 'Secure Deployment & Release Promotion',
+          difficulty: 'Advanced',
+          explanation: 'Secure Databricks deployment means notebooks, jobs, libraries, permissions, secrets, and cluster policies move through dev/test/prod with review and reproducibility.',
+          what: 'Production teams use Git, CI/CD, environment parameters, pinned package versions, Key Vault-backed secrets, and release validation before promoting jobs.',
+          why: 'Manual notebook edits in production are a major reliability and governance risk.',
+          realWorldUsage: 'A feature branch updates a Silver transformation. CI runs unit checks, deploys to test, runs a smoke job, waits for approval, then promotes the workflow to prod with prod parameters.',
+          azureUsage: 'Use Azure DevOps or GitHub Actions, Databricks CLI/Asset Bundles where applicable, Azure Key Vault, managed identities/service principals, and environment-specific parameters.',
+          azureRelevance: 'This aligns Databricks with enterprise Azure release management and audit expectations.',
+          databricksUsage: 'Use Repos/Git for source, Workflows for jobs, secrets scopes/Key Vault for credentials, and cluster policies for deployment guardrails.',
+          databricksRelevance: 'Databricks production assets should be treated as deployable software, not manually edited notebooks.',
+          syntax: `Promotion flow:
+  feature branch -> pull request -> test deployment -> smoke run
+  -> approval -> prod deployment -> validation -> monitor`,
+          example: `Deployment artifacts:
+- notebooks or Python wheel
+- job/workflow definition
+- cluster policy reference
+- environment parameters
+- library lock file
+- permissions and owner groups
+- smoke test notebook`,
+          expectedOutput: `The same reviewed code and workflow definition runs in each environment with only environment parameters changing.`,
+          interview: {
+            question: 'How do you promote Databricks notebooks and jobs safely from dev to prod?',
+            answer: 'Version notebooks/code in Git, package reusable code, deploy workflows through CI/CD with environment parameters, use Key Vault-backed secrets, run test/smoke jobs, require approval, and monitor the first production run.',
+          },
+          interviewQuestion: 'How do you promote Databricks notebooks and jobs safely from dev to prod?',
+          practice: 'Design a release process for a Databricks Silver transformation that feeds a production dashboard.',
+          practiceTask: 'List source control, deployment, validation, secrets, approval, and rollback steps.',
+          hint: 'Treat notebooks and workflow definitions as code.',
+          solution: `Release plan:
+1. Branch and PR review.
+2. Automated tests and linting where available.
+3. Deploy to test workspace with test parameters.
+4. Run smoke job and compare row counts.
+5. Approval gate.
+6. Deploy to prod with prod parameters and Key Vault secrets.
+7. Monitor first run and keep rollback version available.`,
+          commonMistakes: [
+            'Editing production notebooks directly.',
+            'Committing secrets or workspace-specific paths.',
+            'Deploying code without validating workflow definitions and permissions.',
+          ],
+          productionContext: 'Secure deployment is a senior expectation because Databricks jobs often feed regulated reporting and executive dashboards.',
+          performanceTip: 'Release validation should include runtime regression checks for critical jobs, not only functional output.',
+          performanceConsiderations: 'A safe release can still increase cost; compare duration and DBU usage after deployment.',
+          seniorEngineeringInsights: 'Senior answers cover code, jobs, parameters, secrets, approvals, rollback, and post-deploy monitoring.',
+        },
+      ],
+    },
+    {
       title: 'Job Scheduling & Monitoring',
       subtopics: [
         {
@@ -1178,3 +1436,39 @@ ORDER BY event_time DESC;`,
     },
   ],
 };
+
+function normalizeDatabricksLesson(lesson) {
+  const title = lesson.title || 'this Databricks capability';
+  return {
+    ...lesson,
+    azureUsage:
+      lesson.azureUsage ??
+      `In Azure, ${title} is usually combined with ADLS Gen2, Azure Data Factory, Key Vault, and governed serving layers such as Fabric, Synapse, or Power BI.`,
+    databricksUsage:
+      lesson.databricksUsage ??
+      `In Databricks, ${title} is part of day-to-day engineering across notebooks, workflows, Unity Catalog, and Delta Lake operations.`,
+    productionContext:
+      lesson.productionContext ??
+      `${title} becomes production-critical when teams need governed compute, repeatable deployments, and reliable Bronze, Silver, and Gold publishing.`,
+    commonMistakes:
+      lesson.commonMistakes ??
+      [`Using ${title} interactively without promotion controls, auditability, or a clear separation between development and production workloads.`],
+    performanceTip:
+      lesson.performanceTip ??
+      lesson.performanceConsiderations ??
+      `Measure the effect of ${title} through runtime, shuffle, file layout, and compute spend rather than relying on notebook intuition.`,
+    performanceConsiderations:
+      lesson.performanceConsiderations ??
+      lesson.performanceTip ??
+      `Evaluate cluster choice, data layout, and concurrency when applying ${title} at production scale.`,
+    resumeTips:
+      lesson.resumeTips ??
+      lesson.resumeFraming ??
+      `Describe how you used ${title} to improve Databricks reliability, governance, or performance in an Azure data platform.`,
+  };
+}
+
+databricksModule.sections = databricksModule.sections.map((section) => ({
+  ...section,
+  subtopics: section.subtopics.map(normalizeDatabricksLesson),
+}));

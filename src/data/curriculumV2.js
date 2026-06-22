@@ -69,6 +69,31 @@ const titleOverrides = {
   'infrastructure-as-code': 'Infrastructure as Code',
 };
 
+const topicContentOverrides = {
+  finops: {
+    summary: 'Control Fabric capacity, Databricks compute, Synapse pools, and storage lifecycle without hurting the SLA.',
+    whyItMatters: 'Senior Azure Data Engineers are expected to understand not only how to build pipelines, but also how to keep the platform fast enough, governed, and affordable as usage grows.',
+    realWorldUseCase: 'A platform team watches Fabric capacity metrics, isolates noisy notebooks, moves scheduled Spark jobs onto job clusters, pauses Synapse when idle, and ages cold ADLS data into cheaper tiers to reduce spend.',
+    interviewTip: 'Talk about utilization, throttling, isolation, and the cost/performance tradeoff before reaching for a bigger SKU or more compute.',
+    commonMistakes: [
+      'Buying more capacity before looking at utilization or throttling.',
+      'Leaving clusters or pools running when they are not serving users.',
+      'Ignoring storage lifecycle policies and letting hot storage become a budget leak.',
+    ],
+  },
+  'data-contracts': {
+    summary: 'Define producer-owned schemas, compatibility rules, and quality gates so downstream pipelines can trust incoming data.',
+    whyItMatters: 'Data contracts turn tribal knowledge into an enforceable interface and reduce the chance that an upstream change silently breaks Bronze, Silver, Gold, or BI.',
+    realWorldUseCase: 'A customer-events team publishes a versioned contract, validates payloads at ingest, and blocks breaking changes before they reach ADF, Databricks, Synapse, or Fabric consumers.',
+    interviewTip: 'Explain producer and consumer ownership, backward compatibility, and where you would run contract tests and schema enforcement in Azure.',
+    commonMistakes: [
+      'Treating a data contract as a wiki page instead of an executable control.',
+      'Letting schema changes reach production without a migration window.',
+      'Relying on manual checks instead of CI and ingestion-time validation.',
+    ],
+  },
+};
+
 export const phaseBlocks = [
   {
     id: 'phase-1-foundations',
@@ -526,10 +551,11 @@ function routeForTopic(topicId) {
 export function getCurriculumTopicMeta(topicId) {
   if (!topicId) return null;
   const phase = curriculumTracks.find(p => (p.topicIds ?? []).includes(topicId));
+  const override = topicContentOverrides[topicId] ?? {};
   return {
     id: topicId,
     title: topicTitle(topicId),
-    summary: `Learn ${topicTitle(topicId)} in the context of a production Azure data engineering platform.`,
+    summary: override.summary ?? `Learn ${topicTitle(topicId)} in the context of a production Azure data engineering platform.`,
     phaseId: phase?.id ?? null,
     phaseTitle: phase?.title ?? null,
     shortTitle: phase?.shortTitle ?? phase?.title ?? null,
@@ -546,6 +572,10 @@ export function getCurriculumTopicMeta(topicId) {
     relatedInterviewModes: [],
     route: routeForTopic(topicId),
     prerequisites: topicPrerequisites(topicId),
+    whyItMatters: override.whyItMatters ?? undefined,
+    realWorldUseCase: override.realWorldUseCase ?? undefined,
+    interviewTip: override.interviewTip ?? undefined,
+    commonMistakes: override.commonMistakes ?? undefined,
   };
 }
 

@@ -45,15 +45,29 @@ function findLessonCtx(lessonId) {
 function useLessonPosition(lessonId, phaseId) {
   return useMemo(() => {
     const phase = allLearningPhases.find(p => p.id === phaseId);
-    if (!phase) return { lessonIndex: 0, totalLessons: 0, phaseIndex: 0, totalPhases: allLearningPhases.length };
+    if (!phase) {
+      return {
+        lessonIndex: 0,
+        totalLessons: 0,
+        phaseIndex: 0,
+        totalPhases: allLearningPhases.length,
+        previousLesson: null,
+        currentLesson: null,
+        nextLesson: null,
+      };
+    }
     const allLessons = phase.modules.flatMap(m => m.lessons);
     const lessonIndex = allLessons.findIndex(l => l.id === lessonId);
     const phaseIndex  = allLearningPhases.indexOf(phase);
+    const normalizedLessonIndex = lessonIndex >= 0 ? lessonIndex : 0;
     return {
-      lessonIndex: lessonIndex >= 0 ? lessonIndex : 0,
+      lessonIndex: normalizedLessonIndex,
       totalLessons: allLessons.length,
       phaseIndex,
       totalPhases: allLearningPhases.length,
+      previousLesson: allLessons[normalizedLessonIndex - 1] ?? null,
+      currentLesson:  allLessons[normalizedLessonIndex] ?? null,
+      nextLesson:     allLessons[normalizedLessonIndex + 1] ?? null,
     };
   }, [lessonId, phaseId]);
 }
@@ -71,6 +85,55 @@ function LessonProgressIndicator({ lessonIndex, totalLessons, phaseIndex, totalP
       <div className="lpi-track">
         <div className="lpi-fill" style={{ width: `${lessonPct}%` }} />
       </div>
+    </div>
+  );
+}
+
+function LessonFlowStrip({ previousLesson, currentLesson, nextLesson, onNavigate }) {
+  const items = [
+    {
+      key: 'previous',
+      label: 'Previous lesson',
+      lesson: previousLesson,
+      action: 'Open previous lesson',
+      variant: 'secondary',
+    },
+    {
+      key: 'current',
+      label: 'Current lesson',
+      lesson: currentLesson,
+      action: 'You are here',
+      variant: 'current',
+    },
+    {
+      key: 'next',
+      label: 'Next lesson',
+      lesson: nextLesson,
+      action: 'Continue next',
+      variant: 'primary',
+    },
+  ].filter(item => item.lesson || item.key === 'current');
+
+  return (
+    <div className="lesson-flow-strip" aria-label="Lesson navigation">
+      {items.map(item => {
+        const isCurrent = item.variant === 'current';
+        return (
+          <button
+            key={item.key}
+            type="button"
+            className={`lesson-flow-card${isCurrent ? ' lesson-flow-card--current' : ''}`}
+            onClick={() => !isCurrent && item.lesson && onNavigate?.(item.lesson.id)}
+            disabled={isCurrent || !item.lesson}
+          >
+            <span className="lesson-flow-label">{item.label}</span>
+            <strong className="lesson-flow-title">{item.lesson?.title ?? '—'}</strong>
+            <span className="lesson-flow-body">
+              {item.lesson?.body ?? item.action}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -430,6 +493,13 @@ const LessonPage = memo(function LessonPage({
 
   const { topicId, type, lessonTitle, phaseTitle, phaseShortTitle, moduleTitle } = lessonContext;
   const topic = topicId ? topics.find(t => t.id === topicId) : null;
+  const phaseLabel = phaseShortTitle ?? phaseTitle;
+  const showModuleLabel = moduleTitle && moduleTitle !== phaseLabel;
+  const lessonFlow = {
+    previousLesson: lessonPos.previousLesson,
+    currentLesson: lessonPos.currentLesson,
+    nextLesson: lessonPos.nextLesson,
+  };
 
   // Navigate forward to a sibling lesson by ID, or fall back to the learning path
   function handleNavigateLesson(targetLessonId) {
@@ -450,9 +520,13 @@ const LessonPage = memo(function LessonPage({
           ← Learning Path
         </button>
         <span className="lesson-breadcrumb-sep" aria-hidden="true">›</span>
-        <span className="lesson-breadcrumb-item">{phaseShortTitle ?? phaseTitle}</span>
-        <span className="lesson-breadcrumb-sep" aria-hidden="true">›</span>
-        <span className="lesson-breadcrumb-item">{moduleTitle}</span>
+        <span className="lesson-breadcrumb-item">{phaseLabel}</span>
+        {showModuleLabel && (
+          <>
+            <span className="lesson-breadcrumb-sep" aria-hidden="true">›</span>
+            <span className="lesson-breadcrumb-item">{moduleTitle}</span>
+          </>
+        )}
         <span className="lesson-breadcrumb-sep" aria-hidden="true">›</span>
         <span className="lesson-breadcrumb-current" aria-current="page">{lessonTitle}</span>
       </nav>
@@ -461,6 +535,13 @@ const LessonPage = memo(function LessonPage({
       <LessonProgressIndicator
         {...lessonPos}
         phaseTitle={phaseShortTitle ?? phaseTitle}
+      />
+
+      <LessonFlowStrip
+        previousLesson={lessonFlow.previousLesson}
+        currentLesson={lessonFlow.currentLesson ?? { id: lessonId, title: lessonTitle }}
+        nextLesson={lessonFlow.nextLesson}
+        onNavigate={handleNavigateLesson}
       />
 
       {/* Lesson content */}
@@ -476,13 +557,18 @@ const LessonPage = memo(function LessonPage({
         <>
           <TopicDetails
             topic={topic}
+            lessonId={lessonId}
+            lessonTitle={lessonTitle}
+            lessonPosition={lessonPos}
+            previousLesson={lessonFlow.previousLesson}
+            nextLesson={lessonFlow.nextLesson}
             completed={!!(completedTopics ?? {})[topicId]}
             notes={notes?.[topicId] ?? ''}
             onNotesChange={onNotesChange}
             onToggleComplete={onToggleComplete}
             practiceProgress={practiceProgress}
             onTogglePractice={onTogglePractice}
-            onSelectTopic={onBack}
+            onNavigateLesson={handleNavigateLesson}
           />
           <div className="lesson-page-footer">
             <button type="button" className="lesson-back-btn" onClick={onBack}>

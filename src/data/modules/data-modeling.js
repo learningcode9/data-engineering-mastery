@@ -15,6 +15,9 @@ function modelingSubtopic({
   syntax,
   example,
   expectedOutput,
+  azureUsage,
+  databricksUsage,
+  performanceConsiderations,
 }) {
   return {
     id,
@@ -25,6 +28,11 @@ function modelingSubtopic({
     beginnerExplanation,
     realWorldBusinessExample,
     productionContext,
+    realWorldUsage: realWorldBusinessExample,
+    azureUsage,
+    azureRelevance: azureUsage,
+    databricksUsage,
+    databricksRelevance: databricksUsage,
     architectureRelevance,
     interviewAngle,
     commonMistake,
@@ -37,6 +45,8 @@ function modelingSubtopic({
     syntax,
     example,
     expectedOutput,
+    performanceConsiderations,
+    performanceTip: performanceConsiderations,
     interview: {
       question: interviewAngle,
       answer: seniorEngineerNote,
@@ -472,6 +482,139 @@ JOIN order_items i ON o.order_id = i.order_id;`,
         }),
       ],
     },
+    {
+      title: 'Senior Modeling Reliability',
+      subtopics: [
+        modelingSubtopic({
+          id: 'dm-bridge-many-to-many',
+          title: 'Bridge Tables and Many-to-Many Relationships',
+          difficulty: 'Advanced',
+          beginnerExplanation: 'A bridge table resolves a many-to-many relationship by storing one row per valid relationship between two entities, often with weighting or effective dates.',
+          realWorldBusinessExample: 'A customer can belong to multiple marketing segments, and one segment contains many customers. A bridge_customer_segment table prevents duplicating customer or sales facts.',
+          productionContext: 'Many-to-many relationships can silently duplicate measures in Power BI if modeled directly between facts and dimensions.',
+          architectureRelevance: 'Gold models in Fabric Warehouse, Synapse, or Databricks SQL should expose bridge tables deliberately so semantic models have stable relationship paths.',
+          azureUsage: 'Use Fabric Warehouse or Synapse SQL to publish the bridge as a governed Gold table, then model relationships carefully in Power BI semantic models.',
+          databricksUsage: 'Databricks can build bridge tables from Silver relationship history and publish them as Delta Gold tables with effective-date filters.',
+          performanceConsiderations: 'Bridge tables can increase join size. Filter by effective date and segment type before joining to large facts.',
+          interviewAngle: 'How do you model customers that belong to multiple segments without double-counting revenue?',
+          commonMistake: 'Joining fact_sales directly to a multi-row customer segment table and summing revenue without weighting or distinct grain.',
+          seniorEngineerNote: 'Use a bridge table with clear grain, optional allocation weights, and validation checks proving totals do not change after segment joins.',
+          practiceTask: 'Design a bridge table for customer-to-segment membership and explain how a revenue dashboard should avoid double-counting.',
+          hint: 'Declare the bridge grain and decide whether allocation weights are needed.',
+          solution: 'Create bridge_customer_segment(customer_key, segment_key, effective_start, effective_end, allocation_weight). Join facts through customer_key only when segment analysis is requested, and validate total revenue before/after segment filtering.',
+          syntax: `bridge_customer_segment(
+  customer_key,
+  segment_key,
+  effective_start_date,
+  effective_end_date,
+  allocation_weight
+)`,
+          example: 'Marketing wants revenue by loyalty segment, but customers can be in Gold and Holiday Promo at the same time.',
+          expectedOutput: 'A model that supports segment analysis without duplicating base revenue totals.',
+        }),
+        modelingSubtopic({
+          id: 'dm-late-arriving-dimensions',
+          title: 'Late-Arriving Dimensions',
+          difficulty: 'Advanced',
+          beginnerExplanation: 'A late-arriving dimension occurs when a fact event arrives before the dimension row needed to describe it.',
+          realWorldBusinessExample: 'An order event arrives with customer_id=123, but the customer profile feed is delayed. The sales fact still needs to load without losing the event.',
+          productionContext: 'Production pipelines must decide whether to use unknown dimension rows, retry queues, inferred members, or reprocessing once the dimension arrives.',
+          architectureRelevance: 'This affects CDC, SCD2, fact loading, and Power BI completeness in Azure lakehouse/warehouse models.',
+          azureUsage: 'ADF or Databricks can route unresolved facts to a retry table, while Fabric/Synapse Gold tables expose an Unknown Customer member until correction.',
+          databricksUsage: 'Use Delta MERGE to update inferred dimension records and restate affected fact foreign keys after the true dimension arrives.',
+          performanceConsiderations: 'Avoid repeatedly scanning all facts for unresolved keys. Track only affected business keys or date partitions.',
+          interviewAngle: 'How do you handle facts that arrive before their dimension rows?',
+          commonMistake: 'Dropping the fact row or forcing an inner join that hides valid business events.',
+          seniorEngineerNote: 'Preserve the fact, assign an unknown or inferred surrogate key, record the unresolved natural key, and reconcile once the dimension arrives.',
+          practiceTask: 'Design handling for orders arriving before customer dimension updates.',
+          hint: 'Think unknown member, retry, audit, and later correction.',
+          solution: 'Load the fact with unknown_customer_key or an inferred customer dimension row, log unresolved customer_id, rerun the resolution job after customer feed arrival, and validate unresolved count trends.',
+          syntax: `-- Unknown dimension member
+dim_customer(customer_key=-1, customer_id='UNKNOWN', customer_name='Unknown')
+
+-- Fact keeps source natural key for later repair
+fact_sales(customer_key=-1, source_customer_id='123', order_id, amount)`,
+          example: 'A CDC customer feed is delayed by 30 minutes but order events arrive continuously.',
+          expectedOutput: 'No lost sales facts; unresolved dimensions are visible and repairable.',
+        }),
+        modelingSubtopic({
+          id: 'dm-fact-reconciliation-checks',
+          title: 'Fact Reconciliation Checks',
+          difficulty: 'Advanced',
+          beginnerExplanation: 'Reconciliation checks compare source totals, Silver tables, and Gold facts so model errors are caught before dashboards refresh.',
+          realWorldBusinessExample: 'Finance expects $1.25M in yesterday revenue. Gold fact_sales must reconcile to source orders after refunds, tax exclusions, and currency rules are applied.',
+          productionContext: 'A pipeline can succeed technically while producing wrong totals due to duplicate joins, missed CDC deletes, or grain mismatch.',
+          architectureRelevance: 'Reconciliation is the quality gate between lakehouse transformation and trusted BI consumption.',
+          azureUsage: 'Store reconciliation results in an audit Delta/Fabric table and block Power BI refresh or Synapse publish when thresholds fail.',
+          databricksUsage: 'Databricks jobs can compute row counts, sums, checksums, duplicate keys, and null foreign-key counts before publishing Gold tables.',
+          performanceConsiderations: 'Run checks at partition/batch level for large facts, then aggregate trends for monitoring.',
+          interviewAngle: 'What checks prove your dimensional model is not double-counting?',
+          commonMistake: 'Only checking row counts and ignoring business measures like revenue, quantity, or balances.',
+          seniorEngineerNote: 'Use business-aligned checks: row counts, distinct business keys, additive totals, duplicate fact keys, null dimension keys, and variance thresholds.',
+          practiceTask: 'Write validation checks for a daily sales fact table before publishing to Power BI.',
+          hint: 'Compare source, Silver, and Gold for the same date window.',
+          solution: 'Check source_count vs gold_count, SUM(net_sales), duplicate order_line_id, null product/customer keys, and variance against prior-day trend. Fail closed if thresholds breach.',
+          syntax: `SELECT business_date,
+       COUNT(*) AS fact_rows,
+       COUNT(DISTINCT order_line_id) AS distinct_lines,
+       SUM(net_sales) AS revenue,
+       SUM(CASE WHEN customer_key IS NULL THEN 1 ELSE 0 END) AS null_customer_keys
+FROM gold.fact_sales_line
+WHERE business_date = @load_date
+GROUP BY business_date;`,
+          example: 'A product dimension join duplicates rows and doubles revenue; reconciliation catches it before executives see the dashboard.',
+          expectedOutput: 'A pass/fail validation record with row, key, and business metric checks.',
+        }),
+        modelingSubtopic({
+          id: 'dm-semantic-model-contracts',
+          title: 'Power BI Semantic Model Contracts',
+          difficulty: 'Advanced',
+          beginnerExplanation: 'A semantic model contract defines stable measures, relationships, keys, refresh expectations, and security assumptions for BI consumers.',
+          realWorldBusinessExample: 'The Sales semantic model promises one active relationship from fact_sales to dim_date, certified Revenue measures, and RLS by region.',
+          productionContext: 'Changing Gold table grain, column names, or relationship paths without a contract can break reports even when the warehouse load succeeds.',
+          architectureRelevance: 'Senior Azure data engineers must understand how Gold tables become Fabric/Power BI semantic models and how model contracts protect consumers.',
+          azureUsage: 'Fabric semantic models and Power BI datasets depend on stable Gold schemas, Direct Lake/Import choices, RLS roles, and refresh SLAs.',
+          databricksUsage: 'Databricks SQL can serve Gold tables, but Power BI model quality still depends on clean dimensions, measures, and relationship design.',
+          performanceConsiderations: 'High-cardinality columns, bi-directional filters, and ambiguous relationships can slow semantic models and confuse measures.',
+          interviewAngle: 'How do you prevent warehouse changes from breaking Power BI dashboards?',
+          commonMistake: 'Treating the semantic model as a report-layer detail instead of a governed data product contract.',
+          seniorEngineerNote: 'Version the Gold schema, coordinate breaking changes, certify shared measures, document RLS, and test refresh/measure outputs before release.',
+          practiceTask: 'Define a semantic model contract for a Sales Gold mart.',
+          hint: 'Include keys, relationships, measures, refresh SLA, and RLS assumptions.',
+          solution: 'Contract: fact_sales_line grain, conformed dim_date/product/customer/store, certified measures Revenue/Units/Margin, single-direction relationships, regional RLS, daily refresh by 8 AM, and deprecation window for schema changes.',
+          syntax: `Semantic model contract:
+  Fact grain: one row per order line
+  Required keys: date_key, product_key, customer_key, store_key
+  Measures: Revenue, Units, Gross Margin
+  Security: region-based RLS
+  SLA: daily refresh by 08:00 local time`,
+          example: 'A developer renames net_sales to revenue_amount; contract tests catch the breaking change before report refresh fails.',
+          expectedOutput: 'A predictable BI serving layer with clear ownership and release rules.',
+        }),
+        modelingSubtopic({
+          id: 'dm-junk-degenerate-dimensions',
+          title: 'Junk and Degenerate Dimensions',
+          difficulty: 'Intermediate',
+          beginnerExplanation: 'A junk dimension groups low-cardinality flags, while a degenerate dimension stores a business identifier directly in the fact table when no separate dimension is needed.',
+          realWorldBusinessExample: 'Order flags such as is_gift, is_first_order, and channel_type can live in dim_order_flags. order_number can remain as a degenerate dimension in fact_sales_line.',
+          productionContext: 'These patterns keep fact tables understandable without creating dozens of tiny dimensions or bloating facts with repeated descriptive columns.',
+          architectureRelevance: 'Gold dimensional models should balance usability, performance, and semantic clarity for Fabric/Power BI consumers.',
+          azureUsage: 'Fabric Warehouse or Synapse Gold marts can expose junk dimensions and degenerate identifiers for easier slicing and drill-through.',
+          databricksUsage: 'Databricks can derive junk dimensions during Gold transformation and preserve order_number in facts for lineage/drill-through.',
+          performanceConsiderations: 'Avoid over-normalizing tiny flags into many joins. A compact junk dimension can reduce semantic model clutter.',
+          interviewAngle: 'When would you use a junk dimension or a degenerate dimension?',
+          commonMistake: 'Creating separate dimensions for every low-cardinality flag or removing order numbers needed for traceability.',
+          seniorEngineerNote: 'Use junk dimensions for grouped flags; keep transaction identifiers as degenerate dimensions when they support drill-through but have no descriptive attributes.',
+          practiceTask: 'Model order flags and order number for a sales fact table.',
+          hint: 'Flags often belong together; transaction numbers often stay in the fact.',
+          solution: 'Create dim_order_flags(flag_key, is_gift, is_first_order, channel_type). Store order_number directly in fact_sales_line as a degenerate dimension.',
+          syntax: `dim_order_flags(flag_key, is_gift, is_first_order, channel_type)
+fact_sales_line(order_number, flag_key, date_key, product_key, net_sales)`,
+          example: 'Customer support drills from a dashboard total to a specific order_number without joining another order header dimension.',
+          expectedOutput: 'A cleaner star schema with fewer unnecessary dimensions and better drill-through support.',
+        }),
+      ],
+    },
   ],
   miniProject: {
     title: 'Retail Sales Dimensional Warehouse',
@@ -491,3 +634,33 @@ JOIN order_items i ON o.order_id = i.order_id;`,
     { question: 'How do you prevent duplicate revenue in BI?', answer: 'Model facts at the correct grain, avoid many-to-many joins, define measures from base facts, and add reconciliation tests.' },
   ],
 };
+
+function normalizeDataModelingLesson(lesson) {
+  const title = lesson.title || 'this modeling pattern';
+  return {
+    ...lesson,
+    azureUsage:
+      lesson.azureUsage ??
+      `In Azure, ${title} is applied when shaping Gold models for Synapse, Fabric Warehouse, and Power BI semantic models that need stable joins and trusted measures.`,
+    databricksUsage:
+      lesson.databricksUsage ??
+      `In Databricks lakehouse projects, ${title} helps turn Silver conformed data into Gold facts, dimensions, and governed marts for BI consumption.`,
+    performanceConsiderations:
+      lesson.performanceConsiderations ??
+      lesson.performanceTip ??
+      `Check how ${title} affects join paths, semantic model size, partition strategy, and query cost before publishing it broadly.`,
+    performanceTip:
+      lesson.performanceTip ??
+      lesson.performanceConsiderations ??
+      `Validate grain, filter paths, and dimensional joins early so ${title} stays fast and trustworthy in reporting workloads.`,
+    resumeTips:
+      lesson.resumeTips ??
+      lesson.resumeFraming ??
+      `Explain how you used ${title} to design a trustworthy warehouse or lakehouse model that improved Power BI, Fabric, or Databricks reporting outcomes.`,
+  };
+}
+
+dataModelingModule.sections = dataModelingModule.sections.map((section) => ({
+  ...section,
+  subtopics: section.subtopics.map(normalizeDataModelingLesson),
+}));

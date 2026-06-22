@@ -1342,7 +1342,7 @@ const legacyLearningPathPhases = [
       },
       {
         id: 'interview-readiness',
-        title: 'Interview Preparation',
+        title: 'Interview Prep',
         lessons: [
           { id: 'sql-interview',       title: 'SQL Interview Questions',  section: 'interview-prep', label: 'Interview' },
           { id: 'spark-scenarios',     title: 'Spark & PySpark Scenarios', section: 'interview-prep', label: 'Interview' },
